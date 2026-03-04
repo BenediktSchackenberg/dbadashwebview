@@ -2,8 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import EmptyState from '../components/EmptyState';
-import { AlertTriangle, Info, AlertCircle } from 'lucide-react';
-import { clsx } from 'clsx';
+import { AlertTriangle } from 'lucide-react';
 
 export default function AlertsPage() {
   const [alerts, setAlerts] = useState<any[]>([]);

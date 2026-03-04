@@ -349,6 +349,84 @@ app.MapGet("/api/alerts/recent", async () =>
     }
 }).RequireAuthorization();
 
+// ── Availability Groups ──────────────────────────────────────────────────
+
+app.MapGet("/api/availability-groups", async () =>
+{
+    try
+    {
+        var data = await QueryAsync(@"
+            SELECT ag.*, i.InstanceDisplayName
+            FROM dbo.AvailabilityGroups ag
+            JOIN dbo.Instances i ON ag.InstanceID = i.InstanceID");
+        return Results.Ok(data);
+    }
+    catch
+    {
+        return Results.Ok(Array.Empty<object>());
+    }
+}).RequireAuthorization();
+
+app.MapGet("/api/availability-groups/{id:int}", async (int id) =>
+{
+    try
+    {
+        var ag = await QueryAsync(@"
+            SELECT ag.*, i.InstanceDisplayName
+            FROM dbo.AvailabilityGroups ag
+            JOIN dbo.Instances i ON ag.InstanceID = i.InstanceID
+            WHERE ag.AGId = @id", ("@id", id));
+        if (ag.Count == 0) return Results.NotFound();
+
+        List<Dictionary<string, object?>> replicas = new();
+        try
+        {
+            replicas = await QueryAsync(@"
+                SELECT ar.*, i.InstanceDisplayName
+                FROM dbo.AvailabilityReplicas ar
+                LEFT JOIN dbo.Instances i ON ar.InstanceID = i.InstanceID
+                WHERE ar.AGId = @id", ("@id", id));
+        }
+        catch { }
+
+        List<Dictionary<string, object?>> databases = new();
+        try
+        {
+            databases = await QueryAsync(@"
+                SELECT dh.*, d.name AS DatabaseName
+                FROM dbo.DatabasesHADR dh
+                LEFT JOIN dbo.Databases d ON dh.DatabaseID = d.DatabaseID
+                WHERE dh.AGId = @id", ("@id", id));
+        }
+        catch { }
+
+        return Results.Ok(new { ag = ag[0], replicas, databases });
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new { error = ex.Message });
+    }
+}).RequireAuthorization();
+
+// ── Estate-wide Drives ───────────────────────────────────────────────────
+
+app.MapGet("/api/drives", async () =>
+{
+    try
+    {
+        var data = await QueryAsync(@"
+            SELECT d.*, i.InstanceDisplayName
+            FROM dbo.Drives d
+            JOIN dbo.Instances i ON d.InstanceID = i.InstanceID
+            WHERE d.IsActive = 1");
+        return Results.Ok(data);
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new { error = ex.Message, data = Array.Empty<object>() });
+    }
+}).RequireAuthorization();
+
 app.Run();
 
 record LoginRequest(string Username, string Password);

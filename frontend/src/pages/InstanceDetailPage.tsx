@@ -8,7 +8,7 @@ import TabNav from '../components/TabNav';
 import LoadingSpinner from '../components/LoadingSpinner';
 import EmptyState from '../components/EmptyState';
 import { motion } from 'framer-motion';
-import { Server, Cpu, HardDrive, Database, Clock, Shield } from 'lucide-react';
+import { Server, Cpu, HardDrive, Clock } from 'lucide-react';
 import { clsx } from 'clsx';
 import { format } from 'date-fns';
 

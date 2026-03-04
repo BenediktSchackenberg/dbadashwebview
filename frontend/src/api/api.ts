@@ -53,4 +53,7 @@ export const api = {
   jobsRecent: () => request<any[]>('/api/jobs/recent'),
   jobsFailures: () => request<any[]>('/api/jobs/failures'),
   alertsRecent: () => request<any[]>('/api/alerts/recent'),
+  availabilityGroups: () => request<any[]>('/api/availability-groups'),
+  availabilityGroup: (id: number) => request<{ ag: any; replicas: any[]; databases: any[] }>(`/api/availability-groups/${id}`),
+  drives: () => request<any[]>('/api/drives'),
 };

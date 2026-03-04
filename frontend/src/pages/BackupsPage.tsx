@@ -3,7 +3,6 @@ import { api } from '../api/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import EmptyState from '../components/EmptyState';
 import StatusBadge from '../components/StatusBadge';
-import { clsx } from 'clsx';
 
 export default function BackupsPage() {
   const [summary, setSummary] = useState<any[]>([]);

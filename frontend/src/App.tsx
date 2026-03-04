@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, createContext, useContext } from 'rea
 import { isAuthenticated, clearToken } from './api/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  LayoutDashboard, Server, Briefcase, Database, Bell, HardDrive,
+  LayoutDashboard, Server, Briefcase, Database, Bell, HardDrive, Network,
   ChevronLeft, ChevronRight, LogOut, User, RefreshCw, Clock
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -15,6 +15,7 @@ import JobsPage from './pages/JobsPage';
 import BackupsPage from './pages/BackupsPage';
 import AlertsPage from './pages/AlertsPage';
 import DrivesPage from './pages/DrivesPage';
+import AvailabilityGroupsPage from './pages/AvailabilityGroupsPage';
 
 const RefreshContext = createContext<{ lastRefresh: Date; refresh: () => void }>({
   lastRefresh: new Date(),
@@ -32,6 +33,7 @@ const navItems = [
   { path: '/backups', icon: Database, label: 'Backups' },
   { path: '/alerts', icon: Bell, label: 'Alerts' },
   { path: '/drives', icon: HardDrive, label: 'Drives' },
+  { path: '/availability-groups', icon: Network, label: 'AG' },
 ];
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
@@ -194,6 +196,7 @@ export default function App() {
                 <Route path="/backups" element={<BackupsPage key={refreshKey} />} />
                 <Route path="/alerts" element={<AlertsPage key={refreshKey} />} />
                 <Route path="/drives" element={<DrivesPage key={refreshKey} />} />
+                <Route path="/availability-groups" element={<AvailabilityGroupsPage key={refreshKey} />} />
               </Routes>
             </Layout>
           </AuthGuard>

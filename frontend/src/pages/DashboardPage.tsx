@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../api/api';
 import { motion } from 'framer-motion';
 import { Server, CheckCircle, AlertTriangle, XCircle, Briefcase, Bell } from 'lucide-react';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import StatCard from '../components/StatCard';
 import StatusBadge from '../components/StatusBadge';
 import LoadingSpinner from '../components/LoadingSpinner';
