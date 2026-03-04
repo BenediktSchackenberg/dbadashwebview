@@ -1,101 +1,354 @@
+using System.Data;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
+using System.Text.Json;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Data.SqlClient;
+using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddCors(options =>
-{
-    options.AddDefaultPolicy(policy =>
-        policy.WithOrigins("http://localhost:5173")
-              .AllowAnyHeader()
-              .AllowAnyMethod());
-});
+// JWT
+var jwtSecret = builder.Configuration["Jwt:Secret"]!;
+var jwtIssuer = builder.Configuration["Jwt:Issuer"]!;
+var jwtAudience = builder.Configuration["Jwt:Audience"]!;
+var jwtExpHours = int.Parse(builder.Configuration["Jwt:ExpirationHours"] ?? "12");
+var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret));
 
-builder.Services.AddScoped<SqlConnection>(_ =>
-    new SqlConnection(builder.Configuration.GetConnectionString("DBADashDB")));
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(o =>
+    {
+        o.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwtIssuer,
+            ValidAudience = jwtAudience,
+            IssuerSigningKey = key
+        };
+    });
+builder.Services.AddAuthorization();
+
+builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
+    p.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader()));
+
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
-
 app.UseCors();
-app.UseDefaultFiles();
-app.UseStaticFiles();
+app.UseAuthentication();
+app.UseAuthorization();
 
-// --- API Endpoints ---
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+var connStr = builder.Configuration.GetConnectionString("DBADashDB")!;
+
+// ── Helpers ──────────────────────────────────────────────────────────────
+
+string GenerateToken(string username)
+{
+    var claims = new[] {
+        new Claim(ClaimTypes.Name, username),
+        new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+    };
+    var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+    var token = new JwtSecurityToken(jwtIssuer, jwtAudience, claims,
+        expires: DateTime.UtcNow.AddHours(jwtExpHours), signingCredentials: creds);
+    return new JwtSecurityTokenHandler().WriteToken(token);
+}
+
+async Task<List<Dictionary<string, object?>>> QueryAsync(string sql, params (string name, object? value)[] parameters)
+{
+    using var conn = new SqlConnection(connStr);
+    await conn.OpenAsync();
+    using var cmd = new SqlCommand(sql, conn);
+    cmd.CommandTimeout = 30;
+    foreach (var (name, value) in parameters)
+        cmd.Parameters.AddWithValue(name, value ?? DBNull.Value);
+    using var reader = await cmd.ExecuteReaderAsync();
+    var results = new List<Dictionary<string, object?>>();
+    while (await reader.ReadAsync())
+    {
+        var row = new Dictionary<string, object?>();
+        for (int i = 0; i < reader.FieldCount; i++)
+            row[reader.GetName(i)] = reader.IsDBNull(i) ? null : reader.GetValue(i);
+        results.Add(row);
+    }
+    return results;
+}
+
+async Task<List<Dictionary<string, object?>>> SpAsync(string sp, params (string name, object? value)[] parameters)
+{
+    using var conn = new SqlConnection(connStr);
+    await conn.OpenAsync();
+    using var cmd = new SqlCommand(sp, conn) { CommandType = CommandType.StoredProcedure, CommandTimeout = 30 };
+    foreach (var (name, value) in parameters)
+        cmd.Parameters.AddWithValue(name, value ?? DBNull.Value);
+    using var reader = await cmd.ExecuteReaderAsync();
+    var results = new List<Dictionary<string, object?>>();
+    while (await reader.ReadAsync())
+    {
+        var row = new Dictionary<string, object?>();
+        for (int i = 0; i < reader.FieldCount; i++)
+            row[reader.GetName(i)] = reader.IsDBNull(i) ? null : reader.GetValue(i);
+        results.Add(row);
+    }
+    return results;
+}
+
+// ── Public endpoints ─────────────────────────────────────────────────────
 
 app.MapGet("/api/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow }));
 
-app.MapGet("/api/instances", async (SqlConnection db) =>
+app.MapPost("/api/auth/login", (LoginRequest req) =>
+{
+    if (req.Username == "admin" && req.Password == "admin")
+        return Results.Ok(new { token = GenerateToken(req.Username), username = req.Username });
+    return Results.Unauthorized();
+});
+
+// ── Protected endpoints ──────────────────────────────────────────────────
+
+app.MapGet("/api/dashboard/summary", async () =>
 {
     try
     {
-        await db.OpenAsync();
-        var instances = new List<object>();
-        using var cmd = new SqlCommand(
-            "SELECT InstanceID, Instance AS Name, ConnectionID FROM dbo.Instances ORDER BY Instance", db);
-        using var reader = await cmd.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
-        {
-            instances.Add(new
-            {
-                id = reader.GetInt32(0),
-                name = reader.GetString(1),
-                connectionId = reader.IsDBNull(2) ? null : reader.GetString(2)
-            });
-        }
+        var data = await SpAsync("dbo.Summary_Get");
+        return Results.Ok(data);
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new { error = ex.Message, data = Array.Empty<object>() });
+    }
+}).RequireAuthorization();
+
+app.MapGet("/api/instances", async () =>
+{
+    try
+    {
+        var instances = await QueryAsync(@"
+            SELECT i.InstanceID, i.Instance, i.ConnectionID, i.IsActive, i.Edition, 
+                   i.ProductVersion, i.cpu_count, i.physical_memory_kb, i.sqlserver_start_time,
+                   i.InstanceDisplayName, i.ShowInSummary
+            FROM dbo.Instances i WHERE i.IsActive = 1 ORDER BY i.InstanceDisplayName");
         return Results.Ok(instances);
     }
     catch (Exception ex)
     {
-        return Results.Problem($"Database query failed: {ex.Message}", statusCode: 503);
+        return Results.Ok(new { error = ex.Message, data = Array.Empty<object>() });
     }
-});
+}).RequireAuthorization();
 
-app.MapGet("/api/instances/{id}/status", async (int id, SqlConnection db) =>
-{
-    // TODO: Query actual status tables once schema is confirmed
-    return Results.StatusCode(501);
-});
-
-app.MapGet("/api/performance/summary", async (SqlConnection db) =>
-{
-    // TODO: Query performance counters once schema is confirmed
-    return Results.StatusCode(501);
-});
-
-app.MapGet("/api/jobs/recent", async (SqlConnection db) =>
+app.MapGet("/api/instances/{id:int}", async (int id) =>
 {
     try
     {
-        await db.OpenAsync();
-        var jobs = new List<object>();
-        using var cmd = new SqlCommand(@"
-            SELECT TOP 50 j.JobID, j.name AS JobName, jh.InstanceID,
-                   jh.run_status, jh.run_date, jh.run_time, jh.run_duration
-            FROM dbo.Jobs j
-            INNER JOIN dbo.JobHistory jh ON j.JobID = jh.JobID
-            ORDER BY jh.run_date DESC, jh.run_time DESC", db);
-        using var reader = await cmd.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
-        {
-            jobs.Add(new
-            {
-                jobId = reader.GetInt32(0),
-                jobName = reader.GetString(1),
-                instanceId = reader.GetInt32(2),
-                runStatus = reader.GetInt32(3),
-                runDate = reader.GetInt32(4),
-                runTime = reader.GetInt32(5),
-                runDuration = reader.GetInt32(6)
-            });
-        }
-        return Results.Ok(jobs);
+        var inst = await QueryAsync(@"
+            SELECT i.InstanceID, i.Instance, i.ConnectionID, i.IsActive, i.Edition,
+                   i.ProductVersion, i.cpu_count, i.physical_memory_kb, i.sqlserver_start_time,
+                   i.InstanceDisplayName, i.Alias
+            FROM dbo.Instances i WHERE i.InstanceID = @id", ("@id", id));
+        if (inst.Count == 0) return Results.NotFound();
+
+        List<Dictionary<string, object?>>? summary = null;
+        try { summary = await SpAsync("dbo.Summary_Get"); } catch { }
+        var instanceSummary = summary?.FirstOrDefault(s =>
+            s.ContainsKey("InstanceID") && Convert.ToInt32(s["InstanceID"]) == id);
+
+        return Results.Ok(new { instance = inst[0], summary = instanceSummary });
     }
     catch (Exception ex)
     {
-        return Results.Problem($"Database query failed: {ex.Message}", statusCode: 503);
+        return Results.Ok(new { error = ex.Message });
     }
-});
+}).RequireAuthorization();
 
-// SPA fallback for production
-app.MapFallbackToFile("index.html");
+app.MapGet("/api/instances/{id:int}/cpu", async (int id) =>
+{
+    try
+    {
+        var data = await QueryAsync(@"
+            SELECT TOP 1440 EventTime, SQLProcessCPU, SystemIdleCPU,
+                   (100 - SQLProcessCPU - SystemIdleCPU) AS OtherCPU,
+                   (100 - SystemIdleCPU) AS TotalCPU
+            FROM dbo.CPU WHERE InstanceID = @id AND EventTime > DATEADD(hour, -24, GETUTCDATE())
+            ORDER BY EventTime DESC", ("@id", id));
+        return Results.Ok(data);
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new { error = ex.Message, data = Array.Empty<object>() });
+    }
+}).RequireAuthorization();
+
+app.MapGet("/api/instances/{id:int}/waits", async (int id) =>
+{
+    try
+    {
+        var data = await QueryAsync(@"
+            SELECT TOP 20 w.WaitTypeID, wt.WaitType, 
+                   SUM(w.wait_time_ms) as TotalWaitMs,
+                   SUM(w.waiting_tasks_count) as TotalWaitCount,
+                   SUM(w.signal_wait_time_ms) as TotalSignalWaitMs
+            FROM dbo.Waits w
+            LEFT JOIN dbo.WaitType wt ON w.WaitTypeID = wt.WaitTypeID
+            WHERE w.InstanceID = @id AND w.SnapshotDate > DATEADD(hour, -1, GETUTCDATE())
+            GROUP BY w.WaitTypeID, wt.WaitType
+            ORDER BY SUM(w.wait_time_ms) DESC", ("@id", id));
+        return Results.Ok(data);
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new { error = ex.Message, data = Array.Empty<object>() });
+    }
+}).RequireAuthorization();
+
+app.MapGet("/api/instances/{id:int}/drives", async (int id) =>
+{
+    try
+    {
+        var data = await QueryAsync(@"
+            SELECT DriveID, Name, Label, Capacity, FreeSpace,
+                   (Capacity - FreeSpace) AS UsedSpace
+            FROM dbo.Drives WHERE InstanceID = @id", ("@id", id));
+        return Results.Ok(data);
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new { error = ex.Message, data = Array.Empty<object>() });
+    }
+}).RequireAuthorization();
+
+app.MapGet("/api/instances/{id:int}/databases", async (int id) =>
+{
+    try
+    {
+        var data = await QueryAsync(@"
+            SELECT DatabaseID, name, state, recovery_model, LastGoodCheckDbTime, IsActive
+            FROM dbo.Databases WHERE InstanceID = @id AND IsActive = 1
+            ORDER BY name", ("@id", id));
+        return Results.Ok(data);
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new { error = ex.Message, data = Array.Empty<object>() });
+    }
+}).RequireAuthorization();
+
+app.MapGet("/api/instances/{id:int}/backups", async (int id) =>
+{
+    try
+    {
+        var data = await QueryAsync(@"
+            SELECT d.DatabaseID, d.name AS DatabaseName, b.type, 
+                   b.backup_start_date, b.backup_finish_date,
+                   b.backup_size, b.compressed_backup_size
+            FROM dbo.Databases d
+            LEFT JOIN dbo.Backups b ON d.DatabaseID = b.DatabaseID
+            WHERE d.InstanceID = @id AND d.IsActive = 1
+            ORDER BY d.name, b.backup_start_date DESC", ("@id", id));
+        return Results.Ok(data);
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new { error = ex.Message, data = Array.Empty<object>() });
+    }
+}).RequireAuthorization();
+
+app.MapGet("/api/instances/{id:int}/jobs", async (int id) =>
+{
+    try
+    {
+        var data = await QueryAsync(@"
+            SELECT TOP 50 job_id, step_id, step_name, run_status,
+                   RunDateTime, RunDurationSec, message
+            FROM dbo.JobHistory WHERE InstanceID = @id
+            ORDER BY RunDateTime DESC", ("@id", id));
+        return Results.Ok(data);
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new { error = ex.Message, data = Array.Empty<object>() });
+    }
+}).RequireAuthorization();
+
+app.MapGet("/api/jobs/recent", async () =>
+{
+    try
+    {
+        var data = await QueryAsync(@"
+            SELECT TOP 100 jh.job_id, jh.step_id, jh.step_name, jh.run_status,
+                   jh.RunDateTime, jh.RunDurationSec, jh.message,
+                   jh.InstanceID, i.InstanceDisplayName
+            FROM dbo.JobHistory jh
+            JOIN dbo.Instances i ON jh.InstanceID = i.InstanceID
+            WHERE jh.step_id = 0
+            ORDER BY jh.RunDateTime DESC");
+        return Results.Ok(data);
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new { error = ex.Message, data = Array.Empty<object>() });
+    }
+}).RequireAuthorization();
+
+app.MapGet("/api/jobs/failures", async () =>
+{
+    try
+    {
+        var data = await QueryAsync(@"
+            SELECT TOP 100 jh.job_id, jh.step_id, jh.step_name, jh.run_status,
+                   jh.RunDateTime, jh.RunDurationSec, jh.message,
+                   jh.InstanceID, i.InstanceDisplayName
+            FROM dbo.JobHistory jh
+            JOIN dbo.Instances i ON jh.InstanceID = i.InstanceID
+            WHERE jh.run_status = 0 AND jh.RunDateTime > DATEADD(hour, -24, GETUTCDATE())
+            ORDER BY jh.RunDateTime DESC");
+        return Results.Ok(data);
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new { error = ex.Message, data = Array.Empty<object>() });
+    }
+}).RequireAuthorization();
+
+app.MapGet("/api/alerts/recent", async () =>
+{
+    try
+    {
+        // Try common alert table names
+        var data = await QueryAsync(@"
+            SELECT TOP 50 * FROM (
+                SELECT TOP 50 * FROM dbo.Alerts ORDER BY 1 DESC
+            ) t ORDER BY 1 DESC");
+        return Results.Ok(data);
+    }
+    catch
+    {
+        try
+        {
+            // Fallback: check if CollectionErrors can serve as alerts
+            var data = await QueryAsync(@"
+                SELECT TOP 50 InstanceID, ErrorDate, ErrorMessage, ErrorContext
+                FROM dbo.CollectionErrorLog
+                ORDER BY ErrorDate DESC");
+            return Results.Ok(data);
+        }
+        catch
+        {
+            return Results.Ok(Array.Empty<object>());
+        }
+    }
+}).RequireAuthorization();
 
 app.Run();
+
+record LoginRequest(string Username, string Password);
