@@ -408,6 +408,54 @@ app.MapGet("/api/availability-groups/{id:int}", async (int id) =>
     }
 }).RequireAuthorization();
 
+// ── Queries ──────────────────────────────────────────────────────────────
+
+app.MapGet("/api/instances/{id:int}/queries", async (int id) =>
+{
+    try
+    {
+        var data = await QueryAsync(@"
+            SELECT TOP 50 qs.query_hash, qs.total_worker_time AS TotalCPU,
+                   qs.total_logical_reads + qs.total_logical_writes AS TotalIO,
+                   qs.execution_count AS Executions,
+                   CASE WHEN qs.execution_count > 0
+                        THEN qs.total_elapsed_time / qs.execution_count / 1000
+                        ELSE 0 END AS AvgDurationMs,
+                   SUBSTRING(st.text, 1, 4000) AS QueryText
+            FROM sys.dm_exec_query_stats qs
+            CROSS APPLY sys.dm_exec_sql_text(qs.sql_handle) st
+            ORDER BY qs.total_worker_time DESC");
+        return Results.Ok(data);
+    }
+    catch
+    {
+        return Results.Ok(Array.Empty<object>());
+    }
+}).RequireAuthorization();
+
+// ── Estate-wide Backups ──────────────────────────────────────────────────
+
+app.MapGet("/api/backups/estate", async () =>
+{
+    try
+    {
+        var data = await QueryAsync(@"
+            SELECT i.InstanceID, i.InstanceDisplayName, d.DatabaseID, d.name AS DatabaseName,
+                   b.type, b.backup_start_date, b.backup_finish_date,
+                   b.backup_size, b.compressed_backup_size
+            FROM dbo.Instances i
+            JOIN dbo.Databases d ON i.InstanceID = d.InstanceID
+            LEFT JOIN dbo.Backups b ON d.DatabaseID = b.DatabaseID
+            WHERE i.IsActive = 1 AND d.IsActive = 1
+            ORDER BY i.InstanceDisplayName, d.name, b.backup_start_date DESC");
+        return Results.Ok(data);
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new { error = ex.Message, data = Array.Empty<object>() });
+    }
+}).RequireAuthorization();
+
 // ── Estate-wide Drives ───────────────────────────────────────────────────
 
 app.MapGet("/api/drives", async () =>
