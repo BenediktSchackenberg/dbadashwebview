@@ -1,6 +1,6 @@
 # DBA Dash Web View 🖥️
 
-A modern web dashboard for [DBA Dash](https://github.com/trimble-oss/dba-dash) — providing a Redgate Monitor-style web interface for your SQL Server monitoring data.
+A modern web dashboard for [DBA Dash](https://github.com/trimble-oss/dba-dash) — providing a clean, browser-based interface for your SQL Server monitoring data.
 
 ## What is this?
 
@@ -80,4 +80,4 @@ DBA Dash data is read in read-only mode from the existing repository database.
 ## Acknowledgements
 
 - [DBA Dash](https://github.com/trimble-oss/dba-dash) by Trimble (Apache 2.0) — the excellent SQL Server monitoring tool this project builds upon
-- Inspired by [Redgate SQL Monitor](https://www.red-gate.com/products/sql-monitor/)
+
