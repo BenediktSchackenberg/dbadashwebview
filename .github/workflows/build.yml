@@ -1,0 +1,86 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Publish backend
+        working-directory: backend
+        run: dotnet publish -c Release -o ../publish
+
+      - name: Copy frontend to wwwroot
+        run: |
+          if (Test-Path publish\wwwroot) { Remove-Item -Recurse publish\wwwroot }
+          Copy-Item -Recurse frontend\dist publish\wwwroot
+
+      - name: Add web.config
+        run: |
+          @'
+          <?xml version="1.0" encoding="utf-8"?>
+          <configuration>
+            <location path="." inheritInChildApplications="false">
+              <system.webServer>
+                <handlers>
+                  <add name="aspNetCore" path="*" verb="*" modules="AspNetCoreModuleV2" resourceType="Unspecified" />
+                </handlers>
+                <aspNetCore processPath="dotnet" arguments=".\DBADashWebView.dll" stdoutLogEnabled="false" hostingModel="InProcess">
+                  <environmentVariables>
+                    <environmentVariable name="ASPNETCORE_ENVIRONMENT" value="Production" />
+                  </environmentVariables>
+                </aspNetCore>
+              </system.webServer>
+            </location>
+          </configuration>
+          '@ | Set-Content publish\web.config
+
+      - name: Create ZIP artifact
+        run: Compress-Archive -Path publish\* -DestinationPath dbadash-webview.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dbadash-webview
+          path: dbadash-webview.zip
+
+      - name: Create Release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Build ${{ github.run_number }}
+          body: |
+            Automated build from commit ${{ github.sha }}.
+            
+            ## Deployment
+            1. Extract ZIP to `C:\inetpub\dbadash`
+            2. Edit `appsettings.json` with your DB credentials
+            3. Create IIS site pointing to that folder (App Pool: No Managed Code)
+            4. Browse to `http://yourserver:8080` → Login: admin/admin
+          files: dbadash-webview.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
