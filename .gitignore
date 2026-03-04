@@ -1,6 +1,21 @@
-.env
-__pycache__/
-*.pyc
-node_modules/
-dist/
-.vite/
+# .NET
+backend/bin/
+backend/obj/
+backend/Properties/launchSettings.json
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# IDE
+.vs/
+.vscode/
+*.user
+*.suo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
