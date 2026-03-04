@@ -40,6 +40,8 @@ builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 app.UseCors();
+app.UseDefaultFiles();
+app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -474,6 +476,9 @@ app.MapGet("/api/drives", async () =>
         return Results.Ok(new { error = ex.Message, data = Array.Empty<object>() });
     }
 }).RequireAuthorization();
+
+// SPA fallback — serve index.html for all non-API routes
+app.MapFallbackToFile("index.html");
 
 app.Run();
 
