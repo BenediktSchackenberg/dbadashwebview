@@ -21,6 +21,21 @@ function getOverallStatus(row: any): number {
   return worst;
 }
 
+const statusColor = (s: number) => s === 4 ? 'bg-red-500' : s === 2 ? 'bg-yellow-500' : s === 3 ? 'bg-gray-500' : 'bg-emerald-500';
+const statusBorder = (s: number) => s === 4 ? 'border-red-500/40' : s === 2 ? 'border-yellow-500/40' : 'border-emerald-500/40';
+
+const statusDetailFields = [
+  { key: 'FullBackupStatus', label: 'Backup' },
+  { key: 'DriveStatus', label: 'Drives' },
+  { key: 'JobStatus', label: 'Jobs' },
+  { key: 'AGStatus', label: 'AG' },
+  { key: 'CorruptionStatus', label: 'Corruption' },
+  { key: 'LastGoodCheckDBStatus', label: 'DBCC' },
+  { key: 'LogBackupStatus', label: 'Log' },
+];
+
+const statusLabel = (v: number) => v === 1 ? '✓' : v === 2 ? '⚠' : v === 4 ? '✗' : '—';
+
 export default function DashboardPage() {
   const [summary, setSummary] = useState<any[]>([]);
   const [failures, setFailures] = useState<any[]>([]);
@@ -48,7 +63,10 @@ export default function DashboardPage() {
   if (loading) return <LoadingSpinner text="Loading dashboard..." />;
 
   const total = summary.length;
-  const healthy = summary.filter(s => getOverallStatus(s) === 1).length;
+  const healthy = summary.filter(s => {
+    const st = getOverallStatus(s);
+    return st === 1 || st === 3;
+  }).length;
   const warning = summary.filter(s => getOverallStatus(s) === 2).length;
   const critical = summary.filter(s => getOverallStatus(s) === 4).length;
 
@@ -65,41 +83,45 @@ export default function DashboardPage() {
         <StatCard title="Failed Jobs (24h)" value={failures.length} icon={Briefcase} color="text-orange-400" />
       </div>
 
-      {/* Instance Heatmap */}
+      {/* Heatmap Grid */}
       <div>
-        <h2 className="text-lg font-semibold text-white mb-3">Instance Overview</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+        <h2 className="text-lg font-semibold text-white mb-3">Instance Heatmap</h2>
+        <div className="flex flex-wrap gap-1.5">
           {summary.map((inst, i) => {
             const status = getOverallStatus(inst);
-            const borderColor = status === 4 ? 'border-red-500/40' : status === 2 ? 'border-yellow-500/40' : 'border-emerald-500/40';
-            const glowColor = status === 4 ? 'hover:shadow-red-500/10' : status === 2 ? 'hover:shadow-yellow-500/10' : 'hover:shadow-emerald-500/10';
-            const dotColor = status === 4 ? 'bg-red-500' : status === 2 ? 'bg-yellow-500' : 'bg-emerald-500';
             return (
               <motion.div
                 key={inst.InstanceID || i}
-                initial={{ opacity: 0, scale: 0.9 }}
+                initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: i * 0.03 }}
+                transition={{ delay: i * 0.02 }}
                 onClick={() => inst.InstanceID && navigate(`/instances/${inst.InstanceID}`)}
                 className={clsx(
-                  'glass rounded-xl p-4 cursor-pointer transition-all border hover:shadow-lg',
-                  borderColor, glowColor
+                  'w-12 h-12 rounded-lg cursor-pointer transition-all border flex items-center justify-center group relative',
+                  statusBorder(status), 'hover:scale-110 hover:z-10'
                 )}
+                title={`${inst.InstanceDisplayName || inst.ConnectionID || 'Unknown'}\n${statusDetailFields.map(f => `${f.label}: ${statusLabel(inst[f.key] || 3)}`).join('\n')}`}
               >
-                <div className="flex items-center gap-2 mb-2">
-                  <div className={clsx('w-2 h-2 rounded-full', dotColor)} />
-                  <span className="text-xs font-medium text-white truncate">
-                    {inst.InstanceDisplayName || inst.ConnectionID || 'Unknown'}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <StatusBadge status={status} size="xs" />
+                <div className={clsx('w-4 h-4 rounded-full', statusColor(status))} />
+                {/* Tooltip */}
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-50">
+                  <div className="glass-strong rounded-lg p-3 shadow-xl whitespace-nowrap text-xs">
+                    <p className="font-medium text-white mb-1.5">{inst.InstanceDisplayName || inst.ConnectionID || 'Unknown'}</p>
+                    <div className="space-y-0.5">
+                      {statusDetailFields.map(f => (
+                        <div key={f.key} className="flex items-center justify-between gap-4">
+                          <span className="text-gray-400">{f.label}</span>
+                          <StatusBadge status={inst[f.key] || 3} size="xs" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </motion.div>
             );
           })}
           {summary.length === 0 && (
-            <div className="col-span-full text-center py-8 text-gray-500">
+            <div className="w-full text-center py-8 text-gray-500">
               No instances found. Check your connection.
             </div>
           )}
@@ -115,10 +137,15 @@ export default function DashboardPage() {
             Recent Alerts
           </h3>
           <div className="space-y-2 max-h-64 overflow-y-auto">
-            {alerts.slice(0, 10).map((a, i) => (
+            {alerts.slice(0, 5).map((a, i) => (
               <div key={i} className="flex items-start gap-3 p-2 rounded-lg hover:bg-white/5">
                 <AlertTriangle className="w-4 h-4 text-yellow-400 mt-0.5 shrink-0" />
-                <div className="text-xs text-gray-300 truncate">{JSON.stringify(a).slice(0, 120)}</div>
+                <div className="min-w-0">
+                  <p className="text-xs text-white truncate">{a.ErrorMessage || a.message || JSON.stringify(a).slice(0, 120)}</p>
+                  <p className="text-[10px] text-gray-500">
+                    {a.ErrorDate || a.timestamp || ''} {a.ErrorContext || a.InstanceDisplayName ? `· ${a.ErrorContext || a.InstanceDisplayName}` : ''}
+                  </p>
+                </div>
               </div>
             ))}
             {alerts.length === 0 && <p className="text-xs text-gray-500">No recent alerts</p>}
@@ -132,7 +159,7 @@ export default function DashboardPage() {
             Failed Jobs (24h)
           </h3>
           <div className="space-y-2 max-h-64 overflow-y-auto">
-            {failures.slice(0, 10).map((j, i) => (
+            {failures.slice(0, 5).map((j, i) => (
               <div key={i} className="flex items-start gap-3 p-2 rounded-lg hover:bg-white/5">
                 <XCircle className="w-3.5 h-3.5 text-red-400 mt-0.5 shrink-0" />
                 <div className="min-w-0">
@@ -148,4 +175,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-

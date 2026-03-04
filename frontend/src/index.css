@@ -53,3 +53,19 @@ body {
 .status-warning { color: #eab308; }
 .status-critical { color: #ef4444; }
 .status-na { color: #6b7280; }
+
+/* Light mode */
+.light-mode body {
+  background: #f1f5f9;
+  color: #1e293b;
+}
+
+.light-mode .glass {
+  background: rgba(255, 255, 255, 0.8);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+.light-mode .glass-strong {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(0, 0, 0, 0.1);
+}

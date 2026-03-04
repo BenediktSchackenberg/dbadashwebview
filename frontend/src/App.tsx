@@ -1,10 +1,10 @@
 import { Routes, Route, Navigate, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useState, useEffect, useCallback, createContext, useContext } from 'react';
-import { isAuthenticated, clearToken } from './api/api';
+import { isAuthenticated, clearToken, api } from './api/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, Server, Briefcase, Database, Bell, HardDrive, Network,
-  ChevronLeft, ChevronRight, LogOut, User, RefreshCw, Clock
+  ChevronLeft, ChevronRight, LogOut, User, RefreshCw, Sun, Moon
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import LoginPage from './pages/LoginPage';
@@ -16,6 +16,10 @@ import BackupsPage from './pages/BackupsPage';
 import AlertsPage from './pages/AlertsPage';
 import DrivesPage from './pages/DrivesPage';
 import AvailabilityGroupsPage from './pages/AvailabilityGroupsPage';
+import DatabaseDetailPage from './pages/DatabaseDetailPage';
+import SearchDialog from './components/SearchDialog';
+import Breadcrumbs from './components/Breadcrumbs';
+import TimeRangePicker from './components/TimeRangePicker';
 
 const RefreshContext = createContext<{ lastRefresh: Date; refresh: () => void }>({
   lastRefresh: new Date(),
@@ -41,11 +45,45 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function useTheme() {
+  const [dark, setDark] = useState(() => {
+    const stored = localStorage.getItem('theme');
+    return stored ? stored === 'dark' : true;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('theme', dark ? 'dark' : 'light');
+    document.documentElement.classList.toggle('light-mode', !dark);
+  }, [dark]);
+
+  return { dark, toggle: () => setDark(d => !d) };
+}
+
 function Layout({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const { lastRefresh, refresh } = useRefresh();
+  const { dark, toggle: toggleTheme } = useTheme();
+  const [searchData, setSearchData] = useState<{ instances: any[]; databases: any[]; jobs: any[] }>({
+    instances: [], databases: [], jobs: [],
+  });
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [instances, jobs] = await Promise.all([
+          api.instances().catch(() => []),
+          api.jobsRecent().catch(() => []),
+        ]);
+        setSearchData({
+          instances: Array.isArray(instances) ? instances : [],
+          databases: [],
+          jobs: Array.isArray(jobs) ? jobs : [],
+        });
+      } catch {}
+    })();
+  }, []);
 
   const handleLogout = () => {
     clearToken();
@@ -54,29 +92,25 @@ function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen overflow-hidden">
+      <SearchDialog instances={searchData.instances} databases={searchData.databases} jobs={searchData.jobs} />
+
       {/* Sidebar */}
       <motion.aside
         animate={{ width: collapsed ? 72 : 240 }}
         transition={{ duration: 0.2 }}
         className="glass-strong flex flex-col border-r border-white/10 shrink-0 z-20"
       >
-        {/* Logo */}
         <div className="p-4 flex items-center gap-3 border-b border-white/10">
           <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shrink-0">
             <Database className="w-5 h-5 text-white" />
           </div>
           {!collapsed && (
-            <motion.span
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="font-bold text-white whitespace-nowrap"
-            >
+            <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="font-bold text-white whitespace-nowrap">
               DBA Dash
             </motion.span>
           )}
         </div>
 
-        {/* Nav */}
         <nav className="flex-1 p-3 space-y-1">
           {navItems.map(item => {
             const active = location.pathname === item.path ||
@@ -87,9 +121,7 @@ function Layout({ children }: { children: React.ReactNode }) {
                 to={item.path}
                 className={clsx(
                   'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all',
-                  active
-                    ? 'bg-blue-500/15 text-blue-400'
-                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                  active ? 'bg-blue-500/15 text-blue-400' : 'text-gray-400 hover:text-white hover:bg-white/5'
                 )}
               >
                 <item.icon className="w-5 h-5 shrink-0" />
@@ -99,7 +131,6 @@ function Layout({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        {/* Bottom */}
         <div className="p-3 border-t border-white/10 space-y-1">
           <button
             onClick={() => setCollapsed(!collapsed)}
@@ -128,14 +159,24 @@ function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Main */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Top Bar */}
         <header className="h-14 glass-strong border-b border-white/10 flex items-center justify-between px-6 shrink-0 z-10">
-          <div className="text-sm text-gray-400">
-            {navItems.find(n => location.pathname === n.path || (n.path !== '/' && location.pathname.startsWith(n.path)))?.label || 'Dashboard'}
-          </div>
-          <div className="flex items-center gap-4">
+          <Breadcrumbs />
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }))}
+              className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-gray-500 bg-white/5 hover:bg-white/10 transition-all"
+            >
+              <span>Search</span>
+              <kbd className="text-[10px] px-1 py-0.5 rounded bg-white/10">⌘K</kbd>
+            </button>
+            <TimeRangePicker />
+            <button
+              onClick={toggleTheme}
+              className="p-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-all"
+            >
+              {dark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            </button>
             <div className="flex items-center gap-2 text-xs text-gray-500">
-              <Clock className="w-3.5 h-3.5" />
               {lastRefresh.toLocaleTimeString()}
             </div>
             <button
@@ -147,7 +188,6 @@ function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        {/* Content */}
         <main className="flex-1 overflow-y-auto p-6">
           <AnimatePresence mode="wait">
             <motion.div
@@ -175,7 +215,6 @@ export default function App() {
     setLastRefresh(new Date());
   }, []);
 
-  // Auto-refresh every 60s
   useEffect(() => {
     const interval = setInterval(refresh, 60000);
     return () => clearInterval(interval);
@@ -192,6 +231,7 @@ export default function App() {
                 <Route path="/" element={<DashboardPage key={refreshKey} />} />
                 <Route path="/instances" element={<InstancesPage key={refreshKey} />} />
                 <Route path="/instances/:id" element={<InstanceDetailPage key={refreshKey} />} />
+                <Route path="/instances/:id/databases/:dbId" element={<DatabaseDetailPage key={refreshKey} />} />
                 <Route path="/jobs" element={<JobsPage key={refreshKey} />} />
                 <Route path="/backups" element={<BackupsPage key={refreshKey} />} />
                 <Route path="/alerts" element={<AlertsPage key={refreshKey} />} />
