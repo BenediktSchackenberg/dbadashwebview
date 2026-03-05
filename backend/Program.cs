@@ -1315,6 +1315,105 @@ app.MapGet("/api/monitoring/db-space", async (HttpContext ctx, int instanceId) =
 
 static string ToCamelCase(string s) => string.IsNullOrEmpty(s) ? s : char.ToLowerInvariant(s[0]) + s.Substring(1);
 
+app.MapGet("/api/dashboard/performance-summary", async () =>
+{
+    var connStr = app.Configuration.GetConnectionString("DBADashDB");
+    try
+    {
+        using var conn = new SqlConnection(connStr);
+        await conn.OpenAsync();
+        
+        var sql = @"
+        ;WITH LatestCPU AS (
+            SELECT c.InstanceID,
+                   AVG(c.SQLProcessCPU) as AvgCPU,
+                   MAX(c.MaxSQLProcessCPU) as MaxCPU,
+                   MAX(c.MaxTotalCPU) as MaxTotalCPU
+            FROM dbo.CPU c
+            WHERE c.EventTime > DATEADD(minute,-10,GETUTCDATE())
+            GROUP BY c.InstanceID
+        ),
+        LatestIO AS (
+            SELECT io.InstanceID,
+                   MAX(io.MaxReadLatency) as ReadLatency,
+                   MAX(io.MaxWriteLatency) as WriteLatency,
+                   SUM(io.MaxMBsec) as MBsec,
+                   SUM(io.MaxIOPs) as IOPs
+            FROM dbo.DBIOStats io
+            WHERE io.SnapshotDate > DATEADD(minute,-10,GETUTCDATE())
+              AND io.Drive = '*' AND io.FileID = -1
+            GROUP BY io.InstanceID
+        ),
+        LatestWaits AS (
+            SELECT w.InstanceID,
+                   SUM(CASE WHEN wt.IsCriticalWait=1 THEN w.wait_time_ms ELSE 0 END) as CriticalWaitMs,
+                   SUM(CASE WHEN wt.WaitType LIKE 'LCK%' THEN w.wait_time_ms ELSE 0 END) as LockWaitMs,
+                   SUM(CASE WHEN wt.WaitType LIKE 'PAGEIO%' OR wt.WaitType LIKE 'IO_%' OR wt.WaitType LIKE 'WRITELOG%' THEN w.wait_time_ms ELSE 0 END) as IOWaitMs,
+                   SUM(w.wait_time_ms) as TotalWaitMs,
+                   CASE WHEN SUM(w.wait_time_ms)>0 THEN SUM(w.signal_wait_time_ms)*100.0/SUM(w.wait_time_ms) ELSE 0 END as SignalWaitPct,
+                   SUM(CASE WHEN wt.WaitType LIKE 'LATCH%' THEN w.wait_time_ms ELSE 0 END) as LatchWaitMs
+            FROM dbo.Waits w
+            JOIN dbo.WaitType wt ON w.WaitTypeID = wt.WaitTypeID
+            WHERE w.SnapshotDate > DATEADD(minute,-10,GETUTCDATE())
+              AND wt.IsExcluded = 0
+            GROUP BY w.InstanceID
+        )
+        SELECT i.InstanceID, i.InstanceDisplayName,
+               COALESCE(cpu.AvgCPU, 0) as AvgCPU,
+               COALESCE(cpu.MaxCPU, 0) as MaxCPU,
+               COALESCE(cpu.MaxTotalCPU, 0) as MaxTotalCPU,
+               COALESCE(wt.CriticalWaitMs, 0) as CriticalWaitMs,
+               COALESCE(wt.LockWaitMs, 0) as LockWaitMs,
+               COALESCE(wt.IOWaitMs, 0) as IOWaitMs,
+               COALESCE(wt.TotalWaitMs, 0) as TotalWaitMs,
+               ROUND(COALESCE(wt.SignalWaitPct, 0), 1) as SignalWaitPct,
+               COALESCE(wt.LatchWaitMs, 0) as LatchWaitMs,
+               ROUND(COALESCE(io.ReadLatency, 0), 2) as ReadLatency,
+               ROUND(COALESCE(io.WriteLatency, 0), 2) as WriteLatency,
+               ROUND(COALESCE(io.MBsec, 0), 2) as MBsec,
+               ROUND(COALESCE(io.IOPs, 0), 1) as IOPs
+        FROM dbo.Instances i
+        LEFT JOIN LatestCPU cpu ON i.InstanceID = cpu.InstanceID
+        LEFT JOIN LatestIO io ON i.InstanceID = io.InstanceID
+        LEFT JOIN LatestWaits wt ON i.InstanceID = wt.InstanceID
+        WHERE i.IsActive = 1
+        ORDER BY i.InstanceDisplayName";
+
+        using var cmd = new SqlCommand(sql, conn);
+        cmd.CommandTimeout = 30;
+        using var r = await cmd.ExecuteReaderAsync();
+        var list = new List<object>();
+        while (await r.ReadAsync())
+        {
+            var dict = new Dictionary<string, object?>();
+            for (int i2 = 0; i2 < r.FieldCount; i2++)
+                dict[char.ToLowerInvariant(r.GetName(i2)[0]) + r.GetName(i2).Substring(1)] = r.IsDBNull(i2) ? null : r.GetValue(i2);
+            list.Add(dict);
+        }
+        return Results.Ok(new { data = list, note = "" });
+    }
+    catch (Exception ex) { return Results.Ok(new { data = Array.Empty<object>(), note = ex.Message }); }
+}).RequireAuthorization();
+
+app.MapGet("/api/settings/thresholds", () =>
+{
+    var path = Path.Combine(AppContext.BaseDirectory, "config", "thresholds.json");
+    if (!System.IO.File.Exists(path))
+        return Results.Ok(new { thresholds = new Dictionary<string, object>() });
+    var json = System.IO.File.ReadAllText(path);
+    return Results.Ok(System.Text.Json.JsonSerializer.Deserialize<object>(json));
+}).RequireAuthorization();
+
+app.MapPost("/api/settings/thresholds", async (HttpContext ctx) =>
+{
+    using var reader = new StreamReader(ctx.Request.Body);
+    var body = await reader.ReadToEndAsync();
+    var dir = Path.Combine(AppContext.BaseDirectory, "config");
+    Directory.CreateDirectory(dir);
+    System.IO.File.WriteAllText(Path.Combine(dir, "thresholds.json"), body);
+    return Results.Ok(new { success = true });
+}).RequireAuthorization();
+
 // SPA fallback — serve index.html for all non-API routes
 app.MapFallbackToFile("index.html");
 

@@ -106,4 +106,10 @@ export const api = {
     request<{ data: any[]; note: string }>(`/api/monitoring/tempdb?instanceId=${instanceId}`),
   monitoringDBSpace: (instanceId: number) =>
     request<{ data: any[]; note: string }>(`/api/monitoring/db-space?instanceId=${instanceId}`),
+  dashboardPerformanceSummary: () =>
+    request<{ data: any[]; note: string }>('/api/dashboard/performance-summary'),
+  getThresholds: () =>
+    request<{ thresholds: Record<string, { warning: number; critical: number }> }>('/api/settings/thresholds'),
+  saveThresholds: (thresholds: Record<string, { warning: number; critical: number }>) =>
+    request<{ success: boolean }>('/api/settings/thresholds', { method: 'POST', body: JSON.stringify({ thresholds }) }),
 };

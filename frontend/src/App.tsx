@@ -47,6 +47,7 @@ import IdentityColumnsPage from './pages/IdentityColumnsPage';
 import TempDBPage from './pages/TempDBPage';
 import DBSpacePage from './pages/DBSpacePage';
 import AboutPage from './pages/AboutPage';
+import ThresholdsPage from './pages/ThresholdsPage';
 import SearchDialog from './components/SearchDialog';
 import Breadcrumbs from './components/Breadcrumbs';
 import TimeRangePicker from './components/TimeRangePicker';
@@ -127,6 +128,7 @@ const navGroups: NavGroup[] = [
       { path: '/settings/users', icon: Users, label: 'Users & RBAC' },
       { path: '/settings/retention', icon: Clock, label: 'Data Retention' },
       { path: '/settings/alerts', icon: Shield, label: 'Alert Config' },
+      { path: '/settings/thresholds', icon: Gauge, label: 'Thresholds' },
     ],
   },
   {
@@ -384,6 +386,7 @@ export default function App() {
                 <Route path="/monitoring/db-space" element={<DBSpacePage key={refreshKey} />} />
                 <Route path="/performance/query-store" element={<QueryStorePage key={refreshKey} />} />
                 <Route path="/about" element={<AboutPage />} />
+                <Route path="/settings/thresholds" element={<ThresholdsPage key={refreshKey} />} />
               </Routes>
             </Layout>
           </AuthGuard>
