@@ -82,7 +82,7 @@ export default function IOPerformancePage() {
           <h1 className="text-2xl font-bold text-white">IO Performance</h1>
         </div>
         <select value={selectedInstance ?? ''} onChange={e => setSelectedInstance(e.target.value ? Number(e.target.value) : undefined)}
-          className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none">
+          className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none">
           <option value="">All Instances</option>
           {instances.map((inst: any) => (
             <option key={inst.InstanceID} value={inst.InstanceID}>{inst.InstanceDisplayName}</option>
@@ -142,20 +142,20 @@ export default function IOPerformancePage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-white/10 text-left">
-                  <th className="px-4 py-3 text-gray-400 font-medium">Instance</th>
-                  <th className="px-4 py-3 text-gray-400 font-medium">Database</th>
-                  <th className="px-4 py-3 text-gray-400 font-medium">File</th>
-                  <th className="px-4 py-3 text-gray-400 font-medium">Read Stall (ms)</th>
-                  <th className="px-4 py-3 text-gray-400 font-medium">Write Stall (ms)</th>
-                  <th className="px-4 py-3 text-gray-400 font-medium">Reads</th>
-                  <th className="px-4 py-3 text-gray-400 font-medium">Writes</th>
-                  <th className="px-4 py-3 text-gray-400 font-medium">Bytes Read</th>
-                  <th className="px-4 py-3 text-gray-400 font-medium">Bytes Written</th>
+                  <th className="px-4 py-3 text-gray-300 font-semibold">Instance</th>
+                  <th className="px-4 py-3 text-gray-300 font-semibold">Database</th>
+                  <th className="px-4 py-3 text-gray-300 font-semibold">File</th>
+                  <th className="px-4 py-3 text-gray-300 font-semibold">Read Stall (ms)</th>
+                  <th className="px-4 py-3 text-gray-300 font-semibold">Write Stall (ms)</th>
+                  <th className="px-4 py-3 text-gray-300 font-semibold">Reads</th>
+                  <th className="px-4 py-3 text-gray-300 font-semibold">Writes</th>
+                  <th className="px-4 py-3 text-gray-300 font-semibold">Bytes Read</th>
+                  <th className="px-4 py-3 text-gray-300 font-semibold">Bytes Written</th>
                 </tr>
               </thead>
               <tbody>
                 {fileStats.slice(0, 50).map((row, i) => (
-                  <tr key={i} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                  <tr key={i} className="border-b border-white/5 hover:bg-slate-800/50 transition-colors">
                     <td className="px-4 py-3 text-gray-300">{row.InstanceDisplayName}</td>
                     <td className="px-4 py-3 text-gray-300">{row.database_name || '-'}</td>
                     <td className="px-4 py-3 text-gray-400 text-xs font-mono">{row.file_name || '-'}</td>

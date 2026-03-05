@@ -67,9 +67,14 @@ interface NavGroup {
 
 const navGroups: NavGroup[] = [
   {
-    label: 'Overviews',
+    label: 'Dashboard',
     items: [
       { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
+    ],
+  },
+  {
+    label: 'SQL Fleet',
+    items: [
       { path: '/instances', icon: Server, label: 'Instances' },
       { path: '/availability-groups', icon: Network, label: 'Availability Groups' },
     ],
@@ -80,35 +85,32 @@ const navGroups: NavGroup[] = [
       { path: '/performance/running-queries', icon: Activity, label: 'Running Queries' },
       { path: '/performance/blocking', icon: AlertTriangle, label: 'Blocking' },
       { path: '/performance/slow-queries', icon: Clock, label: 'Slow Queries' },
+      { path: '/performance/waits-timeline', icon: Clock, label: 'Waits Timeline' },
+      { path: '/performance/exec-stats', icon: Zap, label: 'Object Exec Stats' },
+      { path: '/performance/query-store', icon: Search, label: 'Query Store' },
       { path: '/performance/memory', icon: HardDrive, label: 'Memory' },
       { path: '/performance/io', icon: HardDrive, label: 'IO Performance' },
-      { path: '/performance/exec-stats', icon: Zap, label: 'Object Exec Stats' },
-      { path: '/performance/waits-timeline', icon: Clock, label: 'Waits Timeline' },
       { path: '/performance/counters', icon: Gauge, label: 'Perf Counters' },
-      { path: '/performance/query-store', icon: Search, label: 'Query Store' },
     ],
   },
   {
-    label: 'Monitoring',
+    label: 'Daily Checks',
     items: [
       { path: '/alerts', icon: Bell, label: 'Alerts' },
-      { path: '/analysis', icon: Activity, label: 'Analysis' },
-      { path: '/queries', icon: Search, label: 'Queries' },
-      { path: '/monitoring/job-timeline', icon: CalendarClock, label: 'Job Timeline' },
+      { path: '/jobs', icon: CalendarClock, label: 'Jobs' },
+      { path: '/backups', icon: Database, label: 'Backups' },
+      { path: '/drives', icon: HardDrive, label: 'Drive Space' },
+      { path: '/monitoring/db-space', icon: Database, label: 'DB Space' },
+      { path: '/monitoring/tempdb', icon: Thermometer, label: 'TempDB' },
+    ],
+  },
+  {
+    label: 'Tracking',
+    items: [
       { path: '/monitoring/configuration', icon: Settings, label: 'Configuration' },
       { path: '/monitoring/patching', icon: Shield, label: 'SQL Patching' },
       { path: '/monitoring/schema-changes', icon: GitBranch, label: 'Schema Changes' },
       { path: '/monitoring/identity-columns', icon: Key, label: 'Identity Columns' },
-      { path: '/monitoring/tempdb', icon: Thermometer, label: 'TempDB' },
-      { path: '/monitoring/db-space', icon: Database, label: 'DB Space' },
-    ],
-  },
-  {
-    label: 'Estate',
-    items: [
-      { path: '/estate/disks', icon: HardDrive, label: 'Disk Usage' },
-      { path: '/estate/backups', icon: Database, label: 'Backups' },
-      { path: '/estate/availability-groups', icon: Network, label: 'AGs Estate' },
     ],
   },
   {

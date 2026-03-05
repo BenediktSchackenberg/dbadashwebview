@@ -52,18 +52,18 @@ export default function JobsPage() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-white/10">
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Status</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Job/Step</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Instance</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Time</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Duration</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">Status</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">Job/Step</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">Instance</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">Time</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">Duration</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
             {data.map((j, i) => {
               const s = statusLabel(j.run_status);
               return (
-                <tr key={i} className="hover:bg-white/5">
+                <tr key={i} className="hover:bg-slate-800/50">
                   <td className="px-4 py-2.5"><span className={clsx('text-xs px-2 py-0.5 rounded', s.color)}>{s.label}</span></td>
                   <td className="px-4 py-2.5 text-white text-xs">{j.step_name || j.job_id || '—'}</td>
                   <td className="px-4 py-2.5 text-gray-400 text-xs">{j.InstanceDisplayName || '—'}</td>

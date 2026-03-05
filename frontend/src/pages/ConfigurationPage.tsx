@@ -54,7 +54,7 @@ export default function ConfigurationPage() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <select value={selectedInstance ?? ''} onChange={e => setSelectedInstance(e.target.value ? Number(e.target.value) : undefined)} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-300">
+          <select value={selectedInstance ?? ''} onChange={e => setSelectedInstance(e.target.value ? Number(e.target.value) : undefined)} className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-gray-300">
             <option value="">Select Instance</option>
             {instances.map((inst: any) => <option key={inst.InstanceID} value={inst.InstanceID}>{inst.InstanceDisplayName || inst.InstanceID}</option>)}
           </select>
@@ -66,10 +66,10 @@ export default function ConfigurationPage() {
       {selectedInstance && (
         <>
           <div className="flex gap-2">
-            <button onClick={() => setTab('current')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${tab === 'current' ? 'bg-indigo-500/20 text-indigo-400' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}>
+            <button onClick={() => setTab('current')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${tab === 'current' ? 'bg-indigo-500/20 text-indigo-400' : 'text-gray-400 hover:text-white hover:bg-slate-800/50'}`}>
               Current Config
             </button>
-            <button onClick={() => setTab('changes')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${tab === 'changes' ? 'bg-indigo-500/20 text-indigo-400' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}>
+            <button onClick={() => setTab('changes')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${tab === 'changes' ? 'bg-indigo-500/20 text-indigo-400' : 'text-gray-400 hover:text-white hover:bg-slate-800/50'}`}>
               Changes {changes.length > 0 && <span className="ml-1 px-1.5 py-0.5 rounded-full text-xs bg-indigo-500/30">{changes.length}</span>}
             </button>
           </div>
@@ -82,7 +82,7 @@ export default function ConfigurationPage() {
               <div className="p-4 border-b border-white/10 flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-white">Configuration Settings</h2>
                 <input type="text" placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)}
-                  className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-gray-300 placeholder-gray-500 w-48" />
+                  className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-gray-300 placeholder-gray-500 w-48" />
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -101,7 +101,7 @@ export default function ConfigurationPage() {
                     {filtered.map((c, i) => {
                       const mismatch = c.value !== undefined && c.value_in_use !== undefined && c.value !== c.value_in_use;
                       return (
-                        <tr key={i} className={`border-b border-white/5 hover:bg-white/5 ${mismatch ? 'bg-yellow-500/5' : ''}`}>
+                        <tr key={i} className={`border-b border-white/5 hover:bg-slate-800/50 ${mismatch ? 'bg-yellow-500/5' : ''}`}>
                           <td className="px-3 py-2 text-white font-medium">{c.name}</td>
                           <td className={`px-3 py-2 ${mismatch ? 'text-yellow-400' : 'text-gray-300'}`}>{c.value}</td>
                           <td className={`px-3 py-2 ${mismatch ? 'text-yellow-400' : 'text-gray-300'}`}>{c.value_in_use}</td>
@@ -136,7 +136,7 @@ export default function ConfigurationPage() {
                   </thead>
                   <tbody>
                     {changes.map((c, i) => (
-                      <tr key={i} className="border-b border-white/5 hover:bg-white/5">
+                      <tr key={i} className="border-b border-white/5 hover:bg-slate-800/50">
                         <td className="px-3 py-2 text-white font-medium">{c.name}</td>
                         <td className="px-3 py-2 text-red-400">{c.old_value}</td>
                         <td className="px-3 py-2 text-green-400">{c.new_value}</td>

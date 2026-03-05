@@ -20,7 +20,7 @@ body {
 }
 
 .glass {
-  background: rgba(17, 24, 39, 0.7);
+  background: rgba(17, 24, 39, 0.85);
   backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
@@ -53,6 +53,41 @@ body {
 .status-warning { color: #eab308; }
 .status-critical { color: #ef4444; }
 .status-na { color: #6b7280; }
+
+/* Global form elements */
+select,
+input[type="text"],
+input[type="number"],
+input[type="password"],
+input[type="email"],
+input[type="search"],
+textarea {
+  background: rgba(30, 41, 59, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #fff;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+select:focus,
+input:focus,
+textarea:focus {
+  outline: none;
+  border-color: rgba(59, 130, 246, 0.5);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+}
+
+select option {
+  background: #1e293b;
+  color: #fff;
+}
+
+body {
+  color: #d1d5db;
+  font-size: 0.9375rem;
+}
 
 /* Light mode */
 .light-mode body {

@@ -100,15 +100,15 @@ function AGDetail({ id, onBack }: { id: number; onBack: () => void }) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-white/10">
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Database</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Sync State</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Log Send Queue</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Redo Queue</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">Database</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">Sync State</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">Log Send Queue</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">Redo Queue</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
               {databases.map((d: any, i: number) => (
-                <tr key={i} className="hover:bg-white/5">
+                <tr key={i} className="hover:bg-slate-800/50">
                   <td className="px-4 py-2.5 text-white">{d.DatabaseName || d.name || '—'}</td>
                   <td className="px-4 py-2.5 text-xs text-gray-400">{d.synchronization_state_desc || d.SyncState || '—'}</td>
                   <td className="px-4 py-2.5 text-xs text-gray-400">{d.log_send_queue_size != null ? `${d.log_send_queue_size} KB` : '—'}</td>
@@ -165,7 +165,7 @@ export default function AvailabilityGroupsPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.05 }}
               onClick={() => ag.AGId && setSelectedId(ag.AGId)}
-              className="glass rounded-xl p-5 cursor-pointer hover:bg-white/5 transition-all border border-white/5 hover:border-blue-500/30"
+              className="glass rounded-xl p-6 cursor-pointer hover:bg-slate-800/50 transition-all border border-white/5 hover:border-blue-500/30"
             >
               <div className="flex items-center gap-3 mb-3">
                 <Network className="w-5 h-5 text-blue-400" />

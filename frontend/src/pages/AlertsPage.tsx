@@ -96,13 +96,13 @@ export default function AlertsPage() {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search alerts..."
-            className="w-full pl-9 pr-4 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50"
+            className="w-full pl-9 pr-4 py-2 bg-slate-800 border border-slate-600 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50"
           />
         </div>
         <select
           value={severityFilter}
           onChange={e => setSeverityFilter(e.target.value as SeverityFilter)}
-          className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-gray-300 focus:outline-none"
+          className="px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-sm text-gray-300 focus:outline-none"
         >
           <option value="all">All Severities</option>
           <option value="critical">Critical</option>
@@ -112,7 +112,7 @@ export default function AlertsPage() {
         <select
           value={statusFilter}
           onChange={e => setStatusFilter(e.target.value as StatusFilter)}
-          className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-gray-300 focus:outline-none"
+          className="px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-sm text-gray-300 focus:outline-none"
         >
           <option value="all">All Status</option>
           <option value="active">Active</option>
@@ -130,7 +130,7 @@ export default function AlertsPage() {
               onClick={() => setSelectedIdx(a._idx)}
               className={clsx(
                 'glass rounded-xl p-4 cursor-pointer transition-all border',
-                selectedIdx === a._idx ? 'border-blue-500/30 bg-blue-500/5' : 'border-white/5 hover:border-white/10 hover:bg-white/5',
+                selectedIdx === a._idx ? 'border-blue-500/30 bg-blue-500/5' : 'border-white/5 hover:border-white/10 hover:bg-slate-800/50',
                 a._acknowledged && 'opacity-60'
               )}
             >
@@ -156,7 +156,7 @@ export default function AlertsPage() {
         </div>
 
         {/* Detail Panel */}
-        <div className="glass rounded-xl p-5 h-fit sticky top-6">
+        <div className="glass rounded-xl p-6 h-fit sticky top-6">
           {selected ? (
             <div className="space-y-4">
               <div className="flex items-center gap-2">

@@ -84,11 +84,11 @@ export default function PerformanceCountersPage() {
         </div>
         <div className="flex items-center gap-3">
           <input type="text" placeholder="Search counters..." value={search} onChange={e => setSearch(e.target.value)}
-            className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-300 placeholder-gray-500 w-48" />
-          <select value={hours} onChange={e => setHours(Number(e.target.value))} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-300">
+            className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-gray-300 placeholder-gray-500 w-48" />
+          <select value={hours} onChange={e => setHours(Number(e.target.value))} className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-gray-300">
             <option value={1}>1h</option><option value={6}>6h</option><option value={12}>12h</option><option value={24}>24h</option><option value={72}>3d</option>
           </select>
-          <select value={selectedInstance ?? ''} onChange={e => setSelectedInstance(e.target.value ? Number(e.target.value) : undefined)} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-300">
+          <select value={selectedInstance ?? ''} onChange={e => setSelectedInstance(e.target.value ? Number(e.target.value) : undefined)} className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-gray-300">
             <option value="">Select Instance</option>
             {instances.map((inst: any) => <option key={inst.InstanceID} value={inst.InstanceID}>{inst.InstanceDisplayName || inst.InstanceID}</option>)}
           </select>
@@ -133,7 +133,7 @@ export default function PerformanceCountersPage() {
               </thead>
               <tbody>
                 {[...counters.entries()].map(([name, points]) => (
-                  <tr key={name} className="border-b border-white/5 hover:bg-white/5">
+                  <tr key={name} className="border-b border-white/5 hover:bg-slate-800/50">
                     <td className="px-3 py-2 text-white">{name}</td>
                     <td className="px-3 py-2 text-cyan-400">{points.length > 0 ? points[points.length - 1].value.toLocaleString() : '-'}</td>
                     <td className="px-3 py-2 text-gray-400">{points.length}</td>

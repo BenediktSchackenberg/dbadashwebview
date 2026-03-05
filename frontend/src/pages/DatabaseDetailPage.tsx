@@ -59,7 +59,7 @@ export default function DatabaseDetailPage() {
             <p className="text-xs text-gray-500 mt-1">{age}</p>
           </>
         ) : (
-          <p className="text-sm text-gray-500">No backup</p>
+          <p className="text-sm text-gray-400">No backup</p>
         )}
       </div>
     );

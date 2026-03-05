@@ -62,14 +62,14 @@ export default function SlowQueriesPage() {
         </div>
         <div className="flex items-center gap-3">
           <select value={hours} onChange={e => setHours(Number(e.target.value))}
-            className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none">
+            className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none">
             <option value={1}>Last 1h</option>
             <option value={6}>Last 6h</option>
             <option value={24}>Last 24h</option>
             <option value={72}>Last 3d</option>
           </select>
           <select value={selectedInstance ?? ''} onChange={e => setSelectedInstance(e.target.value ? Number(e.target.value) : undefined)}
-            className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none">
+            className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none">
             <option value="">All Instances</option>
             {instances.map((inst: any) => (
               <option key={inst.InstanceID} value={inst.InstanceID}>{inst.InstanceDisplayName}</option>
@@ -81,14 +81,14 @@ export default function SlowQueriesPage() {
       <div className="flex items-center gap-3 flex-wrap">
         {databases.length > 0 && (
           <select value={dbFilter} onChange={e => setDbFilter(e.target.value)}
-            className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none">
+            className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none">
             <option value="">All Databases</option>
             {databases.map(db => <option key={db} value={db}>{db}</option>)}
           </select>
         )}
         {apps.length > 0 && (
           <select value={appFilter} onChange={e => setAppFilter(e.target.value)}
-            className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none">
+            className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none">
             <option value="">All Apps</option>
             {apps.map(a => <option key={a} value={a}>{a}</option>)}
           </select>
@@ -108,24 +108,24 @@ export default function SlowQueriesPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-white/10 text-left">
-                  <th className="px-4 py-3 text-gray-400 font-medium"></th>
-                  <th className="px-4 py-3 text-gray-400 font-medium">Instance</th>
-                  <th className="px-4 py-3 text-gray-400 font-medium">Database</th>
-                  <th className="px-4 py-3 text-gray-400 font-medium">Object</th>
-                  <th className="px-4 py-3 text-gray-400 font-medium">Duration</th>
-                  <th className="px-4 py-3 text-gray-400 font-medium">CPU</th>
-                  <th className="px-4 py-3 text-gray-400 font-medium">Reads</th>
-                  <th className="px-4 py-3 text-gray-400 font-medium">Writes</th>
-                  <th className="px-4 py-3 text-gray-400 font-medium">Client</th>
-                  <th className="px-4 py-3 text-gray-400 font-medium">App</th>
-                  <th className="px-4 py-3 text-gray-400 font-medium">Timestamp</th>
+                  <th className="px-4 py-3 text-gray-300 font-semibold"></th>
+                  <th className="px-4 py-3 text-gray-300 font-semibold">Instance</th>
+                  <th className="px-4 py-3 text-gray-300 font-semibold">Database</th>
+                  <th className="px-4 py-3 text-gray-300 font-semibold">Object</th>
+                  <th className="px-4 py-3 text-gray-300 font-semibold">Duration</th>
+                  <th className="px-4 py-3 text-gray-300 font-semibold">CPU</th>
+                  <th className="px-4 py-3 text-gray-300 font-semibold">Reads</th>
+                  <th className="px-4 py-3 text-gray-300 font-semibold">Writes</th>
+                  <th className="px-4 py-3 text-gray-300 font-semibold">Client</th>
+                  <th className="px-4 py-3 text-gray-300 font-semibold">App</th>
+                  <th className="px-4 py-3 text-gray-300 font-semibold">Timestamp</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((row, i) => (
                   <>
                     <tr key={i} onClick={() => toggleRow(i)}
-                      className="border-b border-white/5 cursor-pointer hover:bg-white/5 transition-colors">
+                      className="border-b border-white/5 cursor-pointer hover:bg-slate-800/50 transition-colors">
                       <td className="px-4 py-3 text-gray-500">
                         {expandedRows.has(i) ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                       </td>

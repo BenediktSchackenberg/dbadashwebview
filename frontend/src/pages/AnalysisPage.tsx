@@ -70,7 +70,7 @@ export default function AnalysisPage() {
           <select
             value={selectedInstance ?? ''}
             onChange={e => setSelectedInstance(Number(e.target.value))}
-            className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white"
+            className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white"
           >
             {instances.map(inst => (
               <option key={inst.InstanceID} value={inst.InstanceID}>
@@ -81,9 +81,9 @@ export default function AnalysisPage() {
         </div>
       </div>
 
-      <div className="glass rounded-xl p-5 gradient-border">
+      <div className="glass rounded-xl p-6 gradient-border">
         <div className="flex items-center gap-6 mb-4">
-          <span className="text-sm text-gray-400 font-medium">Metrics:</span>
+          <span className="text-sm text-gray-300 font-semibold">Metrics:</span>
           {(['cpu', 'ioWaits', 'memory'] as const).map(m => (
             <label key={m} className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
               <input
@@ -141,7 +141,7 @@ export default function AnalysisPage() {
       </div>
 
       {waitsData.length > 0 && (
-        <div className="glass rounded-xl p-5 gradient-border">
+        <div className="glass rounded-xl p-6 gradient-border">
           <h3 className="text-lg font-semibold text-white mb-3">Top Wait Types (Last Hour)</h3>
           <div className="space-y-2">
             {waitsData.slice(0, 10).map((w: any, i: number) => (

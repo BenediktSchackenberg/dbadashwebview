@@ -57,25 +57,25 @@ export default function EstateDiskPage() {
           placeholder="Filter by instance or drive..."
           value={filter}
           onChange={e => setFilter(e.target.value)}
-          className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 w-64"
+          className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 w-64"
         />
       </div>
 
-      <div className="glass rounded-xl p-5 gradient-border overflow-x-auto">
+      <div className="glass rounded-xl p-6 gradient-border overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-white/10 text-left">
-              <th className="pb-3 text-gray-400 font-medium">Instance</th>
-              <th className="pb-3 text-gray-400 font-medium">Drive</th>
-              <th className="pb-3 text-gray-400 font-medium w-48">Usage</th>
-              <th className="pb-3 text-gray-400 font-medium text-right">Capacity</th>
-              <th className="pb-3 text-gray-400 font-medium text-right">Free</th>
-              <th className="pb-3 text-gray-400 font-medium text-right">Est. Full</th>
+              <th className="pb-3 text-gray-300 font-semibold">Instance</th>
+              <th className="pb-3 text-gray-300 font-semibold">Drive</th>
+              <th className="pb-3 text-gray-300 font-semibold w-48">Usage</th>
+              <th className="pb-3 text-gray-300 font-semibold text-right">Capacity</th>
+              <th className="pb-3 text-gray-300 font-semibold text-right">Free</th>
+              <th className="pb-3 text-gray-300 font-semibold text-right">Est. Full</th>
             </tr>
           </thead>
           <tbody>
             {filtered.map((d, i) => (
-              <tr key={i} className="border-b border-white/5 hover:bg-white/5">
+              <tr key={i} className="border-b border-white/5 hover:bg-slate-800/50">
                 <td className="py-3 text-gray-300">{d.InstanceDisplayName || '—'}</td>
                 <td className="py-3 text-gray-300 font-mono text-xs">{d.Name || d.Label || '—'}</td>
                 <td className="py-3"><CapacityBar used={d.used} total={d.capacity} /></td>

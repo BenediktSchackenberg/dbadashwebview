@@ -70,10 +70,10 @@ export default function WaitsTimelinePage() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <select value={hours} onChange={e => setHours(Number(e.target.value))} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-300">
+          <select value={hours} onChange={e => setHours(Number(e.target.value))} className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-gray-300">
             <option value={1}>1h</option><option value={6}>6h</option><option value={12}>12h</option><option value={24}>24h</option><option value={72}>3d</option>
           </select>
-          <select value={selectedInstance ?? ''} onChange={e => setSelectedInstance(e.target.value ? Number(e.target.value) : undefined)} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-300">
+          <select value={selectedInstance ?? ''} onChange={e => setSelectedInstance(e.target.value ? Number(e.target.value) : undefined)} className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-gray-300">
             <option value="">Select Instance</option>
             {instances.map((inst: any) => <option key={inst.InstanceID} value={inst.InstanceID}>{inst.InstanceDisplayName || inst.InstanceID}</option>)}
           </select>
@@ -117,7 +117,7 @@ export default function WaitsTimelinePage() {
               </thead>
               <tbody>
                 {totals.slice(0, 50).map((d, i) => (
-                  <tr key={i} className="border-b border-white/5 hover:bg-white/5">
+                  <tr key={i} className="border-b border-white/5 hover:bg-slate-800/50">
                     <td className="px-3 py-2 text-white font-medium">{d.WaitType}</td>
                     <td className="px-3 py-2 text-purple-400">{d.wait_time_ms.toLocaleString()}</td>
                     <td className="px-3 py-2 text-gray-300">{d.waiting_tasks_count.toLocaleString()}</td>

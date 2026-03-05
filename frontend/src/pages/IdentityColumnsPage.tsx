@@ -18,7 +18,7 @@ export default function IdentityColumnsPage() {
   }, [instanceId]);
 
   const getColor = (pct: number) => pct >= 90 ? '#ef4444' : pct >= 70 ? '#f59e0b' : '#10b981';
-  const inputCls = "bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500/50";
+  const inputCls = "bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500/50";
 
   return (
     <div className="space-y-6">
@@ -31,16 +31,16 @@ export default function IdentityColumnsPage() {
       {!instanceId ? <p className="text-gray-500 text-sm">Select an instance to view identity column usage.</p> :
         loading ? <div className="text-gray-400">Loading...</div> :
         data.length === 0 ? <p className="text-gray-500 text-sm">No identity columns found.</p> :
-        <div className="glass rounded-xl p-5 gradient-border overflow-x-auto">
+        <div className="glass rounded-xl p-6 gradient-border overflow-x-auto">
           <table className="w-full text-sm">
-            <thead><tr className="border-b border-white/10 text-left text-gray-400">
+            <thead><tr className="border-b border-white/10 text-left text-gray-300 font-semibold">
               <th className="pb-2">Database</th><th className="pb-2">Table</th><th className="pb-2">Column</th><th className="pb-2">Last Value</th><th className="pb-2">Max Value</th><th className="pb-2 w-48">Usage</th>
             </tr></thead>
             <tbody>{data.map((d, i) => {
               const pct = d.percentUsed ?? 0;
               return (
                 <motion.tr key={i} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.02 }}
-                  className="border-b border-white/5 hover:bg-white/5">
+                  className="border-b border-white/5 hover:bg-slate-800/50">
                   <td className="py-2 text-gray-300">{d.databaseName}</td>
                   <td className="py-2 text-white">{d.schemaName}.{d.tableName}</td>
                   <td className="py-2 text-gray-300">{d.columnName}</td>

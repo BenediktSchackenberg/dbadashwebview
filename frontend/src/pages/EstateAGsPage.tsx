@@ -39,15 +39,15 @@ export default function EstateAGsPage() {
         <StatCard title="Critical" value={stats.critical} icon={XCircle} color="text-red-400" />
       </div>
 
-      <div className="glass rounded-xl p-5 gradient-border overflow-x-auto">
+      <div className="glass rounded-xl p-6 gradient-border overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-white/10 text-left">
-              <th className="pb-3 text-gray-400 font-medium">AG Name</th>
-              <th className="pb-3 text-gray-400 font-medium">Primary</th>
-              <th className="pb-3 text-gray-400 font-medium text-center">Secondaries</th>
-              <th className="pb-3 text-gray-400 font-medium">Sync Health</th>
-              <th className="pb-3 text-gray-400 font-medium">Failover Ready</th>
+              <th className="pb-3 text-gray-300 font-semibold">AG Name</th>
+              <th className="pb-3 text-gray-300 font-semibold">Primary</th>
+              <th className="pb-3 text-gray-300 font-semibold text-center">Secondaries</th>
+              <th className="pb-3 text-gray-300 font-semibold">Sync Health</th>
+              <th className="pb-3 text-gray-300 font-semibold">Failover Ready</th>
             </tr>
           </thead>
           <tbody>
@@ -59,7 +59,7 @@ export default function EstateAGsPage() {
               return (
                 <tr key={i}
                   onClick={() => navigate('/availability-groups')}
-                  className="border-b border-white/5 hover:bg-white/5 cursor-pointer transition-colors">
+                  className="border-b border-white/5 hover:bg-slate-800/50 cursor-pointer transition-colors">
                   <td className="py-3 text-blue-400 font-medium">{ag.ag_name || ag.AGName || ag.name || '—'}</td>
                   <td className="py-3 text-gray-300">{ag.InstanceDisplayName || '—'}</td>
                   <td className="py-3 text-gray-400 text-center">{ag.secondary_count ?? ag.SecondariesCount ?? '—'}</td>

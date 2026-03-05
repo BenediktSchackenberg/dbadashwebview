@@ -153,7 +153,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Top 10 CPU */}
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
-          className="glass rounded-xl p-5">
+          className="glass rounded-xl p-6">
           <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
             <Activity className="w-4 h-4 text-blue-400" />
             Top 10 Instances by CPU (1h avg)
@@ -183,7 +183,7 @@ export default function DashboardPage() {
 
         {/* Top 10 Largest Databases */}
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}
-          className="glass rounded-xl p-5">
+          className="glass rounded-xl p-6">
           <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
             <Database className="w-4 h-4 text-purple-400" />
             Top 10 Largest Databases
@@ -193,14 +193,14 @@ export default function DashboardPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-white/10">
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-400 uppercase">Instance</th>
-                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-400 uppercase">Database</th>
-                    <th className="px-3 py-2 text-right text-xs font-medium text-gray-400 uppercase">Size</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold text-gray-300 uppercase">Instance</th>
+                    <th className="px-3 py-2 text-left text-xs font-semibold text-gray-300 uppercase">Database</th>
+                    <th className="px-3 py-2 text-right text-xs font-semibold text-gray-300 uppercase">Size</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
                   {largestDbs.map((db, i) => (
-                    <tr key={i} className="hover:bg-white/5">
+                    <tr key={i} className="hover:bg-slate-800/50">
                       <td className="px-3 py-2 text-xs text-gray-400 truncate max-w-[140px]">{db.instanceName}</td>
                       <td className="px-3 py-2 text-xs text-white">{db.databaseName}</td>
                       <td className="px-3 py-2 text-xs text-right text-emerald-400 font-mono">{formatSize(db.sizeMb)}</td>
@@ -219,14 +219,14 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Alerts */}
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
-          className="glass rounded-xl p-5">
+          className="glass rounded-xl p-6">
           <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
             <Bell className="w-4 h-4 text-amber-400" />
             Recent Alerts
           </h3>
           <div className="space-y-2 max-h-64 overflow-y-auto">
             {alerts.slice(0, 10).map((a: any, i: number) => (
-              <div key={i} className="flex items-start gap-3 p-2 rounded-lg hover:bg-white/5">
+              <div key={i} className="flex items-start gap-3 p-2 rounded-lg hover:bg-slate-800/50">
                 <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
                 <div className="min-w-0">
                   <p className="text-xs text-white truncate">{a.ErrorMessage || a.message || JSON.stringify(a).slice(0, 120)}</p>
@@ -242,14 +242,14 @@ export default function DashboardPage() {
 
         {/* Failed Jobs */}
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}
-          className="glass rounded-xl p-5">
+          className="glass rounded-xl p-6">
           <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
             <XCircle className="w-4 h-4 text-red-400" />
             Failed Jobs (24h)
           </h3>
           <div className="space-y-2 max-h-64 overflow-y-auto">
             {failures.slice(0, 10).map((j: any, i: number) => (
-              <div key={i} className="flex items-start gap-3 p-2 rounded-lg hover:bg-white/5">
+              <div key={i} className="flex items-start gap-3 p-2 rounded-lg hover:bg-slate-800/50">
                 <XCircle className="w-3.5 h-3.5 text-red-400 mt-0.5 shrink-0" />
                 <div className="min-w-0">
                   <p className="text-xs font-medium text-white truncate">{j.step_name || j.job_id}</p>

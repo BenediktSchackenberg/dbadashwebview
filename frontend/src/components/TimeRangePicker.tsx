@@ -45,7 +45,7 @@ export default function TimeRangePicker() {
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-gray-400 hover:text-white hover:bg-white/5 transition-all"
+        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-gray-400 hover:text-white hover:bg-slate-800/50 transition-all"
       >
         <Clock className="w-3.5 h-3.5" />
         {currentLabel}
@@ -59,7 +59,7 @@ export default function TimeRangePicker() {
               onClick={() => select(p.value)}
               className={clsx(
                 'w-full px-3 py-1.5 text-left text-xs transition-colors',
-                p.value === current ? 'bg-blue-500/15 text-blue-400' : 'text-gray-400 hover:text-white hover:bg-white/5'
+                p.value === current ? 'bg-blue-500/15 text-blue-400' : 'text-gray-400 hover:text-white hover:bg-slate-800/50'
               )}
             >
               {p.label}

@@ -144,7 +144,7 @@ export default function SearchDialog({ instances, databases, jobs }: SearchDialo
                       onClick={() => handleSelect(item)}
                       className={clsx(
                         'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors',
-                        idx === selectedIndex ? 'bg-blue-500/15 text-blue-400' : 'text-gray-300 hover:bg-white/5'
+                        idx === selectedIndex ? 'bg-blue-500/15 text-blue-400' : 'text-gray-300 hover:bg-slate-800/50'
                       )}
                     >
                       <Icon className="w-4 h-4 shrink-0 text-gray-500" />

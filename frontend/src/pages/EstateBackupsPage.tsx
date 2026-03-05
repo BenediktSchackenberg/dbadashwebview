@@ -91,7 +91,7 @@ export default function EstateBackupsPage() {
         </div>
       </div>
 
-      <div className="glass rounded-xl p-5 gradient-border">
+      <div className="glass rounded-xl p-6 gradient-border">
         <h3 className="text-lg font-semibold text-white mb-3">RPO Distribution</h3>
         <ResponsiveContainer width="100%" height={200}>
           <BarChart data={rpoChart}>
@@ -105,16 +105,16 @@ export default function EstateBackupsPage() {
       </div>
 
       {grouped.map(g => (
-        <div key={g.instance} className="glass rounded-xl p-5 gradient-border">
+        <div key={g.instance} className="glass rounded-xl p-6 gradient-border">
           <h3 className="text-lg font-semibold text-white mb-3">{g.instance}</h3>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-white/10 text-left">
-                  <th className="pb-2 text-gray-400 font-medium">Database</th>
-                  <th className="pb-2 text-gray-400 font-medium">Full Backup</th>
-                  <th className="pb-2 text-gray-400 font-medium">Diff Backup</th>
-                  <th className="pb-2 text-gray-400 font-medium">Log Backup</th>
+                  <th className="pb-2 text-gray-300 font-semibold">Database</th>
+                  <th className="pb-2 text-gray-300 font-semibold">Full Backup</th>
+                  <th className="pb-2 text-gray-300 font-semibold">Diff Backup</th>
+                  <th className="pb-2 text-gray-300 font-semibold">Log Backup</th>
                 </tr>
               </thead>
               <tbody>

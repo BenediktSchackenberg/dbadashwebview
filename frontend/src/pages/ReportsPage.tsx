@@ -73,7 +73,7 @@ export default function ReportsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {reportDefs.map(r => (
             <button key={r.id} onClick={() => setActiveReport(r.id)}
-              className="glass rounded-xl p-6 gradient-border text-left hover:bg-white/5 transition-all group">
+              className="glass rounded-xl p-6 gradient-border text-left hover:bg-slate-800/50 transition-all group">
               <div className="flex items-start gap-4">
                 <div className={`p-3 rounded-lg bg-white/5 ${r.color}`}>
                   <r.icon className="w-6 h-6" />
@@ -96,7 +96,7 @@ export default function ReportsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <button onClick={() => setActiveReport(null)} className="p-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-all">
+          <button onClick={() => setActiveReport(null)} className="p-2 rounded-lg hover:bg-slate-800/50 text-gray-400 hover:text-white transition-all">
             <ArrowLeft className="w-5 h-5" />
           </button>
           <h1 className="text-2xl font-bold text-white">{def.title}</h1>
@@ -108,17 +108,17 @@ export default function ReportsPage() {
       </div>
 
       {complianceScore !== null && (
-        <div className="glass rounded-xl p-5 gradient-border">
+        <div className="glass rounded-xl p-6 gradient-border">
           <span className="text-sm text-gray-400">Compliance Score: </span>
           <span className={`text-2xl font-bold ${complianceScore >= 90 ? 'text-emerald-400' : complianceScore >= 70 ? 'text-yellow-400' : 'text-red-400'}`}>
             {complianceScore}%
           </span>
-          <span className="text-sm text-gray-500 ml-2">of databases have a full backup &lt;24h</span>
+          <span className="text-sm text-gray-400 ml-2">of databases have a full backup &lt;24h</span>
         </div>
       )}
 
       {loading ? <LoadingSpinner /> : (
-        <div className="glass rounded-xl p-5 gradient-border overflow-x-auto">
+        <div className="glass rounded-xl p-6 gradient-border overflow-x-auto">
           {data.length === 0 ? (
             <p className="text-gray-400 text-sm">No data available for this report.</p>
           ) : (
@@ -126,13 +126,13 @@ export default function ReportsPage() {
               <thead>
                 <tr className="border-b border-white/10 text-left">
                   {Object.keys(data[0]).map(k => (
-                    <th key={k} className="pb-3 text-gray-400 font-medium px-2">{k}</th>
+                    <th key={k} className="pb-3 text-gray-300 font-semibold px-2">{k}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {data.slice(0, 100).map((row, i) => (
-                  <tr key={i} className="border-b border-white/5 hover:bg-white/5">
+                  <tr key={i} className="border-b border-white/5 hover:bg-slate-800/50">
                     {Object.values(row).map((v, j) => (
                       <td key={j} className="py-2 px-2 text-gray-300">{v != null ? String(v) : '—'}</td>
                     ))}

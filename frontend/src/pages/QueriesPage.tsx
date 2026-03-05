@@ -57,7 +57,7 @@ export default function QueriesPage() {
         <select
           value={selectedInstance ?? ''}
           onChange={e => setSelectedInstance(Number(e.target.value))}
-          className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white"
+          className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white"
         >
           {instances.map(inst => (
             <option key={inst.InstanceID} value={inst.InstanceID}>
@@ -74,16 +74,16 @@ export default function QueriesPage() {
         </div>
       )}
 
-      <div className="glass rounded-xl p-5 gradient-border">
+      <div className="glass rounded-xl p-6 gradient-border">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-white/10 text-left">
-                <th className="pb-3 text-gray-400 font-medium">Query Hash</th>
-                <th className="pb-3 text-gray-400 font-medium text-right">Total CPU</th>
-                <th className="pb-3 text-gray-400 font-medium text-right">Total IO</th>
-                <th className="pb-3 text-gray-400 font-medium text-right">Executions</th>
-                <th className="pb-3 text-gray-400 font-medium text-right">Avg Duration (ms)</th>
+                <th className="pb-3 text-gray-300 font-semibold">Query Hash</th>
+                <th className="pb-3 text-gray-300 font-semibold text-right">Total CPU</th>
+                <th className="pb-3 text-gray-300 font-semibold text-right">Total IO</th>
+                <th className="pb-3 text-gray-300 font-semibold text-right">Executions</th>
+                <th className="pb-3 text-gray-300 font-semibold text-right">Avg Duration (ms)</th>
               </tr>
             </thead>
             <tbody>
@@ -92,7 +92,7 @@ export default function QueriesPage() {
                   <tr
                     key={i}
                     onClick={() => setExpandedRow(expandedRow === q.query_hash ? null : q.query_hash)}
-                    className="border-b border-white/5 hover:bg-white/5 cursor-pointer transition-colors"
+                    className="border-b border-white/5 hover:bg-slate-800/50 cursor-pointer transition-colors"
                   >
                     <td className="py-3 text-blue-400 font-mono text-xs">{q.query_hash}</td>
                     <td className="py-3 text-gray-300 text-right">{(q.TotalCPU ?? 0).toLocaleString()}</td>

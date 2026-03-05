@@ -44,16 +44,16 @@ export default function AlertSettingsPage() {
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-white">Alert Configuration</h1>
 
-      <div className="glass rounded-xl p-5 gradient-border">
+      <div className="glass rounded-xl p-6 gradient-border">
         <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2"><Bell className="w-5 h-5 text-blue-400" /> Alert Types</h3>
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-white/10 text-left">
-              <th className="pb-3 text-gray-400 font-medium">Alert Type</th>
-              <th className="pb-3 text-gray-400 font-medium">Description</th>
-              <th className="pb-3 text-gray-400 font-medium text-right">Threshold</th>
-              <th className="pb-3 text-gray-400 font-medium text-center">Enabled</th>
-              <th className="pb-3 text-gray-400 font-medium text-center">Actions</th>
+              <th className="pb-3 text-gray-300 font-semibold">Alert Type</th>
+              <th className="pb-3 text-gray-300 font-semibold">Description</th>
+              <th className="pb-3 text-gray-300 font-semibold text-right">Threshold</th>
+              <th className="pb-3 text-gray-300 font-semibold text-center">Enabled</th>
+              <th className="pb-3 text-gray-300 font-semibold text-center">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -69,7 +69,7 @@ export default function AlertSettingsPage() {
                   </button>
                 </td>
                 <td className="py-3 text-center">
-                  <button onClick={() => startEdit(a)} className="p-1.5 rounded hover:bg-white/5 text-gray-400 hover:text-white">
+                  <button onClick={() => startEdit(a)} className="p-1.5 rounded hover:bg-slate-800/50 text-gray-400 hover:text-white">
                     <Edit2 className="w-3.5 h-3.5" />
                   </button>
                 </td>
@@ -87,7 +87,7 @@ export default function AlertSettingsPage() {
               <button onClick={() => setEditId(null)} className="text-gray-400 hover:text-white"><X className="w-5 h-5" /></button>
             </div>
             <input type="number" value={editThreshold} onChange={e => setEditThreshold(e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white mb-4" />
+              className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white mb-4" />
             <button onClick={saveEdit} className="w-full py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium transition-colors">
               Save
             </button>
@@ -95,14 +95,14 @@ export default function AlertSettingsPage() {
         </div>
       )}
 
-      <div className="glass rounded-xl p-5 gradient-border">
+      <div className="glass rounded-xl p-6 gradient-border">
         <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2"><Clock className="w-5 h-5 text-yellow-400" /> Maintenance Windows</h3>
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-white/10 text-left">
-              <th className="pb-3 text-gray-400 font-medium">Start</th>
-              <th className="pb-3 text-gray-400 font-medium">End</th>
-              <th className="pb-3 text-gray-400 font-medium">Scope</th>
+              <th className="pb-3 text-gray-300 font-semibold">Start</th>
+              <th className="pb-3 text-gray-300 font-semibold">End</th>
+              <th className="pb-3 text-gray-300 font-semibold">Scope</th>
             </tr>
           </thead>
           <tbody>
@@ -118,7 +118,7 @@ export default function AlertSettingsPage() {
       </div>
 
       {/* Notification Channels (Story #19) */}
-      <div className="glass rounded-xl p-5 gradient-border">
+      <div className="glass rounded-xl p-6 gradient-border">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-white">Notification Channels</h3>
           <button onClick={() => setShowAddChannel(true)} className="px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded-lg text-sm hover:bg-blue-500/30 transition-colors">
@@ -128,9 +128,9 @@ export default function AlertSettingsPage() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-white/10 text-left">
-              <th className="pb-3 text-gray-400 font-medium">Type</th>
-              <th className="pb-3 text-gray-400 font-medium">Configuration</th>
-              <th className="pb-3 text-gray-400 font-medium text-center">Enabled</th>
+              <th className="pb-3 text-gray-300 font-semibold">Type</th>
+              <th className="pb-3 text-gray-300 font-semibold">Configuration</th>
+              <th className="pb-3 text-gray-300 font-semibold text-center">Enabled</th>
             </tr>
           </thead>
           <tbody>
@@ -159,14 +159,14 @@ export default function AlertSettingsPage() {
             </div>
             <div className="space-y-3">
               <select value={newChannel.type} onChange={e => setNewChannel(p => ({ ...p, type: e.target.value }))}
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm">
+                className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm">
                 <option value="Email">Email</option>
                 <option value="Webhook">Webhook</option>
                 <option value="Teams">Teams</option>
               </select>
               <input placeholder={newChannel.type === 'Email' ? 'Email address' : 'Webhook URL'}
                 value={newChannel.config} onChange={e => setNewChannel(p => ({ ...p, config: e.target.value }))}
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm" />
+                className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm" />
               <button onClick={() => {
                 if (newChannel.config) {
                   setChannels(prev => [...prev, { id: Date.now(), ...newChannel, enabled: true }]);
@@ -181,7 +181,7 @@ export default function AlertSettingsPage() {
         </div>
       )}
 
-      <div className="glass rounded-xl p-5 gradient-border">
+      <div className="glass rounded-xl p-6 gradient-border">
         <h3 className="text-lg font-semibold text-white mb-4">Notification Schedule</h3>
         <div className="flex gap-3">
           {['Business Hours (8-18)', '24x7', 'Custom'].map(s => (

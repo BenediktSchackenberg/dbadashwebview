@@ -104,7 +104,7 @@ export default function ConfigUsersPage() {
     setTesting(false);
   };
 
-  const inputCls = "w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/25 transition-all placeholder-gray-500";
+  const inputCls = "w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/25 transition-all placeholder-gray-500";
   const labelCls = "block text-sm font-medium text-gray-300 mb-1.5";
 
   return (
@@ -117,14 +117,14 @@ export default function ConfigUsersPage() {
       </div>
 
       {/* Users Table */}
-      <div className="glass rounded-xl p-5 gradient-border overflow-x-auto">
+      <div className="glass rounded-xl p-6 gradient-border overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-white/10 text-left">
-              <th className="pb-3 text-gray-400 font-medium">Username</th>
-              <th className="pb-3 text-gray-400 font-medium">Role</th>
-              <th className="pb-3 text-gray-400 font-medium">Last Login</th>
-              <th className="pb-3 text-gray-400 font-medium text-center">Status</th>
+              <th className="pb-3 text-gray-300 font-semibold">Username</th>
+              <th className="pb-3 text-gray-300 font-semibold">Role</th>
+              <th className="pb-3 text-gray-300 font-semibold">Last Login</th>
+              <th className="pb-3 text-gray-300 font-semibold text-center">Status</th>
             </tr>
           </thead>
           <tbody>

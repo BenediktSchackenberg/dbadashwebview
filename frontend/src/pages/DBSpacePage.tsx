@@ -17,7 +17,7 @@ export default function DBSpacePage() {
     api.monitoringDBSpace(instanceId).then(r => { setData(r.data || []); setNote(r.note || ''); }).finally(() => setLoading(false));
   }, [instanceId]);
 
-  const inputCls = "bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500/50";
+  const inputCls = "bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500/50";
 
   // Group by database for chart
   const dbGroups = data.reduce<Record<string, { data: number; log: number }>>((acc, d) => {
@@ -42,7 +42,7 @@ export default function DBSpacePage() {
         data.length === 0 ? <p className="text-gray-500 text-sm">No database space data found.</p> : (
         <>
           {chartData.length > 0 && (
-            <div className="glass rounded-xl p-5 gradient-border">
+            <div className="glass rounded-xl p-6 gradient-border">
               <h3 className="text-sm font-semibold text-gray-400 mb-4">Top Databases by Size (MB)</h3>
               <ResponsiveContainer width="100%" height={350}>
                 <BarChart data={chartData} layout="vertical"><XAxis type="number" stroke="#4b5563" /><YAxis type="category" dataKey="name" width={180} stroke="#4b5563" tick={{ fontSize: 11 }} />
@@ -52,13 +52,13 @@ export default function DBSpacePage() {
               </ResponsiveContainer>
             </div>
           )}
-          <div className="glass rounded-xl p-5 gradient-border overflow-x-auto">
+          <div className="glass rounded-xl p-6 gradient-border overflow-x-auto">
             <table className="w-full text-sm">
-              <thead><tr className="border-b border-white/10 text-left text-gray-400">
+              <thead><tr className="border-b border-white/10 text-left text-gray-300 font-semibold">
                 <th className="pb-2">Database</th><th className="pb-2">File</th><th className="pb-2">Type</th><th className="pb-2">Size (MB)</th><th className="pb-2">Used (MB)</th><th className="pb-2">Growth</th>
               </tr></thead>
               <tbody>{data.map((d, i) => (
-                <tr key={i} className="border-b border-white/5 hover:bg-white/5">
+                <tr key={i} className="border-b border-white/5 hover:bg-slate-800/50">
                   <td className="py-2 text-white">{d.databaseName}</td>
                   <td className="py-2 text-gray-300">{d.fileName}</td>
                   <td className="py-2"><span className={`px-1.5 py-0.5 rounded text-xs ${d.typeDesc === 'LOG' ? 'bg-purple-500/10 text-purple-400' : 'bg-blue-500/10 text-blue-400'}`}>{d.typeDesc || 'DATA'}</span></td>

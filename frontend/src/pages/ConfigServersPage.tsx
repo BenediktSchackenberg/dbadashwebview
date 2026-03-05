@@ -29,21 +29,21 @@ export default function ConfigServersPage() {
         </button>
       </div>
 
-      <div className="glass rounded-xl p-5 gradient-border overflow-x-auto">
+      <div className="glass rounded-xl p-6 gradient-border overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-white/10 text-left">
-              <th className="pb-3 text-gray-400 font-medium">Instance</th>
-              <th className="pb-3 text-gray-400 font-medium">Connection ID</th>
-              <th className="pb-3 text-gray-400 font-medium">Edition</th>
-              <th className="pb-3 text-gray-400 font-medium">Version</th>
-              <th className="pb-3 text-gray-400 font-medium text-center">Status</th>
-              <th className="pb-3 text-gray-400 font-medium text-center">Actions</th>
+              <th className="pb-3 text-gray-300 font-semibold">Instance</th>
+              <th className="pb-3 text-gray-300 font-semibold">Connection ID</th>
+              <th className="pb-3 text-gray-300 font-semibold">Edition</th>
+              <th className="pb-3 text-gray-300 font-semibold">Version</th>
+              <th className="pb-3 text-gray-300 font-semibold text-center">Status</th>
+              <th className="pb-3 text-gray-300 font-semibold text-center">Actions</th>
             </tr>
           </thead>
           <tbody>
             {instances.map((inst, i) => (
-              <tr key={i} className="border-b border-white/5 hover:bg-white/5">
+              <tr key={i} className="border-b border-white/5 hover:bg-slate-800/50">
                 <td className="py-3 text-white font-medium">{inst.InstanceDisplayName || inst.Instance}</td>
                 <td className="py-3 text-gray-400 font-mono text-xs">{inst.ConnectionID}</td>
                 <td className="py-3 text-gray-400 text-xs">{inst.Edition || '—'}</td>
@@ -53,7 +53,7 @@ export default function ConfigServersPage() {
                 </td>
                 <td className="py-3 text-center">
                   <div className="flex items-center justify-center gap-1">
-                    <button className="p-1.5 rounded hover:bg-white/5 text-gray-400 hover:text-white"><Edit2 className="w-3.5 h-3.5" /></button>
+                    <button className="p-1.5 rounded hover:bg-slate-800/50 text-gray-400 hover:text-white"><Edit2 className="w-3.5 h-3.5" /></button>
                     <button className="p-1.5 rounded hover:bg-red-500/10 text-gray-400 hover:text-red-400"><Trash2 className="w-3.5 h-3.5" /></button>
                   </div>
                 </td>
@@ -73,9 +73,9 @@ export default function ConfigServersPage() {
             </div>
             <div className="space-y-3">
               <input placeholder="Server Name" value={newServer.name} onChange={e => setNewServer(p => ({ ...p, name: e.target.value }))}
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm" />
+                className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm" />
               <select value={newServer.authType} onChange={e => setNewServer(p => ({ ...p, authType: e.target.value }))}
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm">
+                className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm">
                 <option value="Windows">Windows Authentication</option>
                 <option value="SQL">SQL Authentication</option>
               </select>

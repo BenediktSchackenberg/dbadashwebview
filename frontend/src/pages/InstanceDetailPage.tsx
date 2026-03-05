@@ -165,7 +165,7 @@ export default function InstanceDetailPage() {
       {/* Performance */}
       {tab === 'performance' && (
         <div className="space-y-6">
-          <div className="glass rounded-xl p-5">
+          <div className="glass rounded-xl p-6">
             <h3 className="text-sm font-semibold text-white mb-4">CPU Usage (24h)</h3>
             {cpu.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
@@ -190,7 +190,7 @@ export default function InstanceDetailPage() {
             ) : <EmptyState message="No CPU data available" />}
           </div>
 
-          <div className="glass rounded-xl p-5">
+          <div className="glass rounded-xl p-6">
             <h3 className="text-sm font-semibold text-white mb-4">Top Wait Types (1h)</h3>
             {waits.length > 0 ? (
               <ResponsiveContainer width="100%" height={Math.max(200, waits.slice(0, 10).length * 35)}>
@@ -212,15 +212,15 @@ export default function InstanceDetailPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-white/10">
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Database</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Full Backup</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Diff Backup</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Log Backup</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">Database</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">Full Backup</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">Diff Backup</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">Log Backup</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
               {backupSummary.map((b, i) => (
-                <tr key={i} className="hover:bg-white/5">
+                <tr key={i} className="hover:bg-slate-800/50">
                   <td className="px-4 py-2.5 text-white">{b.name}</td>
                   <td className="px-4 py-2.5">
                     {b.full?.backup_start_date ? (
@@ -264,18 +264,18 @@ export default function InstanceDetailPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-white/10">
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Status</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Job / Step</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Time</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Duration</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Message</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">Job / Step</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">Time</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">Duration</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">Message</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
                 {filteredJobs.map((j, i) => {
                   const s = jobStatusLabel(j.run_status);
                   return (
-                    <tr key={i} className="hover:bg-white/5">
+                    <tr key={i} className="hover:bg-slate-800/50">
                       <td className="px-4 py-2.5"><span className={clsx('text-xs px-2 py-0.5 rounded', s.color)}>{s.label}</span></td>
                       <td className="px-4 py-2.5 text-white text-xs">{j.step_name || '—'}</td>
                       <td className="px-4 py-2.5 text-gray-400 text-xs">{j.RunDateTime ? format(new Date(j.RunDateTime), 'MMM d HH:mm') : '—'}</td>
@@ -297,15 +297,15 @@ export default function InstanceDetailPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-white/10">
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Name</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">State</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Recovery</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Last DBCC</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">Name</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">State</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">Recovery</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase">Last DBCC</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
               {databases.map((d, i) => (
-                <tr key={i} className="hover:bg-white/5">
+                <tr key={i} className="hover:bg-slate-800/50">
                   <td className="px-4 py-2.5">
                     <Link to={`/instances/${instanceId}/databases/${d.DatabaseID}`} className="text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1.5">
                       <Database className="w-3.5 h-3.5" />
@@ -339,7 +339,7 @@ export default function InstanceDetailPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {drives.map((d, i) => (
             <motion.div key={i} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
-              className="glass rounded-xl p-5"
+              className="glass rounded-xl p-6"
             >
               <div className="flex items-center gap-3 mb-3">
                 <HardDrive className="w-5 h-5 text-blue-400" />

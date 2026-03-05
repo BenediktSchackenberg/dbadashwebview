@@ -46,7 +46,7 @@ export default function AboutPage() {
             <ExternalLink className="w-4 h-4" /> Documentation
           </a>
         </div>
-        <p className="text-sm text-gray-500">DBA Dash is licensed under the Apache License 2.0.</p>
+        <p className="text-sm text-gray-400">DBA Dash is licensed under the Apache License 2.0.</p>
       </motion.div>
 
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}

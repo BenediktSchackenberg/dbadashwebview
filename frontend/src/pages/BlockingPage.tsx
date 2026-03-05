@@ -92,7 +92,7 @@ export default function BlockingPage() {
     <div key={`${node.sessionId}-${depth}`}>
       <div
         className={clsx(
-          'flex items-start gap-4 px-4 py-3 border-b border-white/5 transition-colors hover:bg-white/5',
+          'flex items-start gap-4 px-4 py-3 border-b border-white/5 transition-colors hover:bg-slate-800/50',
           depth === 0 && 'bg-red-500/5'
         )}
         style={{ paddingLeft: `${1 + depth * 2}rem` }}
@@ -140,7 +140,7 @@ export default function BlockingPage() {
         <select
           value={selectedInstance ?? ''}
           onChange={e => setSelectedInstance(e.target.value ? Number(e.target.value) : undefined)}
-          className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+          className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
         >
           <option value="">All Instances</option>
           {instances.map((inst: any) => (

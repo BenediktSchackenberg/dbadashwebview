@@ -17,7 +17,7 @@ export default function TempDBPage() {
     api.monitoringTempDB(instanceId).then(r => { setData(r.data || []); setNote(r.note || ''); }).finally(() => setLoading(false));
   }, [instanceId]);
 
-  const inputCls = "bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500/50";
+  const inputCls = "bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500/50";
   const chartData = data.map(d => ({ name: d.name || `File ${d.fileId}`, sizeMb: (d.sizeKb || 0) / 1024, usedMb: (d.usedKb || 0) / 1024 }));
 
   return (
@@ -32,7 +32,7 @@ export default function TempDBPage() {
         loading ? <div className="text-gray-400">Loading...</div> :
         data.length === 0 ? <p className="text-gray-500 text-sm">No TempDB data found.</p> : (
         <>
-          <div className="glass rounded-xl p-5 gradient-border">
+          <div className="glass rounded-xl p-6 gradient-border">
             <h3 className="text-sm font-semibold text-gray-400 mb-4">TempDB Files — Size vs Used (MB)</h3>
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={chartData}><XAxis dataKey="name" stroke="#4b5563" tick={{ fontSize: 11 }} /><YAxis stroke="#4b5563" />
@@ -42,9 +42,9 @@ export default function TempDBPage() {
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <div className="glass rounded-xl p-5 gradient-border overflow-x-auto">
+          <div className="glass rounded-xl p-6 gradient-border overflow-x-auto">
             <table className="w-full text-sm">
-              <thead><tr className="border-b border-white/10 text-left text-gray-400">
+              <thead><tr className="border-b border-white/10 text-left text-gray-300 font-semibold">
                 <th className="pb-2">File</th><th className="pb-2">Size (MB)</th><th className="pb-2">Used (MB)</th><th className="pb-2">Free (MB)</th><th className="pb-2">% Used</th>
               </tr></thead>
               <tbody>{data.map((d, i) => {
@@ -52,7 +52,7 @@ export default function TempDBPage() {
                 const usedMb = (d.usedKb || 0) / 1024;
                 const pct = sizeMb > 0 ? (usedMb / sizeMb * 100) : 0;
                 return (
-                  <tr key={i} className="border-b border-white/5 hover:bg-white/5">
+                  <tr key={i} className="border-b border-white/5 hover:bg-slate-800/50">
                     <td className="py-2 text-white">{d.name || `File ${d.fileId}`}</td>
                     <td className="py-2 text-gray-300">{sizeMb.toFixed(1)}</td>
                     <td className="py-2 text-gray-300">{usedMb.toFixed(1)}</td>

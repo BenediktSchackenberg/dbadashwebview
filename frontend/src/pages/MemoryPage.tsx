@@ -69,7 +69,7 @@ export default function MemoryPage() {
           <h1 className="text-2xl font-bold text-white">Memory</h1>
         </div>
         <select value={selectedInstance ?? ''} onChange={e => setSelectedInstance(e.target.value ? Number(e.target.value) : undefined)}
-          className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none">
+          className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none">
           <option value="">All Instances</option>
           {instances.map((inst: any) => (
             <option key={inst.InstanceID} value={inst.InstanceID}>{inst.InstanceDisplayName}</option>

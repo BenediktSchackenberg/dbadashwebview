@@ -54,7 +54,7 @@ export default function RunningQueriesPage() {
         <select
           value={selectedInstance ?? ''}
           onChange={e => setSelectedInstance(e.target.value ? Number(e.target.value) : undefined)}
-          className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+          className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
         >
           <option value="">All Instances</option>
           {instances.map((inst: any) => (
@@ -76,18 +76,18 @@ export default function RunningQueriesPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-white/10 text-left">
-                  <th className="px-4 py-3 text-gray-400 font-medium"></th>
-                  <th className="px-4 py-3 text-gray-400 font-medium">Instance</th>
-                  <th className="px-4 py-3 text-gray-400 font-medium">SID</th>
-                  <th className="px-4 py-3 text-gray-400 font-medium">Status</th>
-                  <th className="px-4 py-3 text-gray-400 font-medium">Command</th>
-                  <th className="px-4 py-3 text-gray-400 font-medium">Database</th>
-                  <th className="px-4 py-3 text-gray-400 font-medium">CPU</th>
-                  <th className="px-4 py-3 text-gray-400 font-medium">Reads</th>
-                  <th className="px-4 py-3 text-gray-400 font-medium">Writes</th>
-                  <th className="px-4 py-3 text-gray-400 font-medium">Wait Type</th>
-                  <th className="px-4 py-3 text-gray-400 font-medium">Blocking</th>
-                  <th className="px-4 py-3 text-gray-400 font-medium">Duration</th>
+                  <th className="px-4 py-3 text-gray-300 font-semibold"></th>
+                  <th className="px-4 py-3 text-gray-300 font-semibold">Instance</th>
+                  <th className="px-4 py-3 text-gray-300 font-semibold">SID</th>
+                  <th className="px-4 py-3 text-gray-300 font-semibold">Status</th>
+                  <th className="px-4 py-3 text-gray-300 font-semibold">Command</th>
+                  <th className="px-4 py-3 text-gray-300 font-semibold">Database</th>
+                  <th className="px-4 py-3 text-gray-300 font-semibold">CPU</th>
+                  <th className="px-4 py-3 text-gray-300 font-semibold">Reads</th>
+                  <th className="px-4 py-3 text-gray-300 font-semibold">Writes</th>
+                  <th className="px-4 py-3 text-gray-300 font-semibold">Wait Type</th>
+                  <th className="px-4 py-3 text-gray-300 font-semibold">Blocking</th>
+                  <th className="px-4 py-3 text-gray-300 font-semibold">Duration</th>
                 </tr>
               </thead>
               <tbody>
@@ -99,7 +99,7 @@ export default function RunningQueriesPage() {
                         key={i}
                         onClick={() => toggleRow(i)}
                         className={clsx(
-                          'border-b border-white/5 cursor-pointer hover:bg-white/5 transition-colors',
+                          'border-b border-white/5 cursor-pointer hover:bg-slate-800/50 transition-colors',
                           isBlocked && 'bg-red-500/5'
                         )}
                       >

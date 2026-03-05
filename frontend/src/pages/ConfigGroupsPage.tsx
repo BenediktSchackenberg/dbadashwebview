@@ -27,7 +27,7 @@ export default function ConfigGroupsPage() {
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-white">Groups & Tags</h1>
 
-      <div className="glass rounded-xl p-5 gradient-border">
+      <div className="glass rounded-xl p-6 gradient-border">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-white">Groups</h3>
           <button onClick={() => setShowAddGroup(true)} className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded-lg text-sm hover:bg-blue-500/30 transition-colors">
@@ -37,10 +37,10 @@ export default function ConfigGroupsPage() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-white/10 text-left">
-              <th className="pb-3 text-gray-400 font-medium">Name</th>
-              <th className="pb-3 text-gray-400 font-medium">Description</th>
-              <th className="pb-3 text-gray-400 font-medium text-right">Members</th>
-              <th className="pb-3 text-gray-400 font-medium text-center">Actions</th>
+              <th className="pb-3 text-gray-300 font-semibold">Name</th>
+              <th className="pb-3 text-gray-300 font-semibold">Description</th>
+              <th className="pb-3 text-gray-300 font-semibold text-right">Members</th>
+              <th className="pb-3 text-gray-300 font-semibold text-center">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -70,9 +70,9 @@ export default function ConfigGroupsPage() {
             </div>
             <div className="space-y-3">
               <input placeholder="Group Name" value={newGroup.name} onChange={e => setNewGroup(p => ({ ...p, name: e.target.value }))}
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm" />
+                className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm" />
               <input placeholder="Description" value={newGroup.description} onChange={e => setNewGroup(p => ({ ...p, description: e.target.value }))}
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm" />
+                className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm" />
               <button onClick={() => {
                 if (newGroup.name) {
                   setGroups(prev => [...prev, { id: Date.now(), ...newGroup, members: [] }]);
@@ -87,14 +87,14 @@ export default function ConfigGroupsPage() {
         </div>
       )}
 
-      <div className="glass rounded-xl p-5 gradient-border">
+      <div className="glass rounded-xl p-6 gradient-border">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-white flex items-center gap-2"><Tag className="w-5 h-5 text-purple-400" /> Tags</h3>
         </div>
         <div className="flex gap-2 mb-4">
           <input placeholder="New tag name" value={newTag} onChange={e => setNewTag(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && newTag) { setTags(prev => [...prev, { id: Date.now(), name: newTag, appliedTo: 0 }]); setNewTag(''); }}}
-            className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm flex-1" />
+            className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm flex-1" />
           <button onClick={() => { if (newTag) { setTags(prev => [...prev, { id: Date.now(), name: newTag, appliedTo: 0 }]); setNewTag(''); }}}
             className="px-3 py-2 bg-blue-500/20 text-blue-400 rounded-lg text-sm hover:bg-blue-500/30 transition-colors">
             Add

@@ -57,7 +57,7 @@ export default function DataTable<T extends Record<string, any>>({
             placeholder="Search..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50"
+            className="w-full pl-9 pr-4 py-2 bg-slate-800 border border-slate-600 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50"
           />
         </div>
       )}
@@ -69,7 +69,7 @@ export default function DataTable<T extends Record<string, any>>({
                 <th
                   key={col.key}
                   onClick={() => col.sortable !== false && toggleSort(col.key)}
-                  className={clsx('px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider',
+                  className={clsx('px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider',
                     col.sortable !== false && 'cursor-pointer hover:text-gray-200'
                   )}
                 >
@@ -88,7 +88,7 @@ export default function DataTable<T extends Record<string, any>>({
                 onClick={() => onRowClick?.(row)}
                 className={clsx(
                   'transition-colors',
-                  onRowClick && 'cursor-pointer hover:bg-white/5'
+                  onRowClick && 'cursor-pointer hover:bg-slate-800/50'
                 )}
               >
                 {columns.map(col => (

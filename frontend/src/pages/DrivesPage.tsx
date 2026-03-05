@@ -45,7 +45,7 @@ export default function DrivesPage() {
         </div>
         <button
           onClick={() => setSortDesc(!sortDesc)}
-          className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-all"
+          className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-slate-800/50 transition-all"
         >
           <ArrowUpDown className="w-4 h-4" />
           {sortDesc ? 'Most used first' : 'Least used first'}
@@ -65,7 +65,7 @@ export default function DrivesPage() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.03 }}
-                className={clsx('glass rounded-xl p-5 border', borderColor)}
+                className={clsx('glass rounded-xl p-6 border', borderColor)}
               >
                 <div className="flex items-center gap-3 mb-3">
                   <HardDrive className={clsx('w-5 h-5', pct >= 85 ? 'text-red-400' : pct >= 70 ? 'text-yellow-400' : 'text-blue-400')} />

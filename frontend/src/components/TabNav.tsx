@@ -17,7 +17,7 @@ export default function TabNav({ tabs, active, onChange }: { tabs: Tab[]; active
             'px-4 py-2 text-sm font-medium rounded-md transition-all',
             active === tab.key
               ? 'bg-blue-500/20 text-blue-400 shadow-sm'
-              : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+              : 'text-gray-400 hover:text-gray-200 hover:bg-slate-800/50'
           )}
         >
           {tab.label}
