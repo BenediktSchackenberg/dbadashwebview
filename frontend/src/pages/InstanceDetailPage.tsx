@@ -8,7 +8,7 @@ import TabNav from '../components/TabNav';
 import LoadingSpinner from '../components/LoadingSpinner';
 import EmptyState from '../components/EmptyState';
 import { motion } from 'framer-motion';
-import { Server, Cpu, HardDrive, Clock, Database } from 'lucide-react';
+import { Server, Cpu, HardDrive, Clock, Database, Activity } from 'lucide-react';
 import { clsx } from 'clsx';
 import { format, formatDistanceToNow } from 'date-fns';
 
@@ -131,6 +131,7 @@ export default function InstanceDetailPage() {
           {inst.cpu_count && <span className="flex items-center gap-1"><Cpu className="w-3.5 h-3.5" /> {inst.cpu_count} CPUs</span>}
           {inst.physical_memory_kb && <span>{(inst.physical_memory_kb / 1048576).toFixed(1)} GB RAM</span>}
           {inst.sqlserver_start_time && <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> Started {format(new Date(inst.sqlserver_start_time), 'MMM d, yyyy HH:mm')}</span>}
+          {inst.LastCollected && <span className="flex items-center gap-1"><Activity className="w-3.5 h-3.5 text-emerald-400" /> Last Data: {format(new Date(inst.LastCollected), 'MMM d, yyyy HH:mm')}</span>}
         </div>
       </div>
 
@@ -155,6 +156,7 @@ export default function InstanceDetailPage() {
               <div><p className="text-xs text-gray-500">CPUs</p><p className="text-white">{inst.cpu_count ?? '—'}</p></div>
               <div><p className="text-xs text-gray-500">RAM</p><p className="text-white">{inst.physical_memory_kb ? `${(inst.physical_memory_kb / 1048576).toFixed(1)} GB` : '—'}</p></div>
               <div><p className="text-xs text-gray-500">Uptime</p><p className="text-white">{inst.sqlserver_start_time ? formatDistanceToNow(new Date(inst.sqlserver_start_time)) : '—'}</p></div>
+              <div><p className="text-xs text-gray-500">Last Data Received</p><p className="text-white">{inst.LastCollected ? `${format(new Date(inst.LastCollected), 'MMM d, yyyy HH:mm')} (${formatDistanceToNow(new Date(inst.LastCollected), { addSuffix: true })})` : '—'}</p></div>
             </div>
           </div>
         </div>

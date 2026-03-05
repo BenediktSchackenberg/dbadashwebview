@@ -293,6 +293,169 @@ app.MapGet("/api/dashboard/summary", async () =>
     }
 }).RequireAuthorization();
 
+app.MapGet("/api/dashboard/stats", async () =>
+{
+    try
+    {
+        // Get recently-active instance IDs (data received within 24h)
+        var activeIds = new HashSet<int>();
+        try
+        {
+            var activeRows = await QueryAsync(@"
+                SELECT DISTINCT InstanceID FROM dbo.CollectionDates
+                WHERE SnapshotDate > DATEADD(hour, -24, GETUTCDATE())");
+            foreach (var r in activeRows)
+                if (r.TryGetValue("InstanceID", out var v) && v != null)
+                    activeIds.Add(Convert.ToInt32(v));
+        }
+        catch { }
+
+        // Status counts from Summary_Get, filtered to active instances
+        var summary = await SpAsync("dbo.Summary_Get");
+        var activeSummary = activeIds.Count > 0
+            ? summary.Where(r => r.TryGetValue("InstanceID", out var v) && v != null && activeIds.Contains(Convert.ToInt32(v))).ToList()
+            : summary;
+        int totalInstances = activeSummary.Count;
+        int healthy = 0, warning = 0, critical = 0;
+        foreach (var row in activeSummary)
+        {
+            var statusKeys = new[] { "FullBackupStatus", "DriveStatus", "JobStatus", "AGStatus",
+                "CorruptionStatus", "LastGoodCheckDBStatus", "LogBackupStatus" };
+            int worst = 1;
+            foreach (var k in statusKeys)
+            {
+                if (row.TryGetValue(k, out var v) && v != null)
+                {
+                    var val = Convert.ToInt32(v);
+                    if (val == 4) { worst = 4; break; }
+                    if (val == 2 && worst < 2) worst = 2;
+                }
+            }
+            if (worst == 4) critical++;
+            else if (worst == 2) warning++;
+            else healthy++;
+        }
+
+        // Total databases (only from recently-active instances)
+        int totalDatabases = 0;
+        try
+        {
+            var dbCount = await QueryAsync(@"
+                SELECT COUNT(*) AS Cnt FROM dbo.Databases d
+                WHERE d.IsActive=1
+                  AND d.InstanceID IN (SELECT DISTINCT InstanceID FROM dbo.CollectionDates WHERE SnapshotDate > DATEADD(hour,-24,GETUTCDATE()))");
+            if (dbCount.Count > 0) totalDatabases = Convert.ToInt32(dbCount[0]["Cnt"]);
+        }
+        catch { }
+
+        // Failed jobs 24h count (only from recently-active instances)
+        int failedJobs24h = 0;
+        try
+        {
+            var fjCount = await QueryAsync(@"
+                SELECT COUNT(*) AS Cnt FROM dbo.JobHistory
+                WHERE run_status=0 AND RunDateTime > DATEADD(hour,-24,GETUTCDATE())
+                  AND InstanceID IN (SELECT DISTINCT InstanceID FROM dbo.CollectionDates WHERE SnapshotDate > DATEADD(hour,-24,GETUTCDATE()))");
+            if (fjCount.Count > 0) failedJobs24h = Convert.ToInt32(fjCount[0]["Cnt"]);
+        }
+        catch { }
+
+        // Top 10 CPU
+        List<object> top10Cpu = new();
+        try
+        {
+            var cpuData = await QueryAsync(@"
+                SELECT TOP 10 c.InstanceID, i.InstanceDisplayName, AVG(CAST(c.SQLProcessCPU AS FLOAT)) AS AvgCpu
+                FROM dbo.CPU c
+                JOIN dbo.Instances i ON c.InstanceID = i.InstanceID
+                WHERE c.EventTime > DATEADD(hour,-1,GETUTCDATE())
+                  AND c.InstanceID IN (SELECT DISTINCT InstanceID FROM dbo.CollectionDates WHERE SnapshotDate > DATEADD(hour,-24,GETUTCDATE()))
+                GROUP BY c.InstanceID, i.InstanceDisplayName
+                ORDER BY AVG(CAST(c.SQLProcessCPU AS FLOAT)) DESC");
+            foreach (var r in cpuData)
+                top10Cpu.Add(new { instanceId = r["InstanceID"], instanceName = r["InstanceDisplayName"], avgCpu = Math.Round(Convert.ToDouble(r["AvgCpu"]), 1) });
+        }
+        catch { }
+
+        // Top 10 largest databases
+        List<object> top10LargestDbs = new();
+        try
+        {
+            var dbData = await QueryAsync(@"
+                SELECT TOP 10 d.name AS DatabaseName, i.InstanceDisplayName,
+                       SUM(CAST(f.size AS BIGINT)) * 8 / 1024 AS SizeMB
+                FROM dbo.Databases d
+                JOIN dbo.Instances i ON d.InstanceID = i.InstanceID
+                JOIN dbo.DBFiles f ON d.DatabaseID = f.DatabaseID
+                WHERE d.IsActive = 1
+                GROUP BY d.name, i.InstanceDisplayName
+                ORDER BY SUM(CAST(f.size AS BIGINT)) DESC");
+            foreach (var r in dbData)
+                top10LargestDbs.Add(new { instanceName = r["InstanceDisplayName"], databaseName = r["DatabaseName"], sizeMb = r["SizeMB"] });
+        }
+        catch
+        {
+            try
+            {
+                var dbData = await QueryAsync(@"
+                    SELECT TOP 10 d.name AS DatabaseName, i.InstanceDisplayName,
+                           SUM(CAST(f.size AS BIGINT)) * 8 / 1024 AS SizeMB
+                    FROM dbo.Databases d
+                    JOIN dbo.Instances i ON d.InstanceID = i.InstanceID
+                    JOIN dbo.DatabaseFiles f ON d.DatabaseID = f.DatabaseID
+                    WHERE d.IsActive = 1
+                    GROUP BY d.name, i.InstanceDisplayName
+                    ORDER BY SUM(CAST(f.size AS BIGINT)) DESC");
+                foreach (var r in dbData)
+                    top10LargestDbs.Add(new { instanceName = r["InstanceDisplayName"], databaseName = r["DatabaseName"], sizeMb = r["SizeMB"] });
+            }
+            catch { }
+        }
+
+        // Recent alerts
+        List<Dictionary<string, object?>> recentAlerts = new();
+        try
+        {
+            recentAlerts = await QueryAsync(@"
+                SELECT TOP 10 InstanceID, ErrorDate, ErrorMessage, ErrorContext
+                FROM dbo.CollectionErrorLog ORDER BY ErrorDate DESC");
+        }
+        catch { }
+
+        // Failed jobs detail
+        List<Dictionary<string, object?>> failedJobs = new();
+        try
+        {
+            failedJobs = await QueryAsync(@"
+                SELECT TOP 10 jh.job_id, jh.step_name, jh.RunDateTime, jh.message,
+                       jh.InstanceID, i.InstanceDisplayName
+                FROM dbo.JobHistory jh
+                JOIN dbo.Instances i ON jh.InstanceID = i.InstanceID
+                WHERE jh.run_status = 0 AND jh.RunDateTime > DATEADD(hour,-24,GETUTCDATE())
+                ORDER BY jh.RunDateTime DESC");
+        }
+        catch { }
+
+        return Results.Ok(new
+        {
+            totalInstances,
+            healthy,
+            warning,
+            critical,
+            totalDatabases,
+            failedJobs24h,
+            top10Cpu,
+            top10LargestDbs,
+            recentAlerts,
+            failedJobs
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new { error = ex.Message });
+    }
+}).RequireAuthorization();
+
 app.MapGet("/api/instances", async () =>
 {
     try
@@ -300,8 +463,15 @@ app.MapGet("/api/instances", async () =>
         var instances = await QueryAsync(@"
             SELECT i.InstanceID, i.Instance, i.ConnectionID, i.IsActive, i.Edition, 
                    i.ProductVersion, i.cpu_count, i.physical_memory_kb, i.sqlserver_start_time,
-                   i.InstanceDisplayName, i.ShowInSummary
-            FROM dbo.Instances i WHERE i.IsActive = 1 ORDER BY i.InstanceDisplayName");
+                   i.InstanceDisplayName, i.ShowInSummary, cd.LastCollected
+            FROM dbo.Instances i
+            OUTER APPLY (
+                SELECT MAX(SnapshotDate) AS LastCollected
+                FROM dbo.CollectionDates c WHERE c.InstanceID = i.InstanceID
+            ) cd
+            WHERE i.IsActive = 1
+              AND cd.LastCollected > DATEADD(hour, -24, GETUTCDATE())
+            ORDER BY i.InstanceDisplayName");
         return Results.Ok(instances);
     }
     catch (Exception ex)
@@ -317,8 +487,13 @@ app.MapGet("/api/instances/{id:int}", async (int id) =>
         var inst = await QueryAsync(@"
             SELECT i.InstanceID, i.Instance, i.ConnectionID, i.IsActive, i.Edition,
                    i.ProductVersion, i.cpu_count, i.physical_memory_kb, i.sqlserver_start_time,
-                   i.InstanceDisplayName, i.Alias
-            FROM dbo.Instances i WHERE i.InstanceID = @id", ("@id", id));
+                   i.InstanceDisplayName, i.Alias, cd.LastCollected
+            FROM dbo.Instances i
+            OUTER APPLY (
+                SELECT MAX(SnapshotDate) AS LastCollected
+                FROM dbo.CollectionDates c WHERE c.InstanceID = i.InstanceID
+            ) cd
+            WHERE i.InstanceID = @id", ("@id", id));
         if (inst.Count == 0) return Results.NotFound();
 
         List<Dictionary<string, object?>>? summary = null;

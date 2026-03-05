@@ -34,6 +34,19 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return res.json();
 }
 
+export interface DashboardStats {
+  totalInstances: number;
+  healthy: number;
+  warning: number;
+  critical: number;
+  totalDatabases: number;
+  failedJobs24h: number;
+  top10Cpu: { instanceId: number; instanceName: string; avgCpu: number }[];
+  top10LargestDbs: { instanceName: string; databaseName: string; sizeMb: number }[];
+  recentAlerts: any[];
+  failedJobs: any[];
+}
+
 export const api = {
   login: (username: string, password: string) =>
     request<{ token: string; username: string }>('/api/auth/login', {
@@ -42,6 +55,7 @@ export const api = {
     }),
   health: () => request<{ status: string }>('/api/health'),
   dashboardSummary: () => request<any[]>('/api/dashboard/summary'),
+  dashboardStats: () => request<DashboardStats>('/api/dashboard/stats'),
   instances: () => request<any[]>('/api/instances'),
   instance: (id: number) => request<{ instance: any; summary: any }>(`/api/instances/${id}`),
   instanceCpu: (id: number) => request<any[]>(`/api/instances/${id}/cpu`),
