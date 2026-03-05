@@ -9,10 +9,12 @@ const tooltipStyle = { backgroundColor: '#1e293b', border: '1px solid rgba(255,2
 
 type SortKey = 'InstanceName' | 'cpu_count' | 'AvgCPU24h' | 'MaxCPU24h' | 'ramGb' | 'storUsed' | 'storTotal' | 'storPct';
 
-function formatBytes(mb: number): string {
-  if (mb >= 1048576) return (mb / 1048576).toFixed(1) + ' TB';
-  if (mb >= 1024) return (mb / 1024).toFixed(1) + ' GB';
-  return mb + ' MB';
+function formatBytes(bytes: number): string {
+  if (!bytes || bytes <= 0) return '—';
+  if (bytes >= 1099511627776) return (bytes / 1099511627776).toFixed(1) + ' TB';
+  if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(1) + ' GB';
+  if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + ' MB';
+  return (bytes / 1024).toFixed(0) + ' KB';
 }
 
 export default function FleetStatsPage() {
@@ -81,7 +83,7 @@ export default function FleetStatsPage() {
   // Top 10 storage
   const top10Storage = useMemo(() =>
     [...data].filter(r => r.TotalUsed > 0).sort((a, b) => (b.TotalUsed || 0) - (a.TotalUsed || 0)).slice(0, 10).map(r => ({
-      name: r.InstanceName, value: Math.round((r.TotalUsed || 0) / 1024)
+      name: r.InstanceName, value: Math.round((r.TotalUsed || 0) / 1073741824)
     })),
   [data]);
 
@@ -202,7 +204,14 @@ export default function FleetStatsPage() {
 
       {/* Table */}
       <div className="glass rounded-xl p-6 overflow-x-auto">
-        <h2 className="text-lg font-semibold text-white mb-4">All Instances</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-white">All Instances</h2>
+          <div className="flex items-center gap-4 text-xs text-gray-400">
+            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-red-500/20 border border-red-500/30 inline-block"></span> Storage &gt; 85%</span>
+            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-yellow-500/20 border border-yellow-500/30 inline-block"></span> Storage &gt; 70%</span>
+            <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-transparent border border-white/10 inline-block"></span> Normal</span>
+          </div>
+        </div>
         <table className="w-full">
           <thead>
             <tr className="border-b border-white/10">
