@@ -423,3 +423,4 @@ Contributions are welcome! Please:
 This project is licensed under the [MIT License](LICENSE).
 
 DBA Dash is licensed under [Apache 2.0](https://github.com/trimble-oss/DBADash/blob/main/LICENSE) by Trimble. This project is an independent frontend that reads from the DBA Dash repository database — it is not a fork of DBA Dash.
+<!-- build trigger Do 5. Mär 16:48:23 UTC 2026 -->
