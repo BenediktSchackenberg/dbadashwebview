@@ -462,7 +462,7 @@ app.MapGet("/api/instances", async () =>
     {
         var instances = await QueryAsync(@"
             SELECT i.InstanceID, i.Instance, i.ConnectionID, i.IsActive, i.Edition, 
-                   i.ProductVersion, i.cpu_count, i.physical_memory_kb, i.sqlserver_start_time,
+                   i.ProductVersion, i.ProductMajorVersion, i.cpu_count, i.physical_memory_kb, i.sqlserver_start_time,
                    i.InstanceDisplayName, i.ShowInSummary, cd.LastCollected
             FROM dbo.Instances i
             OUTER APPLY (
