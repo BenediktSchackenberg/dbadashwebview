@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { api } from '../api/api';
 import { useRefresh } from '../App';
-import LoadingSpinner from '../components/LoadingSpinner';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Loader2 } from 'lucide-react';
 
