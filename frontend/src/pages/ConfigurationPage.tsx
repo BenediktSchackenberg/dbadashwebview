@@ -1,17 +1,19 @@
 import { useEffect, useState, useMemo } from 'react';
+import { useParams } from 'react-router-dom';
 import { api } from '../api/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { motion } from 'framer-motion';
 import { Settings } from 'lucide-react';
 
 export default function ConfigurationPage() {
+  const { id: routeId } = useParams();
   const [config, setConfig] = useState<any[]>([]);
   const [changes, setChanges] = useState<any[]>([]);
   const [configNote, setConfigNote] = useState('');
   const [changesNote, setChangesNote] = useState('');
   const [loading, setLoading] = useState(true);
   const [instances, setInstances] = useState<any[]>([]);
-  const [selectedInstance, setSelectedInstance] = useState<number | undefined>();
+  const [selectedInstance, setSelectedInstance] = useState<number | undefined>(routeId ? Number(routeId) : undefined);
   const [tab, setTab] = useState<'current' | 'changes'>('current');
   const [search, setSearch] = useState('');
 

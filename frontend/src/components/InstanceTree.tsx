@@ -36,15 +36,14 @@ const globalViews = [
 ];
 
 const instanceCategories = [
-  { key: 'configuration', icon: Settings, label: 'Configuration', path: (id: number) => `/monitoring/configuration?instanceId=${id}` },
+  { key: 'configuration', icon: Settings, label: 'Configuration', path: (id: number) => `/instances/${id}/configuration` },
   { key: 'checks', icon: ClipboardCheck, label: 'Checks', path: (id: number) => `/instances/${id}` },
-  { key: 'hadr', icon: Shield, label: 'HA/DR', path: (id: number) => `/availability-groups?instanceId=${id}` },
-  { key: 'storage', icon: HardDrive, label: 'Storage', path: (id: number) => `/drives?instanceId=${id}` },
+  { key: 'hadr', icon: Shield, label: 'HA/DR', path: (id: number) => `/instances/${id}/hadr` },
+  { key: 'storage', icon: HardDrive, label: 'Storage', path: (id: number) => `/instances/${id}/drives` },
   { key: 'databases', icon: Database, label: 'Databases', path: (_id: number) => '' },
   { key: 'backups', icon: Database, label: 'Backups', path: (id: number) => `/instances/${id}/backups` },
-  { key: 'drives', icon: HardDrive, label: 'Drives', path: (id: number) => `/instances/${id}/drives` },
-  { key: 'jobs', icon: Play, label: 'Jobs', path: (id: number) => `/monitoring/job-timeline?instanceId=${id}` },
-  { key: 'reports', icon: BarChart3, label: 'Reports', path: (id: number) => `/reports?instanceId=${id}` },
+  { key: 'jobs', icon: Play, label: 'Jobs', path: (id: number) => `/instances/${id}/jobs` },
+  { key: 'reports', icon: BarChart3, label: 'Reports', path: (id: number) => `/instances/${id}/reports` },
 ];
 
 export default function InstanceTree({ onLogout }: { onLogout: () => void }) {

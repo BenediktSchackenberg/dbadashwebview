@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import { useParams } from 'react-router-dom';
 import { api } from '../api/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { motion } from 'framer-motion';
@@ -14,11 +15,12 @@ const STATUS_COLORS: Record<number, { bg: string; text: string; label: string }>
 const STATUS_BAR_COLORS: Record<number, string> = { 0: '#ef4444', 1: '#22c55e', 2: '#eab308', 3: '#6b7280' };
 
 export default function JobTimelinePage() {
+  const { id: routeId } = useParams();
   const [data, setData] = useState<any[]>([]);
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(true);
   const [instances, setInstances] = useState<any[]>([]);
-  const [selectedInstance, setSelectedInstance] = useState<number | undefined>();
+  const [selectedInstance, setSelectedInstance] = useState<number | undefined>(routeId ? Number(routeId) : undefined);
   const [hours, setHours] = useState(24);
 
   useEffect(() => {

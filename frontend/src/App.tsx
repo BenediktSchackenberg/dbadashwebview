@@ -192,6 +192,10 @@ export default function App() {
                 <Route path="/instances/:id/databases/:dbId" element={<DatabaseDetailPage key={refreshKey} />} />
                 <Route path="/instances/:id/backups" element={<BackupsPage key={refreshKey} />} />
                 <Route path="/instances/:id/drives" element={<DrivesPage key={refreshKey} />} />
+                <Route path="/instances/:id/configuration" element={<ConfigurationPage key={refreshKey} />} />
+                <Route path="/instances/:id/hadr" element={<AvailabilityGroupsPage key={refreshKey} />} />
+                <Route path="/instances/:id/jobs" element={<JobTimelinePage key={refreshKey} />} />
+                <Route path="/instances/:id/reports" element={<ReportsPage key={refreshKey} />} />
                 <Route path="/jobs" element={<JobsPage key={refreshKey} />} />
                 <Route path="/backups" element={<BackupsPage key={refreshKey} />} />
                 <Route path="/alerts" element={<AlertsPage key={refreshKey} />} />

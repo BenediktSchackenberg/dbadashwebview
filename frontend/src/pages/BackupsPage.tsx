@@ -13,13 +13,18 @@ export default function BackupsPage() {
   useEffect(() => {
     (async () => {
       try {
-        const s = await api.dashboardSummary().catch(() => []);
-        setSummary(Array.isArray(s) ? s : []);
+        if (id) {
+          const s = await api.instanceBackups(Number(id)).catch(() => []);
+          setSummary(Array.isArray(s) ? s : []);
+        } else {
+          const s = await api.dashboardSummary().catch(() => []);
+          setSummary(Array.isArray(s) ? s : []);
+        }
       } finally {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [id]);
 
   if (loading) return <LoadingSpinner />;
   if (summary.length === 0) return <EmptyState message="No backup data available" />;
