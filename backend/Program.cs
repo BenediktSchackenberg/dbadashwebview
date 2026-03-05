@@ -819,43 +819,23 @@ app.MapGet("/api/performance/running-queries", async (int? instanceId) =>
     {
         var filter = instanceId.HasValue ? "AND rq.InstanceID = @instanceId" : "";
         var sql = $@"
-            SELECT TOP 200 rq.InstanceID, i.InstanceDisplayName, rq.session_id, rq.start_time,
+            SELECT TOP 200 rq.InstanceID, i.InstanceDisplayName, rq.session_id, rq.start_time_utc,
                    rq.status, rq.command, rq.wait_type, rq.wait_resource,
                    rq.blocking_session_id, rq.cpu_time, rq.reads, rq.writes,
-                   rq.logical_reads, rq.SnapshotDate, rq.text AS query_text,
+                   rq.logical_reads, rq.SnapshotDateUTC,
                    rq.database_id, d.name AS database_name
             FROM dbo.RunningQueries rq
             JOIN dbo.Instances i ON rq.InstanceID = i.InstanceID
             LEFT JOIN dbo.Databases d ON rq.database_id = d.database_id AND rq.InstanceID = d.InstanceID
-            WHERE rq.SnapshotDate > DATEADD(hour,-1,GETUTCDATE()) {filter}
-            ORDER BY rq.SnapshotDate DESC";
+            WHERE rq.SnapshotDateUTC > DATEADD(hour,-1,GETUTCDATE()) {filter}
+            ORDER BY rq.SnapshotDateUTC DESC";
         var data = await QueryAsync(sql, ("@instanceId", instanceId ?? (object)DBNull.Value));
         return Results.Ok(new { data, note = "" });
     }
     catch (Exception ex)
     {
-        // Try alternate table names
-        try
-        {
-            var filter = instanceId.HasValue ? "AND rq.InstanceID = @instanceId" : "";
-            var sql = $@"
-                SELECT TOP 200 rq.InstanceID, i.InstanceDisplayName, rq.session_id, rq.start_time,
-                       rq.status, rq.command, rq.wait_type, rq.wait_resource,
-                       rq.blocking_session_id, rq.cpu_time, rq.reads, rq.writes,
-                       rq.logical_reads, rq.SnapshotDate, rq.text AS query_text,
-                       rq.database_id
-                FROM dbo.RunningQueriesSnapshot rq
-                JOIN dbo.Instances i ON rq.InstanceID = i.InstanceID
-                WHERE rq.SnapshotDate > DATEADD(hour,-1,GETUTCDATE()) {filter}
-                ORDER BY rq.SnapshotDate DESC";
-            var data = await QueryAsync(sql, ("@instanceId", instanceId ?? (object)DBNull.Value));
-            return Results.Ok(new { data, note = "Using RunningQueriesSnapshot" });
-        }
-        catch
-        {
-            app.Logger.LogWarning("Running queries endpoint error: {Error}", ex.Message);
-            return Results.Ok(new { data = Array.Empty<object>(), note = $"Table not found: {ex.Message}" });
-        }
+        app.Logger.LogWarning("Running queries endpoint error: {Error}", ex.Message);
+        return Results.Ok(new { data = Array.Empty<object>(), note = $"Table not found: {ex.Message}" });
     }
 }).RequireAuthorization();
 
@@ -867,17 +847,17 @@ app.MapGet("/api/performance/blocking", async (int? instanceId) =>
     {
         var filter = instanceId.HasValue ? "AND rq.InstanceID = @instanceId" : "";
         var sql = $@"
-            SELECT rq.InstanceID, i.InstanceDisplayName, rq.session_id, rq.start_time,
+            SELECT rq.InstanceID, i.InstanceDisplayName, rq.session_id, rq.start_time_utc,
                    rq.status, rq.command, rq.wait_type, rq.wait_resource,
                    rq.blocking_session_id, rq.cpu_time, rq.reads, rq.writes,
-                   rq.SnapshotDate, rq.text AS query_text
+                   rq.SnapshotDateUTC
             FROM dbo.RunningQueries rq
             JOIN dbo.Instances i ON rq.InstanceID = i.InstanceID
-            WHERE rq.SnapshotDate > DATEADD(hour,-1,GETUTCDATE())
+            WHERE rq.SnapshotDateUTC > DATEADD(hour,-1,GETUTCDATE())
               AND (rq.blocking_session_id > 0
-                   OR rq.session_id IN (SELECT blocking_session_id FROM dbo.RunningQueries WHERE blocking_session_id > 0 AND SnapshotDate > DATEADD(hour,-1,GETUTCDATE())))
+                   OR rq.session_id IN (SELECT blocking_session_id FROM dbo.RunningQueries WHERE blocking_session_id > 0 AND SnapshotDateUTC > DATEADD(hour,-1,GETUTCDATE())))
               {filter}
-            ORDER BY rq.SnapshotDate DESC";
+            ORDER BY rq.SnapshotDateUTC DESC";
         var data = await QueryAsync(sql, ("@instanceId", instanceId ?? (object)DBNull.Value));
         return Results.Ok(new { data, note = "" });
     }
@@ -897,38 +877,21 @@ app.MapGet("/api/performance/slow-queries", async (int? instanceId, int? hours) 
     {
         var filter = instanceId.HasValue ? "AND sq.InstanceID = @instanceId" : "";
         var sql = $@"
-            SELECT TOP 200 sq.InstanceID, i.InstanceDisplayName, sq.object_name, sq.database_name,
-                   sq.text, sq.duration_ms, sq.cpu_time_ms, sq.logical_reads,
-                   sq.physical_reads, sq.writes, sq.Timestamp,
+            SELECT TOP 200 sq.InstanceID, i.InstanceDisplayName, sq.object_name, sq.DatabaseID,
+                   sq.text, sq.duration, sq.cpu_time, sq.logical_reads,
+                   sq.physical_reads, sq.writes, sq.timestamp,
                    sq.client_hostname, sq.client_app_name, sq.username
             FROM dbo.SlowQueries sq
             JOIN dbo.Instances i ON sq.InstanceID = i.InstanceID
-            WHERE sq.Timestamp > DATEADD(hour,-@hours,GETUTCDATE()) {filter}
-            ORDER BY sq.duration_ms DESC";
+            WHERE sq.timestamp > DATEADD(hour,-@hours,GETUTCDATE()) {filter}
+            ORDER BY sq.duration DESC";
         var data = await QueryAsync(sql, ("@instanceId", instanceId ?? (object)DBNull.Value), ("@hours", h));
         return Results.Ok(new { data, note = "" });
     }
     catch (Exception ex)
     {
-        try
-        {
-            var filter = instanceId.HasValue ? "AND sq.InstanceID = @instanceId" : "";
-            var sql = $@"
-                SELECT TOP 200 sq.InstanceID, i.InstanceDisplayName, sq.object_name, sq.database_name,
-                       sq.text, sq.duration_ms, sq.cpu_time_ms, sq.logical_reads,
-                       sq.physical_reads, sq.writes, sq.Timestamp
-                FROM dbo.SlowQueriesStats sq
-                JOIN dbo.Instances i ON sq.InstanceID = i.InstanceID
-                WHERE sq.Timestamp > DATEADD(hour,-@hours,GETUTCDATE()) {filter}
-                ORDER BY sq.duration_ms DESC";
-            var data = await QueryAsync(sql, ("@instanceId", instanceId ?? (object)DBNull.Value), ("@hours", h));
-            return Results.Ok(new { data, note = "Using SlowQueriesStats" });
-        }
-        catch
-        {
-            app.Logger.LogWarning("Slow queries endpoint error: {Error}", ex.Message);
-            return Results.Ok(new { data = Array.Empty<object>(), note = $"Table not found: {ex.Message}" });
-        }
+        app.Logger.LogWarning("Slow queries endpoint error: {Error}", ex.Message);
+        return Results.Ok(new { data = Array.Empty<object>(), note = $"Table not found: {ex.Message}" });
     }
 }).RequireAuthorization();
 
@@ -946,12 +909,13 @@ app.MapGet("/api/performance/memory", async (int? instanceId) =>
     {
         var filter = instanceId.HasValue ? "AND mc.InstanceID = @instanceId" : "";
         var sql = $@"
-            SELECT TOP 200 mc.InstanceID, i.InstanceDisplayName, mc.type AS clerk_type,
-                   mc.name AS clerk_name, mc.pages_kb, mc.SnapshotDate
-            FROM dbo.MemoryClerkStats mc
-            JOIN dbo.Instances i ON mc.InstanceID = i.InstanceID
-            WHERE mc.SnapshotDate > DATEADD(hour,-24,GETUTCDATE()) {filter}
-            ORDER BY mc.pages_kb DESC";
+            SELECT TOP 200 mu.InstanceID, i.InstanceDisplayName, mct.MemoryClerkType AS clerk_type,
+                   mct.MemoryClerkDescription AS clerk_name, mu.pages_kb, mu.SnapshotDate
+            FROM dbo.MemoryUsage mu
+            JOIN dbo.Instances i ON mu.InstanceID = i.InstanceID
+            JOIN dbo.MemoryClerkType mct ON mu.MemoryClerkTypeID = mct.MemoryClerkTypeID
+            WHERE mu.SnapshotDate > DATEADD(hour,-24,GETUTCDATE()) {filter}
+            ORDER BY mu.pages_kb DESC";
         clerks = await QueryAsync(sql, ("@instanceId", instanceId ?? (object)DBNull.Value));
     }
     catch (Exception ex)
@@ -964,10 +928,11 @@ app.MapGet("/api/performance/memory", async (int? instanceId) =>
     {
         var filter = instanceId.HasValue ? "AND pc.InstanceID = @instanceId" : "";
         var sql = $@"
-            SELECT TOP 500 pc.InstanceID, i.InstanceDisplayName, pc.counter_name, pc.cntr_value, pc.SnapshotDate
+            SELECT TOP 500 pc.InstanceID, i.InstanceDisplayName, c.counter_name, pc.Value AS cntr_value, pc.SnapshotDate
             FROM dbo.PerformanceCounters pc
             JOIN dbo.Instances i ON pc.InstanceID = i.InstanceID
-            WHERE pc.object_name LIKE '%Memory%'
+            JOIN dbo.Counters c ON pc.CounterID = c.CounterID
+            WHERE c.object_name LIKE '%Memory%'
               AND pc.SnapshotDate > DATEADD(hour,-24,GETUTCDATE()) {filter}
             ORDER BY pc.SnapshotDate DESC";
         counters = await QueryAsync(sql, ("@instanceId", instanceId ?? (object)DBNull.Value));
@@ -994,34 +959,20 @@ app.MapGet("/api/performance/io", async (int? instanceId) =>
     {
         var filter = instanceId.HasValue ? "AND ios.InstanceID = @instanceId" : "";
         var sql = $@"
-            SELECT TOP 200 ios.InstanceID, i.InstanceDisplayName, ios.database_name, ios.file_name,
+            SELECT TOP 200 ios.InstanceID, i.InstanceDisplayName, d.name AS database_name, df.name AS file_name,
                    ios.io_stall_read_ms, ios.io_stall_write_ms, ios.num_of_reads, ios.num_of_writes,
                    ios.num_of_bytes_read, ios.num_of_bytes_written, ios.SnapshotDate
-            FROM dbo.IOStats ios
+            FROM dbo.DBIOStats ios
             JOIN dbo.Instances i ON ios.InstanceID = i.InstanceID
+            JOIN dbo.DBFiles df ON ios.FileID = df.FileID
+            JOIN dbo.Databases d ON df.DatabaseID = d.DatabaseID
             WHERE ios.SnapshotDate > DATEADD(hour,-24,GETUTCDATE()) {filter}
             ORDER BY (ios.io_stall_read_ms + ios.io_stall_write_ms) DESC";
         fileStats = await QueryAsync(sql, ("@instanceId", instanceId ?? (object)DBNull.Value));
     }
     catch (Exception ex1)
     {
-        try
-        {
-            var filter = instanceId.HasValue ? "AND ios.InstanceID = @instanceId" : "";
-            var sql = $@"
-                SELECT TOP 200 ios.InstanceID, i.InstanceDisplayName, ios.database_name, ios.file_name,
-                       ios.io_stall_read_ms, ios.io_stall_write_ms, ios.num_of_reads, ios.num_of_writes,
-                       ios.num_of_bytes_read, ios.num_of_bytes_written, ios.SnapshotDate
-                FROM dbo.DBIOStats ios
-                JOIN dbo.Instances i ON ios.InstanceID = i.InstanceID
-                WHERE ios.SnapshotDate > DATEADD(hour,-24,GETUTCDATE()) {filter}
-                ORDER BY (ios.io_stall_read_ms + ios.io_stall_write_ms) DESC";
-            fileStats = await QueryAsync(sql, ("@instanceId", instanceId ?? (object)DBNull.Value));
-        }
-        catch
-        {
-            fileNote = $"IOStats/DBIOStats not found: {ex1.Message}";
-        }
+        fileNote = $"DBIOStats not found: {ex1.Message}";
     }
 
     // Drive performance
@@ -1030,7 +981,7 @@ app.MapGet("/api/performance/io", async (int? instanceId) =>
         var filter = instanceId.HasValue ? "AND dp.InstanceID = @instanceId" : "";
         var sql = $@"
             SELECT TOP 200 dp.*, i.InstanceDisplayName
-            FROM dbo.DrivePerformance dp
+            FROM dbo.DriveSnapshot dp
             JOIN dbo.Instances i ON dp.InstanceID = i.InstanceID
             WHERE dp.SnapshotDate > DATEADD(hour,-24,GETUTCDATE()) {filter}
             ORDER BY dp.SnapshotDate DESC";
@@ -1038,7 +989,7 @@ app.MapGet("/api/performance/io", async (int? instanceId) =>
     }
     catch (Exception ex)
     {
-        driveNote = $"DrivePerformance not found: {ex.Message}";
+        driveNote = $"DriveSnapshot not found: {ex.Message}";
     }
 
     return Results.Ok(new { fileStats, drivePerf, fileNote, driveNote });
@@ -1055,33 +1006,19 @@ app.MapGet("/api/performance/exec-stats", async (int? instanceId, int? hours) =>
     try
     {
         var sql = $@"
-            SELECT TOP 500 os.InstanceID, i.InstanceDisplayName, os.object_name, os.SchemaName,
+            SELECT TOP 500 os.InstanceID, i.InstanceDisplayName, dbo_obj.ObjectName AS object_name, dbo_obj.SchemaName,
                    os.execution_count, os.total_worker_time, os.total_elapsed_time,
                    os.total_logical_reads, os.total_logical_writes, os.total_physical_reads, os.SnapshotDate
             FROM dbo.ObjectExecutionStats os
             JOIN dbo.Instances i ON os.InstanceID=i.InstanceID
+            JOIN dbo.DBObjects dbo_obj ON os.ObjectID=dbo_obj.ObjectID
             WHERE os.SnapshotDate > DATEADD(hour,-@hours,GETUTCDATE()) {filter}
             ORDER BY os.total_worker_time DESC";
         data = await QueryAsync(sql, ("@hours", h), ("@instanceId", instanceId ?? (object)DBNull.Value));
     }
-    catch
+    catch (Exception ex)
     {
-        try
-        {
-            var sql = $@"
-                SELECT TOP 500 ps.InstanceID, i.InstanceDisplayName, ps.object_name, ps.SchemaName,
-                       ps.execution_count, ps.total_worker_time, ps.total_elapsed_time,
-                       ps.total_logical_reads, ps.total_logical_writes, ps.total_physical_reads, ps.SnapshotDate
-                FROM dbo.ObjectStats ps
-                JOIN dbo.Instances i ON ps.InstanceID=i.InstanceID
-                WHERE ps.SnapshotDate > DATEADD(hour,-@hours,GETUTCDATE()) {filter}
-                ORDER BY ps.total_worker_time DESC";
-            data = await QueryAsync(sql, ("@hours", h), ("@instanceId", instanceId ?? (object)DBNull.Value));
-        }
-        catch (Exception ex)
-        {
-            note = $"ObjectExecutionStats/ObjectStats not found: {ex.Message}";
-        }
+        note = $"ObjectExecutionStats not found: {ex.Message}";
     }
     return Results.Ok(new { data, note });
 }).RequireAuthorization();
@@ -1125,31 +1062,18 @@ app.MapGet("/api/performance/counters", async (int? instanceId, int? hours) =>
     try
     {
         var sql = @"
-            SELECT pc.InstanceID, i.InstanceDisplayName, pc.object_name, pc.counter_name,
-                   pc.instance_name, pc.cntr_value, pc.SnapshotDate
+            SELECT pc.InstanceID, i.InstanceDisplayName, c.object_name, c.counter_name,
+                   c.instance_name, pc.Value AS cntr_value, pc.SnapshotDate
             FROM dbo.PerformanceCounters pc
             JOIN dbo.Instances i ON pc.InstanceID=i.InstanceID
+            JOIN dbo.Counters c ON pc.CounterID=c.CounterID
             WHERE pc.InstanceID=@instanceId AND pc.SnapshotDate > DATEADD(hour,-@hours,GETUTCDATE())
             ORDER BY pc.SnapshotDate";
         data = await QueryAsync(sql, ("@instanceId", instanceId.Value), ("@hours", h));
     }
-    catch
+    catch (Exception ex)
     {
-        try
-        {
-            var sql = @"
-                SELECT pc.InstanceID, i.InstanceDisplayName, pc.object_name, pc.counter_name,
-                       pc.instance_name, pc.cntr_value, pc.SnapshotDate
-                FROM dbo.Counters pc
-                JOIN dbo.Instances i ON pc.InstanceID=i.InstanceID
-                WHERE pc.InstanceID=@instanceId AND pc.SnapshotDate > DATEADD(hour,-@hours,GETUTCDATE())
-                ORDER BY pc.SnapshotDate";
-            data = await QueryAsync(sql, ("@instanceId", instanceId.Value), ("@hours", h));
-        }
-        catch (Exception ex)
-        {
-            note = $"PerformanceCounters/Counters not found: {ex.Message}";
-        }
+        note = $"PerformanceCounters/Counters not found: {ex.Message}";
     }
     return Results.Ok(new { data, note });
 }).RequireAuthorization();
@@ -1172,7 +1096,7 @@ app.MapGet("/api/monitoring/job-timeline", async (int? instanceId, int? hours) =
             FROM dbo.JobHistory jh
             JOIN dbo.Instances i ON jh.InstanceID=i.InstanceID
             JOIN dbo.Jobs j ON jh.job_id=j.job_id AND jh.InstanceID=j.InstanceID
-            WHERE jh.RunDateTime > DATEADD(hour,-@hours,GETUTCDATE()) AND jh.step_id=0
+            WHERE jh.InstanceID=@instanceId AND jh.RunDateTime > DATEADD(hour,-@hours,GETUTCDATE()) AND jh.step_id=0
             ORDER BY jh.RunDateTime";
         data = await QueryAsync(sql, ("@instanceId", instanceId.Value), ("@hours", h));
     }
@@ -1194,33 +1118,19 @@ app.MapGet("/api/monitoring/configuration", async (int? instanceId) =>
     try
     {
         var sql = @"
-            SELECT sc.InstanceID, i.InstanceDisplayName, sc.name, sc.value, sc.value_in_use,
-                   sc.minimum, sc.maximum, sc.is_dynamic, sc.is_advanced, sc.SnapshotDate
+            SELECT sc.InstanceID, i.InstanceDisplayName, sco.name, sc.value, sc.value_in_use,
+                   sco.minimum, sco.maximum, sco.is_dynamic, sco.is_advanced, sc.ValidFrom
             FROM dbo.SysConfig sc
             JOIN dbo.Instances i ON sc.InstanceID=i.InstanceID
+            JOIN dbo.SysConfigOptions sco ON sc.configuration_id=sco.configuration_id
             WHERE sc.InstanceID=@instanceId
-              AND sc.SnapshotDate = (SELECT MAX(SnapshotDate) FROM dbo.SysConfig sc2 WHERE sc2.InstanceID=sc.InstanceID)
-            ORDER BY sc.name";
+              AND sc.ValidFrom = (SELECT MAX(ValidFrom) FROM dbo.SysConfig sc2 WHERE sc2.InstanceID=sc.InstanceID AND sc2.configuration_id=sc.configuration_id)
+            ORDER BY sco.name";
         data = await QueryAsync(sql, ("@instanceId", instanceId.Value));
     }
-    catch
+    catch (Exception ex)
     {
-        try
-        {
-            var sql = @"
-                SELECT sc.InstanceID, i.InstanceDisplayName, sc.name, sc.value, sc.value_in_use,
-                       sc.minimum, sc.maximum, sc.is_dynamic, sc.is_advanced, sc.SnapshotDate
-                FROM dbo.Configuration sc
-                JOIN dbo.Instances i ON sc.InstanceID=i.InstanceID
-                WHERE sc.InstanceID=@instanceId
-                  AND sc.SnapshotDate = (SELECT MAX(SnapshotDate) FROM dbo.Configuration sc2 WHERE sc2.InstanceID=sc.InstanceID)
-                ORDER BY sc.name";
-            data = await QueryAsync(sql, ("@instanceId", instanceId.Value));
-        }
-        catch (Exception ex)
-        {
-            note = $"SysConfig/Configuration not found: {ex.Message}";
-        }
+        note = $"SysConfig not found: {ex.Message}";
     }
     return Results.Ok(new { data, note });
 }).RequireAuthorization();
@@ -1237,38 +1147,21 @@ app.MapGet("/api/monitoring/configuration/changes", async (int? instanceId, int?
     {
         var sql = @"
             ;WITH Ranked AS (
-                SELECT sc.name, sc.value, sc.value_in_use, sc.SnapshotDate,
-                       LAG(sc.value) OVER (PARTITION BY sc.name ORDER BY sc.SnapshotDate) as prev_value
+                SELECT sco.name, sc.value, sc.value_in_use, sc.ValidFrom,
+                       LAG(sc.value) OVER (PARTITION BY sc.configuration_id ORDER BY sc.ValidFrom) as prev_value
                 FROM dbo.SysConfig sc
-                WHERE sc.InstanceID=@instanceId AND sc.SnapshotDate > DATEADD(day,-@days,GETUTCDATE())
+                JOIN dbo.SysConfigOptions sco ON sc.configuration_id=sco.configuration_id
+                WHERE sc.InstanceID=@instanceId AND sc.ValidFrom > DATEADD(day,-@days,GETUTCDATE())
             )
-            SELECT name, prev_value as old_value, value as new_value, SnapshotDate as ChangeDate
+            SELECT name, prev_value as old_value, value as new_value, ValidFrom as ChangeDate
             FROM Ranked
             WHERE prev_value IS NOT NULL AND prev_value <> value
-            ORDER BY SnapshotDate DESC";
+            ORDER BY ValidFrom DESC";
         data = await QueryAsync(sql, ("@instanceId", instanceId.Value), ("@days", d));
     }
-    catch
+    catch (Exception ex)
     {
-        try
-        {
-            var sql = @"
-                ;WITH Ranked AS (
-                    SELECT sc.name, sc.value, sc.value_in_use, sc.SnapshotDate,
-                           LAG(sc.value) OVER (PARTITION BY sc.name ORDER BY sc.SnapshotDate) as prev_value
-                    FROM dbo.Configuration sc
-                    WHERE sc.InstanceID=@instanceId AND sc.SnapshotDate > DATEADD(day,-@days,GETUTCDATE())
-                )
-                SELECT name, prev_value as old_value, value as new_value, SnapshotDate as ChangeDate
-                FROM Ranked
-                WHERE prev_value IS NOT NULL AND prev_value <> value
-                ORDER BY SnapshotDate DESC";
-            data = await QueryAsync(sql, ("@instanceId", instanceId.Value), ("@days", d));
-        }
-        catch (Exception ex)
-        {
-            note = $"Configuration change detection failed: {ex.Message}";
-        }
+        note = $"Configuration change detection failed: {ex.Message}";
     }
     return Results.Ok(new { data, note });
 }).RequireAuthorization();
@@ -1293,17 +1186,13 @@ app.MapGet("/api/monitoring/patching", async (HttpContext ctx) =>
 app.MapGet("/api/monitoring/schema-changes", async (HttpContext ctx, int instanceId, int days = 30) =>
 {
     var connStr = app.Configuration.GetConnectionString("DBADashDB");
-    var tables = new[] { "DDLHistory", "DDLEvents", "DDLSnapshotChanges", "SchemaSnapshots" };
+    var tables = new[] { "DDLHistory" };
     foreach (var tbl in tables)
     {
         try
         {
             using var conn = new SqlConnection(connStr); await conn.OpenAsync();
-            var sql = tbl switch
-            {
-                "DDLHistory" => $"SELECT TOP 200 d.InstanceID, d.ObjectName, d.SchemaName, d.ObjectType, d.DDLEvent, d.LoginName, d.EventDate FROM dbo.{tbl} d WHERE d.InstanceID=@id AND d.EventDate > DATEADD(day,-@days,GETUTCDATE()) ORDER BY d.EventDate DESC",
-                _ => $"SELECT TOP 200 * FROM dbo.{tbl} WHERE InstanceID=@id ORDER BY 1 DESC"
-            };
+            var sql = $"SELECT TOP 200 d.DatabaseID, dbo_obj.ObjectName, dbo_obj.SchemaName, dbo_obj.ObjectType, d.ObjectDateCreated, d.ObjectDateModified, d.SnapshotValidFrom FROM dbo.DDLHistory d JOIN dbo.DBObjects dbo_obj ON d.ObjectID=dbo_obj.ObjectID WHERE dbo_obj.DatabaseID IN (SELECT DatabaseID FROM dbo.Databases WHERE InstanceID=@id) AND d.SnapshotValidFrom > DATEADD(day,-@days,GETUTCDATE()) ORDER BY d.SnapshotValidFrom DESC";
             using var cmd = new SqlCommand(sql, conn);
             cmd.Parameters.AddWithValue("@id", instanceId); cmd.Parameters.AddWithValue("@days", days);
             using var r = await cmd.ExecuteReaderAsync();
@@ -1353,7 +1242,7 @@ app.MapGet("/api/monitoring/identity-columns", async (HttpContext ctx, int insta
     try
     {
         using var conn = new SqlConnection(connStr); await conn.OpenAsync();
-        using var cmd = new SqlCommand(@"SELECT ic.InstanceID, d.name as DatabaseName, ic.SchemaName, ic.TableName, ic.ColumnName, ic.SeedValue, ic.IncrementValue, ic.LastValue, ic.MaxValue, CASE WHEN ic.MaxValue > 0 THEN CAST(ic.LastValue AS FLOAT) / CAST(ic.MaxValue AS FLOAT) * 100.0 ELSE 0 END as PercentUsed FROM dbo.IdentityColumns ic JOIN dbo.Databases d ON ic.DatabaseID=d.DatabaseID WHERE ic.InstanceID=@id ORDER BY PercentUsed DESC", conn);
+        using var cmd = new SqlCommand(@"SELECT ic.InstanceID, d.name as DatabaseName, ic.schema_name AS SchemaName, ic.object_name AS TableName, ic.column_name AS ColumnName, ic.seed_value AS SeedValue, ic.increment_value AS IncrementValue, ic.last_value AS LastValue, ic.max_ident AS MaxValue, CASE WHEN ic.max_ident > 0 THEN CAST(ic.last_value AS FLOAT) / CAST(ic.max_ident AS FLOAT) * 100.0 ELSE 0 END as PercentUsed FROM dbo.IdentityColumns ic JOIN dbo.Databases d ON ic.DatabaseID=d.DatabaseID WHERE ic.InstanceID=@id ORDER BY PercentUsed DESC", conn);
         cmd.Parameters.AddWithValue("@id", instanceId);
         using var r = await cmd.ExecuteReaderAsync();
         var list = new List<object>();
@@ -1372,9 +1261,7 @@ app.MapGet("/api/monitoring/tempdb", async (HttpContext ctx, int instanceId) =>
 {
     var connStr = app.Configuration.GetConnectionString("DBADashDB");
     var sqls = new[] {
-        "SELECT file_id as FileId, name as Name, size*8 as SizeKb, FILEPROPERTY(name,'SpaceUsed')*8 as UsedKb FROM dbo.TempDB WHERE InstanceID=@id",
-        "SELECT file_id as FileId, name as Name, size_kb as SizeKb, used_kb as UsedKb FROM dbo.TempDBConfig WHERE InstanceID=@id",
-        "SELECT df.file_id as FileId, df.name as Name, df.size_kb as SizeKb, df.used_kb as UsedKb FROM dbo.DBFiles df JOIN dbo.Databases d ON df.DatabaseID=d.DatabaseID WHERE d.InstanceID=@id AND d.name='tempdb'"
+        "SELECT df.file_id as FileId, df.name as Name, df.size*8 as SizeKb, df.space_used*8 as UsedKb FROM dbo.DBFiles df JOIN dbo.Databases d ON df.DatabaseID=d.DatabaseID WHERE d.InstanceID=@id AND d.name='tempdb'"
     };
     foreach (var sql in sqls)
     {
@@ -1402,8 +1289,7 @@ app.MapGet("/api/monitoring/db-space", async (HttpContext ctx, int instanceId) =
 {
     var connStr = app.Configuration.GetConnectionString("DBADashDB");
     var sqls = new[] {
-        "SELECT d.name as DatabaseName, df.name as FileName, df.type_desc as TypeDesc, df.size*8 as SizeKb, CAST(FILEPROPERTY(df.name,'SpaceUsed') as BIGINT)*8 as UsedKb, df.growth, df.is_percent_growth as IsPercentGrowth FROM dbo.DBFiles df JOIN dbo.Databases d ON df.DatabaseID=d.DatabaseID WHERE d.InstanceID=@id AND d.IsActive=1 ORDER BY df.size DESC",
-        "SELECT d.name as DatabaseName, df.name as FileName, df.type_desc as TypeDesc, df.size_kb as SizeKb, df.used_kb as UsedKb, df.growth, df.is_percent_growth as IsPercentGrowth FROM dbo.DatabaseFiles df JOIN dbo.Databases d ON df.DatabaseID=d.DatabaseID WHERE d.InstanceID=@id AND d.IsActive=1 ORDER BY df.size_kb DESC"
+        "SELECT d.name as DatabaseName, df.name as FileName, CASE df.type WHEN 0 THEN 'ROWS' WHEN 1 THEN 'LOG' ELSE 'OTHER' END as TypeDesc, df.size*8 as SizeKb, df.space_used*8 as UsedKb, df.growth, df.is_percent_growth as IsPercentGrowth FROM dbo.DBFiles df JOIN dbo.Databases d ON df.DatabaseID=d.DatabaseID WHERE d.InstanceID=@id AND d.IsActive=1 ORDER BY df.size DESC"
     };
     foreach (var sql in sqls)
     {
