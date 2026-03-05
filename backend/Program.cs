@@ -1717,6 +1717,130 @@ app.MapGet("/api/reports/fleet-stats", async () =>
     }
 }).RequireAuthorization();
 
+// ── Backups Management Overview ───────────────────────────────────────────
+
+app.MapGet("/api/backups/management", async () =>
+{
+    try
+    {
+        using var conn = new SqlConnection(connStr);
+        await conn.OpenAsync();
+        
+        // 1. Per-instance backup summary
+        using var cmd1 = new SqlCommand(@"
+            ;WITH LatestBackups AS (
+                SELECT b.DatabaseID, b.type, b.backup_start_date, b.backup_finish_date,
+                       b.backup_size, b.compressed_backup_size,
+                       ROW_NUMBER() OVER (PARTITION BY b.DatabaseID, b.type ORDER BY b.backup_start_date DESC) as rn
+                FROM dbo.Backups b
+            ),
+            DbBackups AS (
+                SELECT d.InstanceID, d.DatabaseID, d.name as DatabaseName,
+                       lb.type, lb.backup_start_date, lb.backup_finish_date,
+                       lb.backup_size, lb.compressed_backup_size,
+                       DATEDIFF(second, lb.backup_start_date, lb.backup_finish_date) as backup_duration_sec
+                FROM dbo.Databases d
+                LEFT JOIN LatestBackups lb ON d.DatabaseID = lb.DatabaseID AND lb.rn = 1
+                WHERE d.IsActive = 1
+            )
+            SELECT 
+                i.InstanceID,
+                COALESCE(i.InstanceDisplayName, i.Instance) as InstanceName,
+                i.Edition,
+                db.DatabaseID, db.DatabaseName, db.type, 
+                db.backup_start_date, db.backup_finish_date,
+                db.backup_size, db.compressed_backup_size, db.backup_duration_sec
+            FROM dbo.Instances i
+            JOIN DbBackups db ON i.InstanceID = db.InstanceID
+            WHERE i.IsActive = 1
+            ORDER BY COALESCE(i.InstanceDisplayName, i.Instance), db.DatabaseName, db.type", conn);
+        cmd1.CommandTimeout = 120;
+        
+        var rows1 = new List<Dictionary<string, object?>>();
+        using (var reader1 = await cmd1.ExecuteReaderAsync())
+        {
+            while (await reader1.ReadAsync())
+            {
+                var row = new Dictionary<string, object?>();
+                for (int i = 0; i < reader1.FieldCount; i++)
+                    row[reader1.GetName(i)] = reader1.IsDBNull(i) ? null : reader1.GetValue(i);
+                rows1.Add(row);
+            }
+        }
+        
+        // 2. CPU avg 24h per instance for sorting
+        using var cmd2 = new SqlCommand(@"
+            SELECT c.InstanceID, AVG(CAST(c.SQLProcessCPU as float)) as AvgCPU24h
+            FROM dbo.CPU c
+            WHERE c.EventTime >= DATEADD(hour, -24, GETUTCDATE())
+            GROUP BY c.InstanceID", conn);
+        cmd2.CommandTimeout = 60;
+        
+        var cpuMap = new Dictionary<int, double>();
+        using (var reader2 = await cmd2.ExecuteReaderAsync())
+        {
+            while (await reader2.ReadAsync())
+            {
+                var instId = reader2.GetInt32(0);
+                var avg = reader2.IsDBNull(1) ? 0.0 : reader2.GetDouble(1);
+                cpuMap[instId] = avg;
+            }
+        }
+        
+        // 3. Backups in last 24h stats
+        using var cmd3 = new SqlCommand(@"
+            SELECT COUNT(*) as BackupCount24h,
+                   SUM(backup_size) as TotalSize24h,
+                   AVG(DATEDIFF(second, backup_start_date, backup_finish_date)) as AvgDurationSec24h
+            FROM dbo.Backups
+            WHERE backup_start_date >= DATEADD(hour, -24, GETUTCDATE())", conn);
+        cmd3.CommandTimeout = 60;
+        
+        int backupCount24h = 0; decimal totalSize24h = 0; int avgDuration24h = 0;
+        using (var reader3 = await cmd3.ExecuteReaderAsync())
+        {
+            if (await reader3.ReadAsync())
+            {
+                backupCount24h = reader3.IsDBNull(0) ? 0 : reader3.GetInt32(0);
+                totalSize24h = reader3.IsDBNull(1) ? 0 : reader3.GetDecimal(1);
+                avgDuration24h = reader3.IsDBNull(2) ? 0 : reader3.GetInt32(2);
+            }
+        }
+        
+        // Build response
+        var result = new Dictionary<string, object?>
+        {
+            ["backups"] = rows1.Select(r => new Dictionary<string, object?>
+            {
+                ["instanceId"] = Convert.ToInt32(r["InstanceID"]),
+                ["instanceName"] = r["InstanceName"]?.ToString(),
+                ["edition"] = r["Edition"]?.ToString(),
+                ["databaseId"] = r["DatabaseID"] != null ? Convert.ToInt32(r["DatabaseID"]) : null,
+                ["databaseName"] = r["DatabaseName"]?.ToString(),
+                ["type"] = r["type"]?.ToString()?.Trim(),
+                ["backupStartDate"] = r["backup_start_date"],
+                ["backupFinishDate"] = r["backup_finish_date"],
+                ["backupSize"] = r["backup_size"],
+                ["compressedBackupSize"] = r["compressed_backup_size"],
+                ["backupDurationSec"] = r["backup_duration_sec"] != null ? Convert.ToInt32(r["backup_duration_sec"]) : (int?)null,
+            }).ToList(),
+            ["cpuByInstance"] = cpuMap.Select(kv => new { instanceId = kv.Key, avgCpu24h = Math.Round(kv.Value, 1) }).ToList(),
+            ["stats"] = new
+            {
+                backupCount24h,
+                totalSize24h,
+                avgDurationSec24h = avgDuration24h
+            }
+        };
+        
+        return Results.Ok(result);
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new { error = ex.Message, backups = Array.Empty<object>(), cpuByInstance = Array.Empty<object>(), stats = new { backupCount24h = 0, totalSize24h = 0m, avgDurationSec24h = 0 } });
+    }
+}).RequireAuthorization();
+
 // SPA fallback — serve index.html for all non-API routes
 app.MapFallbackToFile("index.html");
 

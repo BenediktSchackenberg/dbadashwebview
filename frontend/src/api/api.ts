@@ -72,6 +72,7 @@ export const api = {
   drives: () => request<any[]>('/api/drives'),
   instanceQueries: (id: number) => request<any[]>(`/api/instances/${id}/queries`),
   backupsEstate: () => request<any[]>('/api/backups/estate'),
+  backupsManagement: () => request<any>('/api/backups/management'),
   performanceRunningQueries: (instanceId?: number) =>
     request<{ data: any[]; note: string }>(`/api/performance/running-queries${instanceId ? `?instanceId=${instanceId}` : ''}`),
   performanceBlocking: (instanceId?: number) =>
