@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/api';
-import { RefreshCw, ArrowUpDown, ArrowUp, ArrowDown, Clock } from 'lucide-react';
+import { RefreshCw, ArrowUpDown, ArrowUp, ArrowDown, Clock, Loader2 } from 'lucide-react';
 
 type SortDir = 'asc' | 'desc';
 type Thresholds = Record<string, { warning: number; critical: number }>;
@@ -100,6 +100,7 @@ export default function DashboardPage() {
         <h1 className="text-2xl font-bold text-white">Performance Summary</h1>
         <div className="flex items-center gap-4 text-sm text-gray-400">
           <span>{data.length} instances</span>
+          {loading && data.length > 0 && <span className="flex items-center gap-1 text-blue-400"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Updating...</span>}
           <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {lastRefresh.toLocaleTimeString()}</span>
           <span className="flex items-center gap-1"><RefreshCw className="w-3.5 h-3.5" /> Refreshing in {countdown}s</span>
           <button onClick={() => { fetchData(); }} className="p-1.5 rounded hover:bg-white/10 transition-colors">
@@ -108,7 +109,15 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="glass rounded-xl overflow-hidden">
+      {loading && data.length === 0 && (
+        <div className="glass rounded-xl p-12 flex flex-col items-center justify-center gap-4">
+          <Loader2 className="w-10 h-10 text-blue-400 animate-spin" />
+          <p className="text-gray-300 text-lg">Loading performance data from {data.length || '~200'} instances...</p>
+          <p className="text-gray-500 text-sm">This may take a few seconds on first load</p>
+        </div>
+      )}
+
+      <div className={`glass rounded-xl overflow-hidden ${loading && data.length === 0 ? 'hidden' : ''}`}>
         <div className="overflow-x-auto">
           <table className="w-full text-sm font-[Inter]">
             <thead>
