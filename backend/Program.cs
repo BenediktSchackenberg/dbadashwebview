@@ -1322,75 +1322,91 @@ app.MapGet("/api/dashboard/performance-summary", async () =>
     {
         using var conn = new SqlConnection(connStr);
         await conn.OpenAsync();
-        
-        var sql = @"
-        ;WITH LatestCPU AS (
-            SELECT c.InstanceID,
-                   AVG(c.SQLProcessCPU) as AvgCPU,
-                   MAX(c.MaxSQLProcessCPU) as MaxCPU,
-                   MAX(c.MaxTotalCPU) as MaxTotalCPU
-            FROM dbo.CPU c
-            WHERE c.EventTime > DATEADD(minute,-10,GETUTCDATE())
-            GROUP BY c.InstanceID
-        ),
-        LatestIO AS (
-            SELECT io.InstanceID,
-                   MAX(io.MaxReadLatency) as ReadLatency,
-                   MAX(io.MaxWriteLatency) as WriteLatency,
-                   SUM(io.MaxMBsec) as MBsec,
-                   SUM(io.MaxIOPs) as IOPs
-            FROM dbo.DBIOStats io
-            WHERE io.SnapshotDate > DATEADD(minute,-10,GETUTCDATE())
-              AND io.Drive = '*' AND io.FileID = -1
-            GROUP BY io.InstanceID
-        ),
-        LatestWaits AS (
-            SELECT w.InstanceID,
-                   SUM(CASE WHEN wt.IsCriticalWait=1 THEN w.wait_time_ms ELSE 0 END) as CriticalWaitMs,
-                   SUM(CASE WHEN wt.WaitType LIKE 'LCK%' THEN w.wait_time_ms ELSE 0 END) as LockWaitMs,
-                   SUM(CASE WHEN wt.WaitType LIKE 'PAGEIO%' OR wt.WaitType LIKE 'IO_%' OR wt.WaitType LIKE 'WRITELOG%' THEN w.wait_time_ms ELSE 0 END) as IOWaitMs,
-                   SUM(w.wait_time_ms) as TotalWaitMs,
-                   CASE WHEN SUM(w.wait_time_ms)>0 THEN SUM(w.signal_wait_time_ms)*100.0/SUM(w.wait_time_ms) ELSE 0 END as SignalWaitPct,
-                   SUM(CASE WHEN wt.WaitType LIKE 'LATCH%' THEN w.wait_time_ms ELSE 0 END) as LatchWaitMs
-            FROM dbo.Waits w
-            JOIN dbo.WaitType wt ON w.WaitTypeID = wt.WaitTypeID
-            WHERE w.SnapshotDate > DATEADD(minute,-10,GETUTCDATE())
-              AND wt.IsExcluded = 0
-            GROUP BY w.InstanceID
-        )
-        SELECT i.InstanceID, i.InstanceDisplayName,
-               COALESCE(cpu.AvgCPU, 0) as AvgCPU,
-               COALESCE(cpu.MaxCPU, 0) as MaxCPU,
-               COALESCE(cpu.MaxTotalCPU, 0) as MaxTotalCPU,
-               COALESCE(wt.CriticalWaitMs, 0) as CriticalWaitMs,
-               COALESCE(wt.LockWaitMs, 0) as LockWaitMs,
-               COALESCE(wt.IOWaitMs, 0) as IOWaitMs,
-               COALESCE(wt.TotalWaitMs, 0) as TotalWaitMs,
-               ROUND(COALESCE(wt.SignalWaitPct, 0), 1) as SignalWaitPct,
-               COALESCE(wt.LatchWaitMs, 0) as LatchWaitMs,
-               ROUND(COALESCE(io.ReadLatency, 0), 2) as ReadLatency,
-               ROUND(COALESCE(io.WriteLatency, 0), 2) as WriteLatency,
-               ROUND(COALESCE(io.MBsec, 0), 2) as MBsec,
-               ROUND(COALESCE(io.IOPs, 0), 1) as IOPs
-        FROM dbo.Instances i
-        LEFT JOIN LatestCPU cpu ON i.InstanceID = cpu.InstanceID
-        LEFT JOIN LatestIO io ON i.InstanceID = io.InstanceID
-        LEFT JOIN LatestWaits wt ON i.InstanceID = wt.InstanceID
-        WHERE i.IsActive = 1
-        ORDER BY i.InstanceDisplayName";
 
-        using var cmd = new SqlCommand(sql, conn);
-        cmd.CommandTimeout = 30;
-        using var r = await cmd.ExecuteReaderAsync();
-        var list = new List<object>();
-        while (await r.ReadAsync())
+        // Step 1: Get all active instances
+        var instances = new List<Dictionary<string, object?>>();
+        using (var cmd = new SqlCommand("SELECT InstanceID, COALESCE(InstanceDisplayName, Instance) as Name FROM dbo.Instances WHERE IsActive=1 ORDER BY COALESCE(InstanceDisplayName, Instance)", conn))
         {
-            var dict = new Dictionary<string, object?>();
-            for (int i2 = 0; i2 < r.FieldCount; i2++)
-                dict[char.ToLowerInvariant(r.GetName(i2)[0]) + r.GetName(i2).Substring(1)] = r.IsDBNull(i2) ? null : r.GetValue(i2);
-            list.Add(dict);
+            using var r = await cmd.ExecuteReaderAsync();
+            while (await r.ReadAsync())
+                instances.Add(new Dictionary<string, object?> { ["instanceID"] = r.GetInt32(0), ["instanceDisplayName"] = r.GetString(1) });
         }
-        return Results.Ok(new { data = list, note = "" });
+
+        // Step 2: CPU (last 60 min for reliability with collection gaps)
+        var cpuData = new Dictionary<int, (double avg, int max, int maxTotal)>();
+        try
+        {
+            using var cmd = new SqlCommand(@"SELECT InstanceID, AVG(SQLProcessCPU) as AvgCPU, MAX(MaxSQLProcessCPU) as MaxCPU, MAX(MaxTotalCPU) as MaxTotal FROM dbo.CPU WHERE EventTime > DATEADD(hour,-1,GETUTCDATE()) GROUP BY InstanceID", conn);
+            cmd.CommandTimeout = 30;
+            using var r = await cmd.ExecuteReaderAsync();
+            while (await r.ReadAsync())
+                cpuData[r.GetInt32(0)] = (r.IsDBNull(1) ? 0 : Convert.ToDouble(r[1]), r.IsDBNull(2) ? 0 : Convert.ToInt32(r[2]), r.IsDBNull(3) ? 0 : Convert.ToInt32(r[3]));
+        }
+        catch { /* CPU table might differ */ }
+
+        // Step 3: IO (aggregate across all drives/files per instance)
+        var ioData = new Dictionary<int, (double readLat, double writeLat, double mbSec, double iops)>();
+        try
+        {
+            using var cmd = new SqlCommand(@"SELECT InstanceID, MAX(MaxReadLatency) as RL, MAX(MaxWriteLatency) as WL, SUM(MaxMBsec) as MB, SUM(MaxIOPs) as IO FROM dbo.DBIOStats WHERE SnapshotDate > DATEADD(hour,-1,GETUTCDATE()) GROUP BY InstanceID", conn);
+            cmd.CommandTimeout = 30;
+            using var r = await cmd.ExecuteReaderAsync();
+            while (await r.ReadAsync())
+                ioData[r.GetInt32(0)] = (r.IsDBNull(1) ? 0 : Convert.ToDouble(r[1]), r.IsDBNull(2) ? 0 : Convert.ToDouble(r[2]), r.IsDBNull(3) ? 0 : Convert.ToDouble(r[3]), r.IsDBNull(4) ? 0 : Convert.ToDouble(r[4]));
+        }
+        catch { /* IO table might differ */ }
+
+        // Step 4: Waits
+        var waitData = new Dictionary<int, (long critical, long lockW, long ioW, long total, double signal, long latch)>();
+        try
+        {
+            using var cmd = new SqlCommand(@"
+                SELECT w.InstanceID,
+                    SUM(CASE WHEN wt.IsCriticalWait=1 THEN w.wait_time_ms ELSE 0 END),
+                    SUM(CASE WHEN wt.WaitType LIKE 'LCK%' THEN w.wait_time_ms ELSE 0 END),
+                    SUM(CASE WHEN wt.WaitType LIKE 'PAGEIO%' OR wt.WaitType LIKE 'IO_%' OR wt.WaitType LIKE 'WRITELOG%' THEN w.wait_time_ms ELSE 0 END),
+                    SUM(w.wait_time_ms),
+                    CASE WHEN SUM(w.wait_time_ms)>0 THEN SUM(w.signal_wait_time_ms)*100.0/SUM(w.wait_time_ms) ELSE 0 END,
+                    SUM(CASE WHEN wt.WaitType LIKE 'LATCH%' THEN w.wait_time_ms ELSE 0 END)
+                FROM dbo.Waits w
+                JOIN dbo.WaitType wt ON w.WaitTypeID=wt.WaitTypeID
+                WHERE w.SnapshotDate > DATEADD(hour,-1,GETUTCDATE()) AND wt.IsExcluded=0
+                GROUP BY w.InstanceID", conn);
+            cmd.CommandTimeout = 60;
+            using var r = await cmd.ExecuteReaderAsync();
+            while (await r.ReadAsync())
+                waitData[r.GetInt32(0)] = (r.IsDBNull(1)?0:Convert.ToInt64(r[1]), r.IsDBNull(2)?0:Convert.ToInt64(r[2]), r.IsDBNull(3)?0:Convert.ToInt64(r[3]), r.IsDBNull(4)?0:Convert.ToInt64(r[4]), r.IsDBNull(5)?0:Convert.ToDouble(r[5]), r.IsDBNull(6)?0:Convert.ToInt64(r[6]));
+        }
+        catch { /* Waits might differ */ }
+
+        // Combine
+        var result = instances.Select(inst =>
+        {
+            var id = (int)inst["instanceID"]!;
+            cpuData.TryGetValue(id, out var cpu);
+            ioData.TryGetValue(id, out var io);
+            waitData.TryGetValue(id, out var wt);
+            return new Dictionary<string, object?>
+            {
+                ["instanceID"] = id,
+                ["instanceDisplayName"] = inst["instanceDisplayName"],
+                ["avgCPU"] = Math.Round(cpu.avg, 0),
+                ["maxCPU"] = cpu.max,
+                ["maxTotalCPU"] = cpu.maxTotal,
+                ["criticalWaitMs"] = wt.critical,
+                ["lockWaitMs"] = wt.lockW,
+                ["ioWaitMs"] = wt.ioW,
+                ["totalWaitMs"] = wt.total,
+                ["signalWaitPct"] = Math.Round(wt.signal, 1),
+                ["latchWaitMs"] = wt.latch,
+                ["readLatency"] = Math.Round(io.readLat, 2),
+                ["writeLatency"] = Math.Round(io.writeLat, 2),
+                ["mBsec"] = Math.Round(io.mbSec, 2),
+                ["iOPs"] = Math.Round(io.iops, 1)
+            };
+        }).ToList();
+
+        return Results.Ok(new { data = result, note = "" });
     }
     catch (Exception ex) { return Results.Ok(new { data = Array.Empty<object>(), note = ex.Message }); }
 }).RequireAuthorization();
