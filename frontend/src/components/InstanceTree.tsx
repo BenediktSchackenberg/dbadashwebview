@@ -2,7 +2,8 @@ import { useEffect, useState, useMemo } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   Database, ChevronRight, ChevronDown, LayoutDashboard, Bell, HardDrive, Network,
-  Settings, ClipboardCheck, Shield, Play, BarChart3, Search, LogOut, User, Folder, Server
+  Settings, ClipboardCheck, Shield, Play, BarChart3, Search, LogOut, User, Folder, Server,
+  FileSpreadsheet, TrendingDown, Activity
 } from 'lucide-react';
 import { api } from '../api/api';
 
@@ -145,6 +146,26 @@ export default function InstanceTree({ onLogout }: { onLogout: () => void }) {
         <div className="px-3 py-2">
           <div className="text-xs font-semibold uppercase tracking-wider text-gray-500 px-0 py-2">Global Views</div>
           {globalViews.map(item => (
+            <Link key={item.path} to={item.path}
+              className={`flex items-center gap-2.5 py-1.5 px-2 rounded text-sm transition-all ${
+                isActive(item.path)
+                  ? 'bg-blue-500/15 text-blue-400 border-l-2 border-blue-400'
+                  : 'text-gray-400 hover:text-white hover:bg-white/5 border-l-2 border-transparent'
+              }`}>
+              <item.icon className={`w-4 h-4 ${isActive(item.path) ? 'text-blue-400' : 'text-gray-500'}`} />
+              <span>{item.label}</span>
+            </Link>
+          ))}
+        </div>
+
+        {/* Reporting */}
+        <div className="px-3 py-2">
+          <div className="text-xs font-semibold uppercase tracking-wider text-gray-500 px-0 py-2">Reporting</div>
+          {[
+            { path: '/reports/licenses', icon: FileSpreadsheet, label: 'License Overview' },
+            { path: '/reports/underutilized', icon: TrendingDown, label: 'Underutilized Servers' },
+            { path: '/reports/fleet-stats', icon: Activity, label: 'Fleet Statistics' },
+          ].map(item => (
             <Link key={item.path} to={item.path}
               className={`flex items-center gap-2.5 py-1.5 px-2 rounded text-sm transition-all ${
                 isActive(item.path)

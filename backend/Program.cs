@@ -1523,6 +1523,200 @@ app.MapGet("/api/tree", async () =>
     }
 }).RequireAuthorization();
 
+// ── Reports ──────────────────────────────────────────────────────────────
+
+app.MapGet("/api/reports/licenses", async () =>
+{
+    try
+    {
+        var data = await QueryAsync(@"
+            SELECT i.InstanceID, 
+                   COALESCE(i.InstanceDisplayName, i.Instance) as InstanceName,
+                   i.Edition, i.ProductVersion, i.ProductMajorVersion,
+                   i.cpu_count, i.cores_per_socket, i.socket_count,
+                   i.physical_memory_kb,
+                   i.sqlserver_start_time,
+                   i.LicenseType
+            FROM dbo.InstanceInfo i
+            WHERE i.IsActive = 1
+            ORDER BY i.ProductMajorVersion DESC, COALESCE(i.InstanceDisplayName, i.Instance)");
+        return Results.Ok(data);
+    }
+    catch (Exception ex)
+    {
+        // Fallback to Instances table if InstanceInfo view doesn't exist
+        try
+        {
+            var data = await QueryAsync(@"
+                SELECT i.InstanceID, 
+                       COALESCE(i.InstanceDisplayName, i.Instance) as InstanceName,
+                       i.Edition, i.ProductVersion, i.ProductMajorVersion,
+                       i.cpu_count, NULL as cores_per_socket, NULL as socket_count,
+                       i.physical_memory_kb,
+                       i.sqlserver_start_time,
+                       NULL as LicenseType
+                FROM dbo.Instances i
+                WHERE i.IsActive = 1
+                ORDER BY i.ProductMajorVersion DESC, COALESCE(i.InstanceDisplayName, i.Instance)");
+            return Results.Ok(data);
+        }
+        catch (Exception ex2)
+        {
+            return Results.Ok(new { error = ex2.Message, data = Array.Empty<object>() });
+        }
+    }
+}).RequireAuthorization();
+
+app.MapGet("/api/reports/underutilized", async () =>
+{
+    try
+    {
+        var data = await QueryAsync(@"
+            SELECT i.InstanceID, 
+                   COALESCE(i.InstanceDisplayName, i.Instance) as InstanceName,
+                   i.Edition, i.ProductVersion, i.cpu_count, i.socket_count, i.cores_per_socket,
+                   i.physical_memory_kb,
+                   AVG(CAST(c.SQLProcessCPU as float)) as AvgCPU,
+                   MAX(c.SQLProcessCPU) as MaxCPU
+            FROM dbo.InstanceInfo i
+            JOIN dbo.CPU c ON i.InstanceID = c.InstanceID
+            WHERE c.EventTime >= DATEADD(day, -14, GETUTCDATE())
+              AND i.IsActive = 1
+            GROUP BY i.InstanceID, i.InstanceDisplayName, i.Instance, i.Edition, 
+                     i.ProductVersion, i.cpu_count, i.socket_count, i.cores_per_socket, i.physical_memory_kb
+            HAVING AVG(CAST(c.SQLProcessCPU as float)) < 5
+            ORDER BY AVG(CAST(c.SQLProcessCPU as float)) ASC");
+        return Results.Ok(data);
+    }
+    catch
+    {
+        try
+        {
+            var data = await QueryAsync(@"
+                SELECT i.InstanceID, 
+                       COALESCE(i.InstanceDisplayName, i.Instance) as InstanceName,
+                       i.Edition, i.ProductVersion, i.cpu_count, NULL as socket_count, NULL as cores_per_socket,
+                       i.physical_memory_kb,
+                       AVG(CAST(c.SQLProcessCPU as float)) as AvgCPU,
+                       MAX(c.SQLProcessCPU) as MaxCPU
+                FROM dbo.Instances i
+                JOIN dbo.CPU c ON i.InstanceID = c.InstanceID
+                WHERE c.EventTime >= DATEADD(day, -14, GETUTCDATE())
+                  AND i.IsActive = 1
+                GROUP BY i.InstanceID, i.InstanceDisplayName, i.Instance, i.Edition, 
+                         i.ProductVersion, i.cpu_count, i.physical_memory_kb
+                HAVING AVG(CAST(c.SQLProcessCPU as float)) < 5
+                ORDER BY AVG(CAST(c.SQLProcessCPU as float)) ASC");
+            return Results.Ok(data);
+        }
+        catch (Exception ex2)
+        {
+            return Results.Ok(new { error = ex2.Message, data = Array.Empty<object>() });
+        }
+    }
+}).RequireAuthorization();
+
+app.MapGet("/api/reports/fleet-stats", async () =>
+{
+    try
+    {
+        var cpuData = await QueryAsync(@"
+            SELECT i.InstanceID,
+                   COALESCE(i.InstanceDisplayName, i.Instance) as InstanceName,
+                   i.cpu_count, i.physical_memory_kb,
+                   AVG(CAST(c.SQLProcessCPU as float)) as AvgCPU24h,
+                   MAX(c.SQLProcessCPU) as MaxCPU24h
+            FROM dbo.InstanceInfo i
+            LEFT JOIN dbo.CPU c ON i.InstanceID = c.InstanceID AND c.EventTime >= DATEADD(hour, -24, GETUTCDATE())
+            WHERE i.IsActive = 1
+            GROUP BY i.InstanceID, i.InstanceDisplayName, i.Instance, i.cpu_count, i.physical_memory_kb
+            ORDER BY AVG(CAST(c.SQLProcessCPU as float)) DESC");
+
+        // Get storage data
+        var storageData = new Dictionary<int, (long capacity, long free, long used)>();
+        try
+        {
+            var storage = await QueryAsync(@"
+                SELECT d.InstanceID, 
+                       SUM(d.Capacity) as TotalCapacity, 
+                       SUM(d.FreeSpace) as TotalFree
+                FROM dbo.Drives d 
+                WHERE d.IsActive = 1 
+                GROUP BY d.InstanceID");
+            foreach (var row in storage)
+            {
+                var instId = Convert.ToInt32(row["InstanceID"]);
+                var cap = row["TotalCapacity"] != null ? Convert.ToInt64(row["TotalCapacity"]) : 0;
+                var free = row["TotalFree"] != null ? Convert.ToInt64(row["TotalFree"]) : 0;
+                storageData[instId] = (cap, free, cap - free);
+            }
+        }
+        catch { }
+
+        // Merge
+        var result = cpuData.Select(row =>
+        {
+            var instId = Convert.ToInt32(row["InstanceID"]);
+            storageData.TryGetValue(instId, out var stor);
+            row["TotalCapacity"] = stor.capacity;
+            row["TotalFree"] = stor.free;
+            row["TotalUsed"] = stor.used;
+            return row;
+        }).ToList();
+
+        return Results.Ok(result);
+    }
+    catch
+    {
+        try
+        {
+            var cpuData = await QueryAsync(@"
+                SELECT i.InstanceID,
+                       COALESCE(i.InstanceDisplayName, i.Instance) as InstanceName,
+                       i.cpu_count, i.physical_memory_kb,
+                       AVG(CAST(c.SQLProcessCPU as float)) as AvgCPU24h,
+                       MAX(c.SQLProcessCPU) as MaxCPU24h
+                FROM dbo.Instances i
+                LEFT JOIN dbo.CPU c ON i.InstanceID = c.InstanceID AND c.EventTime >= DATEADD(hour, -24, GETUTCDATE())
+                WHERE i.IsActive = 1
+                GROUP BY i.InstanceID, i.InstanceDisplayName, i.Instance, i.cpu_count, i.physical_memory_kb
+                ORDER BY AVG(CAST(c.SQLProcessCPU as float)) DESC");
+
+            var storageData = new Dictionary<int, (long capacity, long free, long used)>();
+            try
+            {
+                var storage = await QueryAsync(@"
+                    SELECT d.InstanceID, SUM(d.Capacity) as TotalCapacity, SUM(d.FreeSpace) as TotalFree
+                    FROM dbo.Drives d WHERE d.IsActive = 1 GROUP BY d.InstanceID");
+                foreach (var row in storage)
+                {
+                    var instId = Convert.ToInt32(row["InstanceID"]);
+                    var cap = row["TotalCapacity"] != null ? Convert.ToInt64(row["TotalCapacity"]) : 0;
+                    var free = row["TotalFree"] != null ? Convert.ToInt64(row["TotalFree"]) : 0;
+                    storageData[instId] = (cap, free, cap - free);
+                }
+            }
+            catch { }
+
+            var result = cpuData.Select(row =>
+            {
+                var instId = Convert.ToInt32(row["InstanceID"]);
+                storageData.TryGetValue(instId, out var stor);
+                row["TotalCapacity"] = stor.capacity;
+                row["TotalFree"] = stor.free;
+                row["TotalUsed"] = stor.used;
+                return row;
+            }).ToList();
+
+            return Results.Ok(result);
+        }
+        catch (Exception ex2)
+        {
+            return Results.Ok(new { error = ex2.Message, data = Array.Empty<object>() });
+        }
+    }
+}).RequireAuthorization();
+
 // SPA fallback — serve index.html for all non-API routes
 app.MapFallbackToFile("index.html");
 

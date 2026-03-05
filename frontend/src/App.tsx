@@ -40,6 +40,9 @@ import QueryStorePage from './pages/QueryStorePage';
 import IdentityColumnsPage from './pages/IdentityColumnsPage';
 import TempDBPage from './pages/TempDBPage';
 import DBSpacePage from './pages/DBSpacePage';
+import LicenseOverviewPage from './pages/LicenseOverviewPage';
+import UnderutilizedPage from './pages/UnderutilizedPage';
+import FleetStatsPage from './pages/FleetStatsPage';
 import AboutPage from './pages/AboutPage';
 import ThresholdsPage from './pages/ThresholdsPage';
 import SearchDialog from './components/SearchDialog';
@@ -222,6 +225,9 @@ export default function App() {
                 <Route path="/monitoring/db-space" element={<DBSpacePage key={refreshKey} />} />
                 <Route path="/performance/query-store" element={<QueryStorePage key={refreshKey} />} />
                 <Route path="/about" element={<AboutPage />} />
+                <Route path="/reports/licenses" element={<LicenseOverviewPage key={refreshKey} />} />
+                <Route path="/reports/underutilized" element={<UnderutilizedPage key={refreshKey} />} />
+                <Route path="/reports/fleet-stats" element={<FleetStatsPage key={refreshKey} />} />
                 <Route path="/settings/thresholds" element={<ThresholdsPage key={refreshKey} />} />
               </Routes>
             </Layout>

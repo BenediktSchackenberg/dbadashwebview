@@ -109,6 +109,9 @@ export const api = {
   dashboardPerformanceSummary: () =>
     request<{ data: any[]; note: string }>('/api/dashboard/performance-summary'),
   tree: () => request<any[]>('/api/tree'),
+  reportsLicenses: () => request<any[]>('/api/reports/licenses'),
+  reportsUnderutilized: () => request<any[]>('/api/reports/underutilized'),
+  reportsFleetStats: () => request<any[]>('/api/reports/fleet-stats'),
   getThresholds: () =>
     request<{ thresholds: Record<string, { warning: number; critical: number }> }>('/api/settings/thresholds'),
   saveThresholds: (thresholds: Record<string, { warning: number; critical: number }>) =>
