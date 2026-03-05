@@ -484,4 +484,6 @@ app.MapFallbackToFile("index.html");
 
 app.Run();
 
-record LoginRequest(string Username, string Password);
+record LoginRequest(
+    [property: System.Text.Json.Serialization.JsonPropertyName("username")] string Username,
+    [property: System.Text.Json.Serialization.JsonPropertyName("password")] string Password);
