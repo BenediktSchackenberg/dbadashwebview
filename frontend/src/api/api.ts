@@ -72,4 +72,14 @@ export const api = {
   drives: () => request<any[]>('/api/drives'),
   instanceQueries: (id: number) => request<any[]>(`/api/instances/${id}/queries`),
   backupsEstate: () => request<any[]>('/api/backups/estate'),
+  performanceRunningQueries: (instanceId?: number) =>
+    request<{ data: any[]; note: string }>(`/api/performance/running-queries${instanceId ? `?instanceId=${instanceId}` : ''}`),
+  performanceBlocking: (instanceId?: number) =>
+    request<{ data: any[]; note: string }>(`/api/performance/blocking${instanceId ? `?instanceId=${instanceId}` : ''}`),
+  performanceSlowQueries: (instanceId?: number, hours = 24) =>
+    request<{ data: any[]; note: string }>(`/api/performance/slow-queries?hours=${hours}${instanceId ? `&instanceId=${instanceId}` : ''}`),
+  performanceMemory: (instanceId?: number) =>
+    request<{ clerks: any[]; counters: any[]; clerkNote: string; counterNote: string }>(`/api/performance/memory${instanceId ? `?instanceId=${instanceId}` : ''}`),
+  performanceIO: (instanceId?: number) =>
+    request<{ fileStats: any[]; drivePerf: any[]; fileNote: string; driveNote: string }>(`/api/performance/io${instanceId ? `?instanceId=${instanceId}` : ''}`),
 };

@@ -811,6 +811,239 @@ app.MapGet("/api/drives", async () =>
     }
 }).RequireAuthorization();
 
+// ── Performance: Running Queries ─────────────────────────────────────────
+
+app.MapGet("/api/performance/running-queries", async (int? instanceId) =>
+{
+    try
+    {
+        var filter = instanceId.HasValue ? "AND rq.InstanceID = @instanceId" : "";
+        var sql = $@"
+            SELECT TOP 200 rq.InstanceID, i.InstanceDisplayName, rq.session_id, rq.start_time,
+                   rq.status, rq.command, rq.wait_type, rq.wait_resource,
+                   rq.blocking_session_id, rq.cpu_time, rq.reads, rq.writes,
+                   rq.logical_reads, rq.SnapshotDate, rq.text AS query_text,
+                   rq.database_id, d.name AS database_name
+            FROM dbo.RunningQueries rq
+            JOIN dbo.Instances i ON rq.InstanceID = i.InstanceID
+            LEFT JOIN dbo.Databases d ON rq.database_id = d.database_id AND rq.InstanceID = d.InstanceID
+            WHERE rq.SnapshotDate > DATEADD(hour,-1,GETUTCDATE()) {filter}
+            ORDER BY rq.SnapshotDate DESC";
+        var data = await QueryAsync(sql, ("@instanceId", instanceId ?? (object)DBNull.Value));
+        return Results.Ok(new { data, note = "" });
+    }
+    catch (Exception ex)
+    {
+        // Try alternate table names
+        try
+        {
+            var filter = instanceId.HasValue ? "AND rq.InstanceID = @instanceId" : "";
+            var sql = $@"
+                SELECT TOP 200 rq.InstanceID, i.InstanceDisplayName, rq.session_id, rq.start_time,
+                       rq.status, rq.command, rq.wait_type, rq.wait_resource,
+                       rq.blocking_session_id, rq.cpu_time, rq.reads, rq.writes,
+                       rq.logical_reads, rq.SnapshotDate, rq.text AS query_text,
+                       rq.database_id
+                FROM dbo.RunningQueriesSnapshot rq
+                JOIN dbo.Instances i ON rq.InstanceID = i.InstanceID
+                WHERE rq.SnapshotDate > DATEADD(hour,-1,GETUTCDATE()) {filter}
+                ORDER BY rq.SnapshotDate DESC";
+            var data = await QueryAsync(sql, ("@instanceId", instanceId ?? (object)DBNull.Value));
+            return Results.Ok(new { data, note = "Using RunningQueriesSnapshot" });
+        }
+        catch
+        {
+            app.Logger.LogWarning("Running queries endpoint error: {Error}", ex.Message);
+            return Results.Ok(new { data = Array.Empty<object>(), note = $"Table not found: {ex.Message}" });
+        }
+    }
+}).RequireAuthorization();
+
+// ── Performance: Blocking ────────────────────────────────────────────────
+
+app.MapGet("/api/performance/blocking", async (int? instanceId) =>
+{
+    try
+    {
+        var filter = instanceId.HasValue ? "AND rq.InstanceID = @instanceId" : "";
+        var sql = $@"
+            SELECT rq.InstanceID, i.InstanceDisplayName, rq.session_id, rq.start_time,
+                   rq.status, rq.command, rq.wait_type, rq.wait_resource,
+                   rq.blocking_session_id, rq.cpu_time, rq.reads, rq.writes,
+                   rq.SnapshotDate, rq.text AS query_text
+            FROM dbo.RunningQueries rq
+            JOIN dbo.Instances i ON rq.InstanceID = i.InstanceID
+            WHERE rq.SnapshotDate > DATEADD(hour,-1,GETUTCDATE())
+              AND (rq.blocking_session_id > 0
+                   OR rq.session_id IN (SELECT blocking_session_id FROM dbo.RunningQueries WHERE blocking_session_id > 0 AND SnapshotDate > DATEADD(hour,-1,GETUTCDATE())))
+              {filter}
+            ORDER BY rq.SnapshotDate DESC";
+        var data = await QueryAsync(sql, ("@instanceId", instanceId ?? (object)DBNull.Value));
+        return Results.Ok(new { data, note = "" });
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning("Blocking endpoint error: {Error}", ex.Message);
+        return Results.Ok(new { data = Array.Empty<object>(), note = $"Table not found: {ex.Message}" });
+    }
+}).RequireAuthorization();
+
+// ── Performance: Slow Queries ────────────────────────────────────────────
+
+app.MapGet("/api/performance/slow-queries", async (int? instanceId, int? hours) =>
+{
+    var h = hours ?? 24;
+    try
+    {
+        var filter = instanceId.HasValue ? "AND sq.InstanceID = @instanceId" : "";
+        var sql = $@"
+            SELECT TOP 200 sq.InstanceID, i.InstanceDisplayName, sq.object_name, sq.database_name,
+                   sq.text, sq.duration_ms, sq.cpu_time_ms, sq.logical_reads,
+                   sq.physical_reads, sq.writes, sq.Timestamp,
+                   sq.client_hostname, sq.client_app_name, sq.username
+            FROM dbo.SlowQueries sq
+            JOIN dbo.Instances i ON sq.InstanceID = i.InstanceID
+            WHERE sq.Timestamp > DATEADD(hour,-@hours,GETUTCDATE()) {filter}
+            ORDER BY sq.duration_ms DESC";
+        var data = await QueryAsync(sql, ("@instanceId", instanceId ?? (object)DBNull.Value), ("@hours", h));
+        return Results.Ok(new { data, note = "" });
+    }
+    catch (Exception ex)
+    {
+        try
+        {
+            var filter = instanceId.HasValue ? "AND sq.InstanceID = @instanceId" : "";
+            var sql = $@"
+                SELECT TOP 200 sq.InstanceID, i.InstanceDisplayName, sq.object_name, sq.database_name,
+                       sq.text, sq.duration_ms, sq.cpu_time_ms, sq.logical_reads,
+                       sq.physical_reads, sq.writes, sq.Timestamp
+                FROM dbo.SlowQueriesStats sq
+                JOIN dbo.Instances i ON sq.InstanceID = i.InstanceID
+                WHERE sq.Timestamp > DATEADD(hour,-@hours,GETUTCDATE()) {filter}
+                ORDER BY sq.duration_ms DESC";
+            var data = await QueryAsync(sql, ("@instanceId", instanceId ?? (object)DBNull.Value), ("@hours", h));
+            return Results.Ok(new { data, note = "Using SlowQueriesStats" });
+        }
+        catch
+        {
+            app.Logger.LogWarning("Slow queries endpoint error: {Error}", ex.Message);
+            return Results.Ok(new { data = Array.Empty<object>(), note = $"Table not found: {ex.Message}" });
+        }
+    }
+}).RequireAuthorization();
+
+// ── Performance: Memory ──────────────────────────────────────────────────
+
+app.MapGet("/api/performance/memory", async (int? instanceId) =>
+{
+    var clerks = Array.Empty<object>() as object;
+    var counters = Array.Empty<object>() as object;
+    var clerkNote = "";
+    var counterNote = "";
+
+    // Memory clerk stats
+    try
+    {
+        var filter = instanceId.HasValue ? "AND mc.InstanceID = @instanceId" : "";
+        var sql = $@"
+            SELECT TOP 200 mc.InstanceID, i.InstanceDisplayName, mc.type AS clerk_type,
+                   mc.name AS clerk_name, mc.pages_kb, mc.SnapshotDate
+            FROM dbo.MemoryClerkStats mc
+            JOIN dbo.Instances i ON mc.InstanceID = i.InstanceID
+            WHERE mc.SnapshotDate > DATEADD(hour,-24,GETUTCDATE()) {filter}
+            ORDER BY mc.pages_kb DESC";
+        clerks = await QueryAsync(sql, ("@instanceId", instanceId ?? (object)DBNull.Value));
+    }
+    catch (Exception ex)
+    {
+        clerkNote = $"MemoryClerkStats not found: {ex.Message}";
+    }
+
+    // Performance counters (memory)
+    try
+    {
+        var filter = instanceId.HasValue ? "AND pc.InstanceID = @instanceId" : "";
+        var sql = $@"
+            SELECT TOP 500 pc.InstanceID, i.InstanceDisplayName, pc.counter_name, pc.cntr_value, pc.SnapshotDate
+            FROM dbo.PerformanceCounters pc
+            JOIN dbo.Instances i ON pc.InstanceID = i.InstanceID
+            WHERE pc.object_name LIKE '%Memory%'
+              AND pc.SnapshotDate > DATEADD(hour,-24,GETUTCDATE()) {filter}
+            ORDER BY pc.SnapshotDate DESC";
+        counters = await QueryAsync(sql, ("@instanceId", instanceId ?? (object)DBNull.Value));
+    }
+    catch (Exception ex)
+    {
+        counterNote = $"PerformanceCounters not found: {ex.Message}";
+    }
+
+    return Results.Ok(new { clerks, counters, clerkNote, counterNote });
+}).RequireAuthorization();
+
+// ── Performance: IO ──────────────────────────────────────────────────────
+
+app.MapGet("/api/performance/io", async (int? instanceId) =>
+{
+    var fileStats = Array.Empty<object>() as object;
+    var drivePerf = Array.Empty<object>() as object;
+    var fileNote = "";
+    var driveNote = "";
+
+    // File IO stats
+    try
+    {
+        var filter = instanceId.HasValue ? "AND ios.InstanceID = @instanceId" : "";
+        var sql = $@"
+            SELECT TOP 200 ios.InstanceID, i.InstanceDisplayName, ios.database_name, ios.file_name,
+                   ios.io_stall_read_ms, ios.io_stall_write_ms, ios.num_of_reads, ios.num_of_writes,
+                   ios.num_of_bytes_read, ios.num_of_bytes_written, ios.SnapshotDate
+            FROM dbo.IOStats ios
+            JOIN dbo.Instances i ON ios.InstanceID = i.InstanceID
+            WHERE ios.SnapshotDate > DATEADD(hour,-24,GETUTCDATE()) {filter}
+            ORDER BY (ios.io_stall_read_ms + ios.io_stall_write_ms) DESC";
+        fileStats = await QueryAsync(sql, ("@instanceId", instanceId ?? (object)DBNull.Value));
+    }
+    catch (Exception ex1)
+    {
+        try
+        {
+            var filter = instanceId.HasValue ? "AND ios.InstanceID = @instanceId" : "";
+            var sql = $@"
+                SELECT TOP 200 ios.InstanceID, i.InstanceDisplayName, ios.database_name, ios.file_name,
+                       ios.io_stall_read_ms, ios.io_stall_write_ms, ios.num_of_reads, ios.num_of_writes,
+                       ios.num_of_bytes_read, ios.num_of_bytes_written, ios.SnapshotDate
+                FROM dbo.DBIOStats ios
+                JOIN dbo.Instances i ON ios.InstanceID = i.InstanceID
+                WHERE ios.SnapshotDate > DATEADD(hour,-24,GETUTCDATE()) {filter}
+                ORDER BY (ios.io_stall_read_ms + ios.io_stall_write_ms) DESC";
+            fileStats = await QueryAsync(sql, ("@instanceId", instanceId ?? (object)DBNull.Value));
+        }
+        catch
+        {
+            fileNote = $"IOStats/DBIOStats not found: {ex1.Message}";
+        }
+    }
+
+    // Drive performance
+    try
+    {
+        var filter = instanceId.HasValue ? "AND dp.InstanceID = @instanceId" : "";
+        var sql = $@"
+            SELECT TOP 200 dp.*, i.InstanceDisplayName
+            FROM dbo.DrivePerformance dp
+            JOIN dbo.Instances i ON dp.InstanceID = i.InstanceID
+            WHERE dp.SnapshotDate > DATEADD(hour,-24,GETUTCDATE()) {filter}
+            ORDER BY dp.SnapshotDate DESC";
+        drivePerf = await QueryAsync(sql, ("@instanceId", instanceId ?? (object)DBNull.Value));
+    }
+    catch (Exception ex)
+    {
+        driveNote = $"DrivePerformance not found: {ex.Message}";
+    }
+
+    return Results.Ok(new { fileStats, drivePerf, fileNote, driveNote });
+}).RequireAuthorization();
+
 // SPA fallback — serve index.html for all non-API routes
 app.MapFallbackToFile("index.html");
 

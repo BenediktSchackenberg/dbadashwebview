@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, createContext, useContext } from 'rea
 import { isAuthenticated, clearToken, api } from './api/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  LayoutDashboard, Server, Database, Bell, HardDrive, Network,
+  LayoutDashboard, Server, Database, Bell, HardDrive, Network, AlertTriangle,
   ChevronLeft, ChevronRight, ChevronDown, LogOut, User, RefreshCw, Sun, Moon,
   Activity, Search, FileText, Users, Tag, Clock, Shield
 } from 'lucide-react';
@@ -29,6 +29,11 @@ import ConfigServersPage from './pages/ConfigServersPage';
 import ConfigGroupsPage from './pages/ConfigGroupsPage';
 import ConfigUsersPage from './pages/ConfigUsersPage';
 import ConfigRetentionPage from './pages/ConfigRetentionPage';
+import RunningQueriesPage from './pages/RunningQueriesPage';
+import BlockingPage from './pages/BlockingPage';
+import SlowQueriesPage from './pages/SlowQueriesPage';
+import MemoryPage from './pages/MemoryPage';
+import IOPerformancePage from './pages/IOPerformancePage';
 import SearchDialog from './components/SearchDialog';
 import Breadcrumbs from './components/Breadcrumbs';
 import TimeRangePicker from './components/TimeRangePicker';
@@ -54,6 +59,16 @@ const navGroups: NavGroup[] = [
       { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
       { path: '/instances', icon: Server, label: 'Instances' },
       { path: '/availability-groups', icon: Network, label: 'Availability Groups' },
+    ],
+  },
+  {
+    label: 'Performance',
+    items: [
+      { path: '/performance/running-queries', icon: Activity, label: 'Running Queries' },
+      { path: '/performance/blocking', icon: AlertTriangle, label: 'Blocking' },
+      { path: '/performance/slow-queries', icon: Clock, label: 'Slow Queries' },
+      { path: '/performance/memory', icon: HardDrive, label: 'Memory' },
+      { path: '/performance/io', icon: HardDrive, label: 'IO Performance' },
     ],
   },
   {
@@ -320,6 +335,11 @@ export default function App() {
                 <Route path="/settings/groups" element={<ConfigGroupsPage key={refreshKey} />} />
                 <Route path="/settings/users" element={<ConfigUsersPage key={refreshKey} />} />
                 <Route path="/settings/retention" element={<ConfigRetentionPage key={refreshKey} />} />
+                <Route path="/performance/running-queries" element={<RunningQueriesPage key={refreshKey} />} />
+                <Route path="/performance/blocking" element={<BlockingPage key={refreshKey} />} />
+                <Route path="/performance/slow-queries" element={<SlowQueriesPage key={refreshKey} />} />
+                <Route path="/performance/memory" element={<MemoryPage key={refreshKey} />} />
+                <Route path="/performance/io" element={<IOPerformancePage key={refreshKey} />} />
               </Routes>
             </Layout>
           </AuthGuard>
