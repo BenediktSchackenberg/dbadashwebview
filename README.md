@@ -6,7 +6,7 @@
 
 **A modern web dashboard for SQL Server fleet monitoring**
 
-*Browser-based companion to [DBA Dash](https://github.com/trimble-oss/DBADash) — monitor hundreds of SQL Servers from any device.*
+*Browser-based companion to [DBA Dash](https://github.com/trimble-oss/dba-dash) — monitor hundreds of SQL Servers from any device.*
 
 [![Build](https://github.com/BenediktSchackenberg/dbadashwebview/actions/workflows/build.yml/badge.svg)](https://github.com/BenediktSchackenberg/dbadashwebview/actions/workflows/build.yml)
 [![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -95,7 +95,7 @@ Real-time overview of your entire fleet in a single table — CPU, waits, IO lat
 
 | Requirement | Version |
 |-------------|---------|
-| [DBA Dash](https://github.com/trimble-oss/DBADash) | Any (populated DBADashDB required) |
+| [DBA Dash](https://github.com/trimble-oss/dba-dash) | Any (populated DBADashDB required) |
 | [.NET 8 Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) | 8.0+ |
 | SQL Server | 2014+ |
 
@@ -368,7 +368,7 @@ git push origin feature/my-feature
 
 ## Acknowledgements
 
-**[DBA Dash](https://github.com/trimble-oss/DBADash)** by [Trimble](https://github.com/trimble-oss) — the engine behind all the monitoring data. DBA Dash is one of the best open-source SQL Server monitoring tools available. If you're not using it yet, [check it out](https://dbadash.com).
+**[DBA Dash](https://github.com/trimble-oss/dba-dash)** by [Trimble](https://github.com/trimble-oss) — the engine behind all the monitoring data. DBA Dash is one of the best open-source SQL Server monitoring tools available. If you're not using it yet, [check it out](https://dbadash.com).
 
 DBA Dash WebView is an independent project that provides a web frontend for DBA Dash data. It is not affiliated with or endorsed by Trimble or the DBA Dash project.
 
@@ -378,7 +378,7 @@ DBA Dash WebView is an independent project that provides a web frontend for DBA 
 
 [MIT](LICENSE) — DBA Dash WebView
 
-[Apache 2.0](https://github.com/trimble-oss/DBADash/blob/main/LICENSE) — DBA Dash
+[Apache 2.0](https://github.com/trimble-oss/dba-dash/blob/main/LICENSE) — DBA Dash
 
 ---
 
