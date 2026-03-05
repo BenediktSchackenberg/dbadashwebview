@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, Server, Database, Bell, HardDrive, Network, AlertTriangle,
   ChevronLeft, ChevronRight, ChevronDown, LogOut, User, RefreshCw, Sun, Moon,
-  Activity, Search, FileText, Users, Tag, Clock, Shield, Zap, Gauge, CalendarClock, Settings
+  Activity, Search, FileText, Users, Tag, Clock, Shield, Zap, Gauge, CalendarClock, Settings,
+  Key, Thermometer, GitBranch, Info
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import LoginPage from './pages/LoginPage';
@@ -39,6 +40,13 @@ import WaitsTimelinePage from './pages/WaitsTimelinePage';
 import PerformanceCountersPage from './pages/PerformanceCountersPage';
 import JobTimelinePage from './pages/JobTimelinePage';
 import ConfigurationPage from './pages/ConfigurationPage';
+import PatchingPage from './pages/PatchingPage';
+import SchemaChangesPage from './pages/SchemaChangesPage';
+import QueryStorePage from './pages/QueryStorePage';
+import IdentityColumnsPage from './pages/IdentityColumnsPage';
+import TempDBPage from './pages/TempDBPage';
+import DBSpacePage from './pages/DBSpacePage';
+import AboutPage from './pages/AboutPage';
 import SearchDialog from './components/SearchDialog';
 import Breadcrumbs from './components/Breadcrumbs';
 import TimeRangePicker from './components/TimeRangePicker';
@@ -77,6 +85,7 @@ const navGroups: NavGroup[] = [
       { path: '/performance/exec-stats', icon: Zap, label: 'Object Exec Stats' },
       { path: '/performance/waits-timeline', icon: Clock, label: 'Waits Timeline' },
       { path: '/performance/counters', icon: Gauge, label: 'Perf Counters' },
+      { path: '/performance/query-store', icon: Search, label: 'Query Store' },
     ],
   },
   {
@@ -87,6 +96,11 @@ const navGroups: NavGroup[] = [
       { path: '/queries', icon: Search, label: 'Queries' },
       { path: '/monitoring/job-timeline', icon: CalendarClock, label: 'Job Timeline' },
       { path: '/monitoring/configuration', icon: Settings, label: 'Configuration' },
+      { path: '/monitoring/patching', icon: Shield, label: 'SQL Patching' },
+      { path: '/monitoring/schema-changes', icon: GitBranch, label: 'Schema Changes' },
+      { path: '/monitoring/identity-columns', icon: Key, label: 'Identity Columns' },
+      { path: '/monitoring/tempdb', icon: Thermometer, label: 'TempDB' },
+      { path: '/monitoring/db-space', icon: Database, label: 'DB Space' },
     ],
   },
   {
@@ -111,6 +125,12 @@ const navGroups: NavGroup[] = [
       { path: '/settings/users', icon: Users, label: 'Users & RBAC' },
       { path: '/settings/retention', icon: Clock, label: 'Data Retention' },
       { path: '/settings/alerts', icon: Shield, label: 'Alert Config' },
+    ],
+  },
+  {
+    label: 'About',
+    items: [
+      { path: '/about', icon: Info, label: 'About DBA Dash' },
     ],
   },
 ];
@@ -355,6 +375,13 @@ export default function App() {
                 <Route path="/performance/counters" element={<PerformanceCountersPage key={refreshKey} />} />
                 <Route path="/monitoring/job-timeline" element={<JobTimelinePage key={refreshKey} />} />
                 <Route path="/monitoring/configuration" element={<ConfigurationPage key={refreshKey} />} />
+                <Route path="/monitoring/patching" element={<PatchingPage key={refreshKey} />} />
+                <Route path="/monitoring/schema-changes" element={<SchemaChangesPage key={refreshKey} />} />
+                <Route path="/monitoring/identity-columns" element={<IdentityColumnsPage key={refreshKey} />} />
+                <Route path="/monitoring/tempdb" element={<TempDBPage key={refreshKey} />} />
+                <Route path="/monitoring/db-space" element={<DBSpacePage key={refreshKey} />} />
+                <Route path="/performance/query-store" element={<QueryStorePage key={refreshKey} />} />
+                <Route path="/about" element={<AboutPage />} />
               </Routes>
             </Layout>
           </AuthGuard>

@@ -1273,6 +1273,162 @@ app.MapGet("/api/monitoring/configuration/changes", async (int? instanceId, int?
     return Results.Ok(new { data, note });
 }).RequireAuthorization();
 
+// ── Batch 3: Patching, Schema Changes, Query Store, Identity, TempDB, DB Space ──
+
+app.MapGet("/api/monitoring/patching", async (HttpContext ctx) =>
+{
+    var connStr = app.Configuration.GetConnectionString("DBADashDB");
+    try
+    {
+        using var conn = new SqlConnection(connStr); await conn.OpenAsync();
+        using var cmd = new SqlCommand("SELECT i.InstanceID, i.InstanceDisplayName, i.ProductVersion, i.ProductMajorVersion, i.Edition FROM dbo.Instances i WHERE i.IsActive=1 ORDER BY i.ProductVersion", conn);
+        using var r = await cmd.ExecuteReaderAsync();
+        var list = new List<object>();
+        while (await r.ReadAsync()) list.Add(new { instanceId = r["InstanceID"], instanceName = r["InstanceDisplayName"]?.ToString(), productVersion = r["ProductVersion"]?.ToString(), productMajorVersion = r["ProductMajorVersion"] is DBNull ? 0 : Convert.ToInt32(r["ProductMajorVersion"]), edition = r["Edition"]?.ToString() });
+        return Results.Ok(new { data = list, note = "" });
+    }
+    catch (Exception ex) { return Results.Ok(new { data = Array.Empty<object>(), note = ex.Message }); }
+}).RequireAuthorization();
+
+app.MapGet("/api/monitoring/schema-changes", async (HttpContext ctx, int instanceId, int days = 30) =>
+{
+    var connStr = app.Configuration.GetConnectionString("DBADashDB");
+    var tables = new[] { "DDLHistory", "DDLEvents", "DDLSnapshotChanges", "SchemaSnapshots" };
+    foreach (var tbl in tables)
+    {
+        try
+        {
+            using var conn = new SqlConnection(connStr); await conn.OpenAsync();
+            var sql = tbl switch
+            {
+                "DDLHistory" => $"SELECT TOP 200 d.InstanceID, d.ObjectName, d.SchemaName, d.ObjectType, d.DDLEvent, d.LoginName, d.EventDate FROM dbo.{tbl} d WHERE d.InstanceID=@id AND d.EventDate > DATEADD(day,-@days,GETUTCDATE()) ORDER BY d.EventDate DESC",
+                _ => $"SELECT TOP 200 * FROM dbo.{tbl} WHERE InstanceID=@id ORDER BY 1 DESC"
+            };
+            using var cmd = new SqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@id", instanceId); cmd.Parameters.AddWithValue("@days", days);
+            using var r = await cmd.ExecuteReaderAsync();
+            var list = new List<object>();
+            while (await r.ReadAsync())
+            {
+                var dict = new Dictionary<string, object?>();
+                for (int i = 0; i < r.FieldCount; i++) dict[ToCamelCase(r.GetName(i))] = r.IsDBNull(i) ? null : r.GetValue(i);
+                list.Add(dict);
+            }
+            return Results.Ok(new { data = list, note = "" });
+        }
+        catch { continue; }
+    }
+    return Results.Ok(new { data = Array.Empty<object>(), note = "No schema change tables found" });
+}).RequireAuthorization();
+
+app.MapGet("/api/performance/query-store", async (HttpContext ctx, int instanceId) =>
+{
+    var connStr = app.Configuration.GetConnectionString("DBADashDB");
+    var tables = new[] { "QueryStoreStats", "TopQueries" };
+    foreach (var tbl in tables)
+    {
+        try
+        {
+            using var conn = new SqlConnection(connStr); await conn.OpenAsync();
+            using var cmd = new SqlCommand($"SELECT TOP 100 * FROM dbo.{tbl} WHERE InstanceID=@id ORDER BY 1 DESC", conn);
+            cmd.Parameters.AddWithValue("@id", instanceId);
+            using var r = await cmd.ExecuteReaderAsync();
+            var list = new List<object>();
+            while (await r.ReadAsync())
+            {
+                var dict = new Dictionary<string, object?>();
+                for (int i = 0; i < r.FieldCount; i++) dict[ToCamelCase(r.GetName(i))] = r.IsDBNull(i) ? null : r.GetValue(i);
+                list.Add(dict);
+            }
+            return Results.Ok(new { data = list, note = "" });
+        }
+        catch { continue; }
+    }
+    return Results.Ok(new { data = Array.Empty<object>(), note = "Query Store tables not found" });
+}).RequireAuthorization();
+
+app.MapGet("/api/monitoring/identity-columns", async (HttpContext ctx, int instanceId) =>
+{
+    var connStr = app.Configuration.GetConnectionString("DBADashDB");
+    try
+    {
+        using var conn = new SqlConnection(connStr); await conn.OpenAsync();
+        using var cmd = new SqlCommand(@"SELECT ic.InstanceID, d.name as DatabaseName, ic.SchemaName, ic.TableName, ic.ColumnName, ic.SeedValue, ic.IncrementValue, ic.LastValue, ic.MaxValue, CASE WHEN ic.MaxValue > 0 THEN CAST(ic.LastValue AS FLOAT) / CAST(ic.MaxValue AS FLOAT) * 100.0 ELSE 0 END as PercentUsed FROM dbo.IdentityColumns ic JOIN dbo.Databases d ON ic.DatabaseID=d.DatabaseID WHERE ic.InstanceID=@id ORDER BY PercentUsed DESC", conn);
+        cmd.Parameters.AddWithValue("@id", instanceId);
+        using var r = await cmd.ExecuteReaderAsync();
+        var list = new List<object>();
+        while (await r.ReadAsync())
+        {
+            var dict = new Dictionary<string, object?>();
+            for (int i = 0; i < r.FieldCount; i++) dict[ToCamelCase(r.GetName(i))] = r.IsDBNull(i) ? null : r.GetValue(i);
+            list.Add(dict);
+        }
+        return Results.Ok(new { data = list, note = "" });
+    }
+    catch (Exception ex) { return Results.Ok(new { data = Array.Empty<object>(), note = ex.Message }); }
+}).RequireAuthorization();
+
+app.MapGet("/api/monitoring/tempdb", async (HttpContext ctx, int instanceId) =>
+{
+    var connStr = app.Configuration.GetConnectionString("DBADashDB");
+    var sqls = new[] {
+        "SELECT file_id as FileId, name as Name, size*8 as SizeKb, FILEPROPERTY(name,'SpaceUsed')*8 as UsedKb FROM dbo.TempDB WHERE InstanceID=@id",
+        "SELECT file_id as FileId, name as Name, size_kb as SizeKb, used_kb as UsedKb FROM dbo.TempDBConfig WHERE InstanceID=@id",
+        "SELECT df.file_id as FileId, df.name as Name, df.size_kb as SizeKb, df.used_kb as UsedKb FROM dbo.DBFiles df JOIN dbo.Databases d ON df.DatabaseID=d.DatabaseID WHERE d.InstanceID=@id AND d.name='tempdb'"
+    };
+    foreach (var sql in sqls)
+    {
+        try
+        {
+            using var conn = new SqlConnection(connStr); await conn.OpenAsync();
+            using var cmd = new SqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@id", instanceId);
+            using var r = await cmd.ExecuteReaderAsync();
+            var list = new List<object>();
+            while (await r.ReadAsync())
+            {
+                var dict = new Dictionary<string, object?>();
+                for (int i = 0; i < r.FieldCount; i++) dict[ToCamelCase(r.GetName(i))] = r.IsDBNull(i) ? null : r.GetValue(i);
+                list.Add(dict);
+            }
+            if (list.Count > 0) return Results.Ok(new { data = list, note = "" });
+        }
+        catch { continue; }
+    }
+    return Results.Ok(new { data = Array.Empty<object>(), note = "TempDB data not available" });
+}).RequireAuthorization();
+
+app.MapGet("/api/monitoring/db-space", async (HttpContext ctx, int instanceId) =>
+{
+    var connStr = app.Configuration.GetConnectionString("DBADashDB");
+    var sqls = new[] {
+        "SELECT d.name as DatabaseName, df.name as FileName, df.type_desc as TypeDesc, df.size*8 as SizeKb, CAST(FILEPROPERTY(df.name,'SpaceUsed') as BIGINT)*8 as UsedKb, df.growth, df.is_percent_growth as IsPercentGrowth FROM dbo.DBFiles df JOIN dbo.Databases d ON df.DatabaseID=d.DatabaseID WHERE d.InstanceID=@id AND d.IsActive=1 ORDER BY df.size DESC",
+        "SELECT d.name as DatabaseName, df.name as FileName, df.type_desc as TypeDesc, df.size_kb as SizeKb, df.used_kb as UsedKb, df.growth, df.is_percent_growth as IsPercentGrowth FROM dbo.DatabaseFiles df JOIN dbo.Databases d ON df.DatabaseID=d.DatabaseID WHERE d.InstanceID=@id AND d.IsActive=1 ORDER BY df.size_kb DESC"
+    };
+    foreach (var sql in sqls)
+    {
+        try
+        {
+            using var conn = new SqlConnection(connStr); await conn.OpenAsync();
+            using var cmd = new SqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@id", instanceId);
+            using var r = await cmd.ExecuteReaderAsync();
+            var list = new List<object>();
+            while (await r.ReadAsync())
+            {
+                var dict = new Dictionary<string, object?>();
+                for (int i = 0; i < r.FieldCount; i++) dict[ToCamelCase(r.GetName(i))] = r.IsDBNull(i) ? null : r.GetValue(i);
+                list.Add(dict);
+            }
+            if (list.Count > 0) return Results.Ok(new { data = list, note = "" });
+        }
+        catch { continue; }
+    }
+    return Results.Ok(new { data = Array.Empty<object>(), note = "DB space data not available" });
+}).RequireAuthorization();
+
+static string ToCamelCase(string s) => string.IsNullOrEmpty(s) ? s : char.ToLowerInvariant(s[0]) + s.Substring(1);
+
 // SPA fallback — serve index.html for all non-API routes
 app.MapFallbackToFile("index.html");
 

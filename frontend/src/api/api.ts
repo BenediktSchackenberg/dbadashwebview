@@ -94,4 +94,16 @@ export const api = {
     request<{ data: any[]; note: string }>(`/api/monitoring/configuration?instanceId=${instanceId}`),
   monitoringConfigurationChanges: (instanceId: number, days = 30) =>
     request<{ data: any[]; note: string }>(`/api/monitoring/configuration/changes?instanceId=${instanceId}&days=${days}`),
+  monitoringPatching: () =>
+    request<{ data: any[]; note: string }>('/api/monitoring/patching'),
+  monitoringSchemaChanges: (instanceId: number, days = 30) =>
+    request<{ data: any[]; note: string }>(`/api/monitoring/schema-changes?instanceId=${instanceId}&days=${days}`),
+  performanceQueryStore: (instanceId: number) =>
+    request<{ data: any[]; note: string }>(`/api/performance/query-store?instanceId=${instanceId}`),
+  monitoringIdentityColumns: (instanceId: number) =>
+    request<{ data: any[]; note: string }>(`/api/monitoring/identity-columns?instanceId=${instanceId}`),
+  monitoringTempDB: (instanceId: number) =>
+    request<{ data: any[]; note: string }>(`/api/monitoring/tempdb?instanceId=${instanceId}`),
+  monitoringDBSpace: (instanceId: number) =>
+    request<{ data: any[]; note: string }>(`/api/monitoring/db-space?instanceId=${instanceId}`),
 };
