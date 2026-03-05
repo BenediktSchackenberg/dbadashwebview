@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="120" y2="120" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1e3a5f"/>
+      <stop offset="100%" stop-color="#0a0f1e"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="30" y1="30" x2="90" y2="90" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#8b5cf6"/>
+    </linearGradient>
+  </defs>
+  <rect width="120" height="120" rx="24" fill="url(#bg)"/>
+  <!-- Database cylinder -->
+  <ellipse cx="60" cy="42" rx="28" ry="10" fill="none" stroke="url(#accent)" stroke-width="2.5"/>
+  <path d="M32 42v28c0 5.5 12.5 10 28 10s28-4.5 28-10V42" fill="none" stroke="url(#accent)" stroke-width="2.5"/>
+  <ellipse cx="60" cy="70" rx="28" ry="10" fill="none" stroke="url(#accent)" stroke-width="2.5" opacity="0.3"/>
+  <!-- Bar chart overlay -->
+  <rect x="42" y="52" width="8" height="20" rx="2" fill="#3b82f6" opacity="0.8"/>
+  <rect x="54" y="45" width="8" height="27" rx="2" fill="#60a5fa" opacity="0.8"/>
+  <rect x="66" y="48" width="8" height="24" rx="2" fill="#8b5cf6" opacity="0.8"/>
+  <!-- Magnifying glass -->
+  <circle cx="85" cy="32" r="10" fill="none" stroke="#60a5fa" stroke-width="2"/>
+  <line x1="92" y1="39" x2="100" y2="47" stroke="#60a5fa" stroke-width="2.5" stroke-linecap="round"/>
+</svg>

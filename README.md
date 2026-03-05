@@ -1,426 +1,391 @@
 <div align="center">
 
-# 🖥️ DBA Dash Web View
+<img src="docs/logo.svg" alt="DBA Dash WebView" width="120" />
 
-**Enterprise-class web dashboard for SQL Server monitoring**
+# DBA Dash WebView
 
-Built on top of [DBA Dash](https://github.com/trimble-oss/DBADash) — the open-source SQL Server monitoring tool.
+**A modern web dashboard for SQL Server fleet monitoring**
 
-[![Build & Release](https://github.com/BenediktSchackenberg/dbadashwebview/actions/workflows/build.yml/badge.svg)](https://github.com/BenediktSchackenberg/dbadashwebview/actions/workflows/build.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+*Browser-based companion to [DBA Dash](https://github.com/trimble-oss/DBADash) — monitor hundreds of SQL Servers from any device.*
 
-[Features](#-features) · [Quick Start](#-quick-start) · [IIS Deployment](#-iis-deployment) · [Configuration](#-configuration) · [API Reference](#-api-reference) · [Screenshots](#-screenshots)
+[![Build](https://github.com/BenediktSchackenberg/dbadashwebview/actions/workflows/build.yml/badge.svg)](https://github.com/BenediktSchackenberg/dbadashwebview/actions/workflows/build.yml)
+[![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![.NET 8](https://img.shields.io/badge/.NET-8.0-purple.svg)](https://dotnet.microsoft.com/)
+[![React](https://img.shields.io/badge/React-19-61dafb.svg)](https://react.dev/)
+[![DBA Dash](https://img.shields.io/badge/Powered%20by-DBA%20Dash-green.svg)](https://dbadash.com)
+
+[Features](#features) · [Screenshots](#screenshots) · [Quick Start](#quick-start) · [IIS Deployment](#iis-deployment) · [Configuration](#configuration) · [API Reference](#api-reference) · [Contributing](#contributing)
+
+---
+
+**DBA Dash** is an outstanding open-source SQL Server monitoring tool by [Trimble](https://github.com/trimble-oss/dba-dash). **DBA Dash WebView** gives it a web UI — access your fleet's health from any browser, any device, anywhere.
 
 </div>
 
----
-
-## 📋 Overview
-
-DBA Dash Web View provides a modern, browser-based UI for your existing DBA Dash repository database. It reads from the same `DBADashDB` that your DBA Dash collectors write to — no additional agents or collectors required.
-
-**What you get:**
-- Real-time estate health at a glance (dashboard heatmap, status cards)
-- Deep-dive into any instance (CPU, waits, drives, databases, backups, jobs)
-- Alert inbox with triage workflows
-- Multi-metric analysis graphs with zoom and baseline comparison
-- Estate-wide views for disk capacity, backup compliance, and Availability Groups
-- Configurable reports with CSV export
-- Full settings UI (servers, groups, users, retention, alerting)
-
-**What you need:**
-- A running [DBA Dash](https://github.com/trimble-oss/DBADash) setup with a populated `DBADashDB`
-- A Windows Server with IIS (or any machine with .NET 8 for dev/testing)
-
----
-
-## ✨ Features
-
-### Overviews
-| Feature | Description |
-|---------|-------------|
-| **Global Dashboard** | Heatmap grid of all instances, stat cards (healthy/warning/critical), failed jobs & alerts panels |
-| **Instance Detail** | 6 tabs: Overview, Performance (CPU/Waits charts), Backups, Jobs, Databases, Drives |
-| **Database Detail** | Per-database status, backup age, properties, recovery model |
-| **Availability Groups** | Topology diagram (Primary → Secondaries), sync state, failover readiness |
-
-### Monitoring
-| Feature | Description |
-|---------|-------------|
-| **Alert Inbox** | Email-style inbox with severity filters, search, detail panel, acknowledge workflow |
-| **Analysis Graph** | Multi-metric time series (CPU, IO, Memory) with Recharts brush/zoom and baseline overlay |
-| **Query Analysis** | Top queries by CPU/IO/Duration, expandable query text, instance selector |
-
-### Estate Views
-| Feature | Description |
-|---------|-------------|
-| **Disk Usage & Projection** | All drives estate-wide, capacity bars, "days until full" linear projection |
-| **Backups & RPO** | Backup matrix by instance, RPO distribution chart, compliance score |
-| **AG Overview** | Aggregated AG health, failover readiness, sync status |
-
-### Reports & Configuration
-| Feature | Description |
-|---------|-------------|
-| **Report Center** | 5 built-in reports (Health, Backups, Disk, Jobs, Resources) with CSV export |
-| **Server Management** | Add/edit/remove monitored servers |
-| **Groups & Tags** | Organize instances into groups, apply tags for filtering |
-| **Users & RBAC** | Local users, LDAP/OIDC placeholders, Admin/Operator/Viewer roles |
-| **Data Retention** | Configure retention periods per data category |
-| **Alert Configuration** | Alert types catalog, thresholds, notification channels, maintenance windows |
-
-### UX
-- 🔍 **Cmd+K Search** — find instances, databases, jobs instantly
-- ⏱️ **Time Range Picker** — consistent focus window across all views
-- 🌙 **Dark/Light Mode** — toggle in top bar, persistent
-- 🧭 **Breadcrumbs** — always know where you are
-- 🔄 **Auto-Refresh** — configurable 60s/120s interval
-- 📱 **Responsive** — collapsible sidebar, works on tablets
-
----
-
-## 🚀 Quick Start
-
-### Prerequisites
-
-| Requirement | Version | Notes |
-|-------------|---------|-------|
-| [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) | 8.0+ | For building the backend |
-| [Node.js](https://nodejs.org/) | 18+ | For building the frontend |
-| [DBA Dash](https://github.com/trimble-oss/DBADash) | Any | Must have a populated DBADashDB |
-| SQL Server | 2016+ | Where DBADashDB lives |
-
-### Option A: Download Release (recommended)
-
-1. Go to [Releases](https://github.com/BenediktSchackenberg/dbadashwebview/releases)
-2. Download the latest `dbadash-webview.zip`
-3. Extract to your desired location (e.g. `C:\inetpub\dbadash`)
-4. Edit `appsettings.json` with your connection string
-5. Run or deploy to IIS (see below)
-
-### Option B: Build from Source
-
-```bash
-# Clone
-git clone https://github.com/BenediktSchackenberg/dbadashwebview.git
-cd dbadashwebview
-
-# Build frontend
-cd frontend
-npm install
-npm run build
-cd ..
-
-# Build backend
-cd backend
-dotnet publish -c Release -o ../publish
-
-# Copy frontend into publish folder
-cp -r frontend/dist/* publish/wwwroot/
-# (Windows: xcopy /E /I frontend\dist publish\wwwroot)
-```
-
-### Run in Development Mode
-
-```bash
-# Terminal 1: Backend
-cd backend
-dotnet run
-# Runs on http://localhost:5000
-
-# Terminal 2: Frontend (hot reload)
-cd frontend
-npm run dev
-# Runs on http://localhost:5173, proxies /api to backend
-```
-
-Login: `admin` / `admin`
-
----
-
-## 🌐 IIS Deployment
-
-### Step 1: Install Prerequisites on the IIS Server
-
-```powershell
-# Install ASP.NET Core 8.0 Hosting Bundle (includes .NET Runtime + IIS module)
-# Download from: https://dotnet.microsoft.com/download/dotnet/8.0
-# → Look for "Hosting Bundle" under ASP.NET Core Runtime
-
-# After installing, restart IIS:
-iisreset
-```
-
-> **Important:** You need the **Hosting Bundle**, not just the Runtime. The Hosting Bundle includes the ASP.NET Core IIS Module.
-
-### Step 2: Deploy the Application
-
-**From Release ZIP:**
-```powershell
-# Extract the release ZIP
-Expand-Archive -Path dbadash-webview.zip -DestinationPath C:\inetpub\dbadash
-```
-
-**From Source:**
-```powershell
-# Or copy your publish output
-Copy-Item -Recurse publish\* C:\inetpub\dbadash
-```
-
-### Step 3: Configure the Connection String
-
-Edit `C:\inetpub\dbadash\appsettings.json`:
-
-```json
-{
-  "ConnectionStrings": {
-    "DBADashDB": "Server=YOUR_SQL_SERVER;Database=DBADashDB;User Id=YOUR_USER;Password=YOUR_PASSWORD;TrustServerCertificate=true;Encrypt=false;"
-  },
-  "Jwt": {
-    "Secret": "CHANGE-THIS-TO-A-RANDOM-STRING-AT-LEAST-32-CHARS!",
-    "Issuer": "DBADashWebView",
-    "Audience": "DBADashWebView",
-    "ExpirationHours": 12
-  }
-}
-```
-
-> **Security:** Change the JWT secret to a random string. The default is for development only.
-
-#### Connection String Examples
-
-| Scenario | Connection String |
-|----------|------------------|
-| SQL Auth | `Server=sql01;Database=DBADashDB;User Id=dbadash;Password=MyPassword;TrustServerCertificate=true;` |
-| Windows Auth | `Server=sql01;Database=DBADashDB;Trusted_Connection=true;TrustServerCertificate=true;` |
-| Named Instance | `Server=sql01\DBADash;Database=DBADashDB;User Id=dbadash;Password=MyPassword;TrustServerCertificate=true;` |
-| Non-default Port | `Server=sql01,1444;Database=DBADashDB;User Id=dbadash;Password=MyPassword;TrustServerCertificate=true;` |
-
-### Step 4: Create the IIS Site
-
-**Via IIS Manager (GUI):**
-
-1. Open **IIS Manager** (`inetmgr`)
-2. Right-click **Application Pools** → **Add Application Pool**
-   - Name: `DBADashWebView`
-   - .NET CLR version: **No Managed Code**
-   - Managed pipeline mode: **Integrated**
-3. Right-click **Sites** → **Add Website**
-   - Site name: `DBADashWebView`
-   - Application pool: `DBADashWebView`
-   - Physical path: `C:\inetpub\dbadash`
-   - Binding: `http`, Port `8080` (or your preferred port)
-4. Click **OK**
-
-**Via PowerShell (one-liner):**
-
-```powershell
-# Run as Administrator
-Import-Module WebAdministration
-
-# Create App Pool
-New-WebAppPool -Name "DBADashWebView"
-Set-ItemProperty "IIS:\AppPools\DBADashWebView" -Name "managedRuntimeVersion" -Value ""
-
-# Create Site
-New-Website -Name "DBADashWebView" `
-  -PhysicalPath "C:\inetpub\dbadash" `
-  -ApplicationPool "DBADashWebView" `
-  -Port 8080
-
-Write-Host "Site created! Browse to http://localhost:8080"
-```
-
-### Step 5: Set Folder Permissions
-
-```powershell
-# Grant IIS App Pool identity read access
-icacls "C:\inetpub\dbadash" /grant "IIS AppPool\DBADashWebView:(OI)(CI)R" /T
-```
-
-### Step 6: Test
-
-1. Browse to `http://your-server:8080`
-2. Login with `admin` / `admin`
-3. You should see the dashboard with your DBA Dash data
-
-### Troubleshooting
+## Why DBA Dash WebView?
 
 | Problem | Solution |
 |---------|----------|
-| 502.5 / 500.30 error | Hosting Bundle not installed or IIS not restarted (`iisreset`) |
-| Blank page, no data | Check connection string in `appsettings.json` |
-| Login works but no instances | Verify the SQL user has `db_datareader` on `DBADashDB` |
-| CORS errors in browser console | Shouldn't happen in production (SPA served from same origin) |
-| Port already in use | Change the port in IIS bindings |
-| "HTTP Error 500.19" | Check that `web.config` is valid XML, Hosting Bundle is installed |
+| DBA Dash GUI is Windows-only | WebView runs in any browser — Mac, Linux, iPad, phone |
+| Can't share dashboards with the team | One URL, everyone sees the same live data |
+| VPN required to check server health | Deploy on an internal web server, access from anywhere on your network |
+| No mobile-friendly monitoring | Responsive design works on tablets and phones |
+| Setting up monitoring views takes time | Pre-built pages for the most common DBA workflows |
 
-#### Enable Logging
-
-To debug issues, enable stdout logging in `web.config`:
-
-```xml
-<aspNetCore processPath="dotnet" arguments=".\DBADashWebView.dll"
-  stdoutLogEnabled="true"
-  stdoutLogFile=".\logs\stdout"
-  hostingModel="InProcess">
-```
-
-Then check `C:\inetpub\dbadash\logs\` for detailed error logs.
+**Zero impact on your existing setup** — WebView reads from the same `DBADashDB` your collectors already write to. No additional agents, no schema changes, no configuration needed on monitored servers.
 
 ---
 
-## ⚙️ Configuration
+## Features
 
-### appsettings.json Reference
+### Performance Summary Dashboard
+Real-time overview of your entire fleet in a single table — CPU, waits, IO latency, IOPs per instance. Sortable columns, auto-refresh every 30 seconds, configurable color thresholds. Server tree sidebar grouped by SQL Server version.
+
+### Performance Deep-Dive
+- **Running Queries** — Live view of executing queries with blocking detection
+- **Blocking Analysis** — Tree view of blocking chains, root blockers highlighted
+- **Slow Queries** — Extended Events data with duration/DB/application filters
+- **Wait Statistics** — Stacked area chart of wait types over time
+- **Memory** — Buffer pool, PLE trends, memory clerk breakdown
+- **IO Performance** — Read/write latency charts, IOPS, throughput per file
+- **Object Execution Stats** — Stored procedure and function performance
+- **Performance Counters** — Custom counter monitoring with trend charts
+- **Query Store** — Top resource consumers from Query Store data
+
+### Daily Health Checks
+- **Backup Status** — Full/Diff/Log backup age per database, RPO compliance chart
+- **Agent Jobs** — Job history with Gantt-style timeline visualization
+- **Drive Space** — Capacity monitoring with usage projections
+- **Database Space** — File-level space tracking with growth analysis
+- **TempDB** — File configuration and usage monitoring
+- **Alerts** — Alert inbox with severity filtering and acknowledgement
+
+### Tracking & Compliance
+- **Configuration Tracking** — Detect sp_configure changes with before/after diff
+- **SQL Patching** — Version distribution across fleet, patch history
+- **Schema Changes** — DDL change history timeline
+- **Identity Columns** — Usage percentage with threshold alerts
+
+### Administration
+- **Configurable Thresholds** — Define warning/critical levels for dashboard color-coding
+- **Active Directory Authentication** — LDAP integration with group-based roles
+- **Server Management** — Add/remove monitored instances
+- **Groups & Tags** — Organize instances for filtering
+- **Users & RBAC** — Admin/Operator/Viewer roles
+- **Data Retention** — Configure cleanup per data category
+
+### User Experience
+- **Command Palette** (Ctrl+K) — Instant search across instances, databases, jobs
+- **Auto-Refresh** — Configurable intervals with countdown display
+- **Dark Theme** — Optimized for NOC/SOC wall displays and extended monitoring
+- **Responsive** — Collapsible sidebar, works on tablets
+- **Fast** — React 19 + Vite, sub-second page transitions
+
+---
+
+## Screenshots
+
+> *Coming soon — the project is actively being developed.*
+
+---
+
+## Quick Start
+
+### Prerequisites
+
+| Requirement | Version |
+|-------------|---------|
+| [DBA Dash](https://github.com/trimble-oss/DBADash) | Any (populated DBADashDB required) |
+| [.NET 8 Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) | 8.0+ |
+| SQL Server | 2014+ |
+
+### Download & Run
+
+1. Download the latest release from [Releases](https://github.com/BenediktSchackenberg/dbadashwebview/releases)
+2. Extract the ZIP
+3. Edit `appsettings.json` with your DBADashDB connection string:
 
 ```json
 {
   "ConnectionStrings": {
-    "DBADashDB": "Server=...;Database=DBADashDB;..."
-  },
-  "Jwt": {
-    "Secret": "your-secret-key-min-32-chars",
-    "Issuer": "DBADashWebView",
-    "Audience": "DBADashWebView",
-    "ExpirationHours": 12
-  },
-  "Logging": {
-    "LogLevel": {
-      "Default": "Information",
-      "Microsoft.AspNetCore": "Warning"
-    }
+    "DBADashDB": "Server=YOUR_SQL_SERVER;Database=DBADashDB;User Id=YOUR_USER;Password=YOUR_PASSWORD;TrustServerCertificate=true;"
   }
 }
 ```
 
+4. Deploy to IIS (see below) or run standalone:
+```bash
+dotnet DBADashWebView.dll
+# Open http://localhost:5000
+```
+
+5. Login with `admin` / `admin` (change this in production)
+
+---
+
+## IIS Deployment
+
+### 1. Install the ASP.NET Core Hosting Bundle
+
+Download from [Microsoft](https://dotnet.microsoft.com/download/dotnet/8.0) → **Hosting Bundle** (not just Runtime).
+
+```powershell
+iisreset  # Restart IIS after installing
+```
+
+### 2. Create the IIS Site
+
+```powershell
+# Extract release
+Expand-Archive -Path dbadash-webview.zip -DestinationPath C:\inetpub\dbadash
+
+# Create App Pool + Site
+Import-Module WebAdministration
+New-WebAppPool -Name "DBADashWebView"
+Set-ItemProperty "IIS:\AppPools\DBADashWebView" -Name "managedRuntimeVersion" -Value ""
+New-Website -Name "DBADashWebView" -PhysicalPath "C:\inetpub\dbadash" -ApplicationPool "DBADashWebView" -Port 8080
+
+# Grant permissions
+icacls "C:\inetpub\dbadash" /grant "IIS AppPool\DBADashWebView:(OI)(CI)R" /T
+```
+
+### 3. Configure Connection String
+
+Edit `C:\inetpub\dbadash\appsettings.json` with your DBADashDB credentials.
+
+### 4. Browse to `http://your-server:8080`
+
+### Troubleshooting
+
+| Problem | Fix |
+|---------|-----|
+| 502.5 / 500.30 | Install the Hosting Bundle, then `iisreset` |
+| Blank page | Check connection string in `appsettings.json` |
+| No instances showing | Verify SQL user has `db_datareader` on DBADashDB |
+| "HTTP Error 500.19" | Hosting Bundle missing or web.config invalid |
+
+Enable detailed logs:
+```xml
+<!-- In web.config, set stdoutLogEnabled="true" -->
+<aspNetCore stdoutLogEnabled="true" stdoutLogFile=".\logs\stdout" ... />
+```
+
+---
+
+## Configuration
+
 ### SQL Server Permissions
 
-The SQL user needs **read-only** access to DBADashDB:
+WebView needs **read-only** access:
 
 ```sql
 USE DBADashDB;
-CREATE LOGIN dbadash WITH PASSWORD = 'YourPassword';
-CREATE USER dbadash FOR LOGIN dbadash;
-ALTER ROLE db_datareader ADD MEMBER dbadash;
-
--- Grant execute on stored procedures used by the dashboard
-GRANT EXECUTE ON SCHEMA::dbo TO dbadash;
+CREATE LOGIN [dbadashweb] WITH PASSWORD = 'YourSecurePassword';
+CREATE USER [dbadashweb] FOR LOGIN [dbadashweb];
+ALTER ROLE db_datareader ADD MEMBER [dbadashweb];
+GRANT EXECUTE ON SCHEMA::dbo TO [dbadashweb];
 ```
 
-### Authentication
+### Active Directory Authentication
 
-Currently supports local authentication with a hardcoded user (`admin`/`admin`). The Settings → Users page provides the UI framework for:
-- Local user management
-- LDAP/Active Directory integration
-- OpenID Connect (OIDC) SSO
+Configure via Settings → Users → LDAP tab, or edit `config/ad-config.json`:
 
-These require backend implementation for your specific environment.
+```json
+{
+  "Enabled": true,
+  "Server": "ldap://dc01.corp.local",
+  "BaseDN": "DC=corp,DC=local",
+  "BindUser": "CN=svc-dbadash,OU=Service,DC=corp,DC=local",
+  "AdminGroup": "CN=DBA-Admins,OU=Groups,DC=corp,DC=local",
+  "AllowLocalFallback": true
+}
+```
+
+### Threshold Configuration
+
+Configure dashboard color-coding via Settings → Thresholds. Define warning and critical levels per metric (CPU, latency, IOPs, etc.). Cells remain uncolored until you set thresholds.
 
 ---
 
-## 📡 API Reference
+## API Reference
 
-All endpoints require a valid JWT token (except `/api/auth/login` and `/api/health`).
+All endpoints require JWT authentication (except `/api/auth/login` and `/api/health`).
 
-### Authentication
-```
-POST /api/auth/login
-Body: { "username": "admin", "password": "admin" }
-Returns: { "token": "eyJ...", "username": "admin" }
-```
+<details>
+<summary><strong>Authentication</strong></summary>
 
-### Dashboard
 ```
-GET /api/health              — Health check
-GET /api/dashboard/summary   — Estate summary (all instances + status)
+POST /api/auth/login    { "username": "admin", "password": "admin" }  →  { "token": "..." }
 ```
+</details>
 
-### Instances
-```
-GET /api/instances                    — List all instances
-GET /api/instances/{id}               — Instance detail + summary
-GET /api/instances/{id}/cpu           — CPU history (24h)
-GET /api/instances/{id}/waits         — Top waits (1h)
-GET /api/instances/{id}/drives        — Instance drives
-GET /api/instances/{id}/databases     — Instance databases
-GET /api/instances/{id}/backups       — Instance backups
-GET /api/instances/{id}/jobs          — Instance job history
-GET /api/instances/{id}/queries       — Top queries
-```
+<details>
+<summary><strong>Dashboard & Instances</strong></summary>
 
-### Jobs
 ```
-GET /api/jobs/recent     — Recent job executions
-GET /api/jobs/failures   — Failed jobs (24h)
+GET /api/health
+GET /api/dashboard/stats
+GET /api/dashboard/performance-summary
+GET /api/instances
+GET /api/instances/{id}
+GET /api/instances/{id}/cpu
+GET /api/instances/{id}/waits
+GET /api/instances/{id}/drives
+GET /api/instances/{id}/databases
+GET /api/instances/{id}/backups
+GET /api/instances/{id}/jobs
+GET /api/instances/{id}/queries
 ```
+</details>
 
-### Alerts
-```
-GET /api/alerts/recent   — Recent alerts
-```
+<details>
+<summary><strong>Performance</strong></summary>
 
-### Availability Groups
 ```
-GET /api/availability-groups       — All AGs with instance names
-GET /api/availability-groups/{id}  — AG detail with replicas + databases
+GET /api/performance/running-queries?instanceId=
+GET /api/performance/blocking?instanceId=
+GET /api/performance/slow-queries?instanceId=&hours=24
+GET /api/performance/memory?instanceId=
+GET /api/performance/io?instanceId=
+GET /api/performance/exec-stats?instanceId=&hours=24
+GET /api/performance/waits-timeline?instanceId=&hours=24
+GET /api/performance/counters?instanceId=&hours=24
+GET /api/performance/query-store?instanceId=
 ```
+</details>
 
-### Drives & Backups
+<details>
+<summary><strong>Monitoring & Tracking</strong></summary>
+
 ```
-GET /api/drives            — Estate-wide drive status
-GET /api/backups/estate    — Estate-wide backup status
+GET /api/monitoring/job-timeline?instanceId=&hours=24
+GET /api/monitoring/configuration?instanceId=
+GET /api/monitoring/configuration/changes?instanceId=&days=30
+GET /api/monitoring/patching
+GET /api/monitoring/schema-changes?instanceId=&days=30
+GET /api/monitoring/identity-columns?instanceId=
+GET /api/monitoring/tempdb?instanceId=
+GET /api/monitoring/db-space?instanceId=
 ```
+</details>
+
+<details>
+<summary><strong>Estate & Reports</strong></summary>
+
+```
+GET /api/alerts/recent
+GET /api/jobs/recent
+GET /api/jobs/failures
+GET /api/drives
+GET /api/backups/estate
+GET /api/availability-groups
+GET /api/availability-groups/{id}
+```
+</details>
+
+<details>
+<summary><strong>Settings</strong></summary>
+
+```
+GET  /api/settings/ad
+POST /api/settings/ad
+POST /api/settings/ad/test
+GET  /api/settings/thresholds
+POST /api/settings/thresholds
+```
+</details>
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```
-┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│                  │     │                  │     │                  │
-│  React SPA       │────▶│  ASP.NET Core 8  │────▶│  DBADashDB       │
-│  (Vite + TS)     │     │  (Minimal API)   │     │  (SQL Server)    │
-│                  │     │                  │     │                  │
-└─────────────────┘     └──────────────────┘     └─────────────────┘
-       │                        │                        ▲
-       │  Static files          │  JWT Auth              │
-       │  served by IIS         │  SqlClient             │  DBA Dash
-       │  or Kestrel            │                        │  Collectors
-       └────────────────────────┘                        │
-                                                  ┌──────┴────────┐
-                                                  │ Your SQL      │
-                                                  │ Servers       │
-                                                  └───────────────┘
+┌──────────────┐       ┌──────────────────┐       ┌─────────────┐
+│  Browser     │──────▶│  ASP.NET Core 8  │──────▶│  DBADashDB  │
+│  (React SPA) │       │  (Minimal API)   │       │  (SQL Server)│
+└──────────────┘       └──────────────────┘       └──────┬──────┘
+                              │                          │
+                         IIS / Kestrel              DBA Dash
+                         JWT Auth                   Collectors
+                         Read-only queries               │
+                                                  ┌──────┴──────┐
+                                                  │ Your SQL    │
+                                                  │ Servers     │
+                                                  └─────────────┘
 ```
-
-### Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | React 19, TypeScript, Vite, Tailwind CSS v4, Recharts, Framer Motion, Lucide Icons |
+| Frontend | React 19, TypeScript, Vite, Tailwind CSS 4, Recharts, Framer Motion |
 | Backend | ASP.NET Core 8 Minimal API, Microsoft.Data.SqlClient |
-| Auth | JWT Bearer Tokens |
-| Database | SQL Server (DBADashDB, read-only) |
-| Deployment | IIS with ASP.NET Core Module, or standalone Kestrel |
-| CI/CD | GitHub Actions (build on Windows, ZIP release artifact) |
+| Auth | JWT + optional LDAP/AD |
+| Deployment | IIS with ASP.NET Core Module |
+| CI/CD | GitHub Actions → ZIP artifact + GitHub Release |
 
 ---
 
-## 🤝 Contributing
+## Building from Source
 
-Contributions are welcome! Please:
+```bash
+git clone https://github.com/BenediktSchackenberg/dbadashwebview.git
+cd dbadashwebview
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/my-feature`)
-3. Commit your changes (`git commit -m 'feat: add my feature'`)
-4. Push to the branch (`git push origin feature/my-feature`)
-5. Open a Pull Request
+# Frontend
+cd frontend && npm install && npm run build && cd ..
+
+# Backend
+cd backend && dotnet publish -c Release -o ../publish && cd ..
+
+# Combine
+cp -r frontend/dist/* publish/wwwroot/
+```
 
 ---
 
-## 📄 License
+## Roadmap
 
-This project is licensed under the [MIT License](LICENSE).
+- [ ] Scheduled PDF reports via email
+- [ ] Multi-tenant support (multiple DBADashDB repositories)
+- [ ] Custom dashboard layouts
+- [ ] Webhook notifications
+- [ ] Dark/Light theme toggle
+- [ ] Grafana-style alerting rules
+- [ ] REST API for external integrations
 
-DBA Dash is licensed under [Apache 2.0](https://github.com/trimble-oss/DBADash/blob/main/LICENSE) by Trimble. This project is an independent frontend that reads from the DBA Dash repository database — it is not a fork of DBA Dash.
-<!-- build trigger Do 5. Mär 16:48:23 UTC 2026 -->
+---
+
+## Contributing
+
+Contributions welcome! Fork, create a feature branch, and submit a PR.
+
+```bash
+git checkout -b feature/my-feature
+git commit -m 'feat: add my feature'
+git push origin feature/my-feature
+```
+
+---
+
+## Acknowledgements
+
+**[DBA Dash](https://github.com/trimble-oss/DBADash)** by [Trimble](https://github.com/trimble-oss) — the engine behind all the monitoring data. DBA Dash is one of the best open-source SQL Server monitoring tools available. If you're not using it yet, [check it out](https://dbadash.com).
+
+DBA Dash WebView is an independent project that provides a web frontend for DBA Dash data. It is not affiliated with or endorsed by Trimble or the DBA Dash project.
+
+---
+
+## License
+
+[MIT](LICENSE) — DBA Dash WebView
+
+[Apache 2.0](https://github.com/trimble-oss/DBADash/blob/main/LICENSE) — DBA Dash
+
+---
+
+<div align="center">
+
+**Built by [Benedikt Schackenberg](https://github.com/BenediktSchackenberg)**
+
+*If this project helps you, give it a star!*
+
+</div>
