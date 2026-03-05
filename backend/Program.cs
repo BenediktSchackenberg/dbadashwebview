@@ -1464,6 +1464,64 @@ app.MapPost("/api/settings/thresholds", async (HttpContext ctx) =>
     return Results.Ok(new { success = true });
 }).RequireAuthorization();
 
+// ── Tree endpoint ────────────────────────────────────────────────────────
+app.MapGet("/api/tree", async () =>
+{
+    try
+    {
+        var rows = await QueryAsync(@"
+            SELECT i.InstanceID, COALESCE(i.InstanceDisplayName, i.Instance) as InstanceName,
+                   i.ProductVersion,
+                   d.DatabaseID, d.name as DatabaseName,
+                   CASE WHEN d.database_id <= 4 THEN 1 ELSE 0 END as IsSystem
+            FROM dbo.Instances i
+            LEFT JOIN dbo.Databases d ON i.InstanceID = d.InstanceID AND d.IsActive = 1
+            WHERE i.IsActive = 1
+            ORDER BY COALESCE(i.InstanceDisplayName, i.Instance),
+                     CASE WHEN d.database_id <= 4 THEN 0 ELSE 1 END, d.name");
+
+        var instances = new Dictionary<int, Dictionary<string, object?>>();
+        var dbLists = new Dictionary<int, List<object>>();
+
+        foreach (var row in rows)
+        {
+            var instId = Convert.ToInt32(row["InstanceID"]);
+            if (!instances.ContainsKey(instId))
+            {
+                instances[instId] = new Dictionary<string, object?>
+                {
+                    ["instanceId"] = instId,
+                    ["instanceName"] = row["InstanceName"],
+                    ["productVersion"] = row["ProductVersion"]
+                };
+                dbLists[instId] = new List<object>();
+            }
+            if (row["DatabaseID"] != null)
+            {
+                dbLists[instId].Add(new
+                {
+                    databaseId = Convert.ToInt32(row["DatabaseID"]),
+                    name = row["DatabaseName"]?.ToString(),
+                    isSystem = Convert.ToInt32(row["IsSystem"]) == 1
+                });
+            }
+        }
+
+        var result = instances.Values.Select(inst =>
+        {
+            var id = Convert.ToInt32(inst["instanceId"]!);
+            inst["databases"] = dbLists[id];
+            return inst;
+        }).ToList();
+
+        return Results.Ok(result);
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new { error = ex.Message, data = Array.Empty<object>() });
+    }
+}).RequireAuthorization();
+
 // SPA fallback — serve index.html for all non-API routes
 app.MapFallbackToFile("index.html");
 

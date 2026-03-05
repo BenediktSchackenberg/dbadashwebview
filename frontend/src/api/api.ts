@@ -108,6 +108,7 @@ export const api = {
     request<{ data: any[]; note: string }>(`/api/monitoring/db-space?instanceId=${instanceId}`),
   dashboardPerformanceSummary: () =>
     request<{ data: any[]; note: string }>('/api/dashboard/performance-summary'),
+  tree: () => request<any[]>('/api/tree'),
   getThresholds: () =>
     request<{ thresholds: Record<string, { warning: number; critical: number }> }>('/api/settings/thresholds'),
   saveThresholds: (thresholds: Record<string, { warning: number; critical: number }>) =>

@@ -1,14 +1,8 @@
-import { Routes, Route, Navigate, useNavigate, useLocation, Link } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useState, useEffect, useCallback, createContext, useContext } from 'react';
 import { isAuthenticated, clearToken, api } from './api/api';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  LayoutDashboard, Server, Database, Bell, HardDrive, Network, AlertTriangle,
-  ChevronLeft, ChevronRight, ChevronDown, LogOut, User, RefreshCw, Sun, Moon,
-  Activity, Search, FileText, Users, Tag, Clock, Shield, Zap, Gauge, CalendarClock, Settings,
-  Key, Thermometer, GitBranch, Info
-} from 'lucide-react';
-import { clsx } from 'clsx';
+import { Sun, Moon, RefreshCw } from 'lucide-react';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import InstancesPage from './pages/InstancesPage';
@@ -51,6 +45,7 @@ import ThresholdsPage from './pages/ThresholdsPage';
 import SearchDialog from './components/SearchDialog';
 import Breadcrumbs from './components/Breadcrumbs';
 import TimeRangePicker from './components/TimeRangePicker';
+import InstanceTree from './components/InstanceTree';
 
 const RefreshContext = createContext<{ lastRefresh: Date; refresh: () => void }>({
   lastRefresh: new Date(),
@@ -60,84 +55,6 @@ const RefreshContext = createContext<{ lastRefresh: Date; refresh: () => void }>
 export function useRefresh() {
   return useContext(RefreshContext);
 }
-
-interface NavGroup {
-  label: string;
-  items: { path: string; icon: any; label: string }[];
-}
-
-const navGroups: NavGroup[] = [
-  {
-    label: 'Dashboard',
-    items: [
-      { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
-    ],
-  },
-  {
-    label: 'SQL Fleet',
-    items: [
-      { path: '/instances', icon: Server, label: 'Instances' },
-      { path: '/availability-groups', icon: Network, label: 'Availability Groups' },
-    ],
-  },
-  {
-    label: 'Performance',
-    items: [
-      { path: '/performance/running-queries', icon: Activity, label: 'Running Queries' },
-      { path: '/performance/blocking', icon: AlertTriangle, label: 'Blocking' },
-      { path: '/performance/slow-queries', icon: Clock, label: 'Slow Queries' },
-      { path: '/performance/waits-timeline', icon: Clock, label: 'Waits Timeline' },
-      { path: '/performance/exec-stats', icon: Zap, label: 'Object Exec Stats' },
-      { path: '/performance/query-store', icon: Search, label: 'Query Store' },
-      { path: '/performance/memory', icon: HardDrive, label: 'Memory' },
-      { path: '/performance/io', icon: HardDrive, label: 'IO Performance' },
-      { path: '/performance/counters', icon: Gauge, label: 'Perf Counters' },
-    ],
-  },
-  {
-    label: 'Daily Checks',
-    items: [
-      { path: '/alerts', icon: Bell, label: 'Alerts' },
-      { path: '/jobs', icon: CalendarClock, label: 'Jobs' },
-      { path: '/backups', icon: Database, label: 'Backups' },
-      { path: '/drives', icon: HardDrive, label: 'Drive Space' },
-      { path: '/monitoring/db-space', icon: Database, label: 'DB Space' },
-      { path: '/monitoring/tempdb', icon: Thermometer, label: 'TempDB' },
-    ],
-  },
-  {
-    label: 'Tracking',
-    items: [
-      { path: '/monitoring/configuration', icon: Settings, label: 'Configuration' },
-      { path: '/monitoring/patching', icon: Shield, label: 'SQL Patching' },
-      { path: '/monitoring/schema-changes', icon: GitBranch, label: 'Schema Changes' },
-      { path: '/monitoring/identity-columns', icon: Key, label: 'Identity Columns' },
-    ],
-  },
-  {
-    label: 'Reports',
-    items: [
-      { path: '/reports', icon: FileText, label: 'Reports' },
-    ],
-  },
-  {
-    label: 'Settings',
-    items: [
-      { path: '/settings/servers', icon: Server, label: 'Servers' },
-      { path: '/settings/groups', icon: Tag, label: 'Groups & Tags' },
-      { path: '/settings/users', icon: Users, label: 'Users & RBAC' },
-      { path: '/settings/retention', icon: Clock, label: 'Data Retention' },
-      { path: '/settings/alerts', icon: Shield, label: 'Alert Config' },
-      { path: '/settings/thresholds', icon: Gauge, label: 'Thresholds' },
-    ],
-  },
-  {
-    label: 'About',
-    items: [
-      { path: '/about', icon: Info, label: 'About DBA Dash' },
-    ],
-  },
-];
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   if (!isAuthenticated()) return <Navigate to="/login" replace />;
@@ -159,12 +76,6 @@ function useTheme() {
 }
 
 function Layout({ children }: { children: React.ReactNode }) {
-  const [collapsed, setCollapsed] = useState(false);
-  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(() => {
-    const initial: Record<string, boolean> = {};
-    navGroups.forEach(g => { initial[g.label] = true; });
-    return initial;
-  });
   const navigate = useNavigate();
   const location = useLocation();
   const { lastRefresh, refresh } = useRefresh();
@@ -194,89 +105,12 @@ function Layout({ children }: { children: React.ReactNode }) {
     navigate('/login');
   };
 
-  const toggleGroup = (label: string) => {
-    setExpandedGroups(prev => ({ ...prev, [label]: !prev[label] }));
-  };
-
   return (
     <div className="flex h-screen overflow-hidden">
       <SearchDialog instances={searchData.instances} databases={searchData.databases} jobs={searchData.jobs} />
 
-      {/* Sidebar */}
-      <motion.aside
-        animate={{ width: collapsed ? 72 : 256 }}
-        transition={{ duration: 0.2 }}
-        className="glass-strong flex flex-col border-r border-white/10 shrink-0 z-20"
-      >
-        <div className="p-4 flex items-center gap-3 border-b border-white/10">
-          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shrink-0">
-            <Database className="w-5 h-5 text-white" />
-          </div>
-          {!collapsed && (
-            <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="font-bold text-white whitespace-nowrap">
-              DBA Dash
-            </motion.span>
-          )}
-        </div>
-
-        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-          {navGroups.map(group => (
-            <div key={group.label}>
-              {!collapsed && (
-                <button
-                  onClick={() => toggleGroup(group.label)}
-                  className="flex items-center justify-between w-full px-3 py-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wider hover:text-gray-300 transition-colors"
-                >
-                  <span>{group.label}</span>
-                  {expandedGroups[group.label] ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                </button>
-              )}
-              {(collapsed || expandedGroups[group.label]) && group.items.map(item => {
-                const active = location.pathname === item.path ||
-                  (item.path !== '/' && location.pathname.startsWith(item.path));
-                return (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    className={clsx(
-                      'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all',
-                      active ? 'bg-blue-500/15 text-blue-400' : 'text-gray-400 hover:text-white hover:bg-white/5'
-                    )}
-                  >
-                    <item.icon className="w-5 h-5 shrink-0" />
-                    {!collapsed && <span className="truncate">{item.label}</span>}
-                  </Link>
-                );
-              })}
-            </div>
-          ))}
-        </nav>
-
-        <div className="p-3 border-t border-white/10 space-y-1">
-          <button
-            onClick={() => setCollapsed(!collapsed)}
-            className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-all w-full"
-          >
-            {collapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronLeft className="w-5 h-5" />}
-            {!collapsed && <span>Collapse</span>}
-          </button>
-          {!collapsed && (
-            <div className="flex items-center gap-3 px-3 py-2">
-              <div className="w-7 h-7 rounded-full bg-blue-500/20 flex items-center justify-center">
-                <User className="w-4 h-4 text-blue-400" />
-              </div>
-              <span className="text-sm text-gray-300">admin</span>
-            </div>
-          )}
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-red-400 hover:bg-red-400/5 transition-all w-full"
-          >
-            <LogOut className="w-5 h-5 shrink-0" />
-            {!collapsed && <span>Sign Out</span>}
-          </button>
-        </div>
-      </motion.aside>
+      {/* Instance Tree Sidebar */}
+      <InstanceTree onLogout={handleLogout} />
 
       {/* Main */}
       <div className="flex-1 flex flex-col overflow-hidden">

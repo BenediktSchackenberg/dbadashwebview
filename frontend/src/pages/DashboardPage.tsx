@@ -2,7 +2,6 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/api';
 import { RefreshCw, ArrowUpDown, ArrowUp, ArrowDown, Clock, Loader2 } from 'lucide-react';
-import ServerTree from '../components/ServerTree';
 
 type SortDir = 'asc' | 'desc';
 type Thresholds = Record<string, { warning: number; critical: number }>;
@@ -46,7 +45,6 @@ export default function DashboardPage() {
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [countdown, setCountdown] = useState(30);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
-  const [selectedInstanceId, setSelectedInstanceId] = useState<number | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchData = useCallback(async () => {
@@ -97,8 +95,7 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="flex gap-6">
-      <div className="flex-1 min-w-0 space-y-4">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-white">Performance Summary</h1>
         <div className="flex items-center gap-4 text-sm text-gray-400">
@@ -168,14 +165,6 @@ export default function DashboardPage() {
             </tbody>
           </table>
         </div>
-      </div>
-      </div>
-      <div className="w-80 flex-shrink-0 hidden xl:block">
-        <ServerTree
-          selectedInstanceId={selectedInstanceId}
-          onSelectInstance={setSelectedInstanceId}
-          performanceData={data}
-        />
       </div>
     </div>
   );
