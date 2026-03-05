@@ -1044,6 +1044,235 @@ app.MapGet("/api/performance/io", async (int? instanceId) =>
     return Results.Ok(new { fileStats, drivePerf, fileNote, driveNote });
 }).RequireAuthorization();
 
+// ── Exec Stats ───────────────────────────────────────────────────────────
+app.MapGet("/api/performance/exec-stats", async (int? instanceId, int? hours) =>
+{
+    var h = hours ?? 24;
+    var data = Array.Empty<object>() as object;
+    var note = "";
+    var filter = instanceId.HasValue ? "AND os.InstanceID = @instanceId" : "";
+
+    try
+    {
+        var sql = $@"
+            SELECT TOP 500 os.InstanceID, i.InstanceDisplayName, os.object_name, os.SchemaName,
+                   os.execution_count, os.total_worker_time, os.total_elapsed_time,
+                   os.total_logical_reads, os.total_logical_writes, os.total_physical_reads, os.SnapshotDate
+            FROM dbo.ObjectExecutionStats os
+            JOIN dbo.Instances i ON os.InstanceID=i.InstanceID
+            WHERE os.SnapshotDate > DATEADD(hour,-@hours,GETUTCDATE()) {filter}
+            ORDER BY os.total_worker_time DESC";
+        data = await QueryAsync(sql, ("@hours", h), ("@instanceId", instanceId ?? (object)DBNull.Value));
+    }
+    catch
+    {
+        try
+        {
+            var sql = $@"
+                SELECT TOP 500 ps.InstanceID, i.InstanceDisplayName, ps.object_name, ps.SchemaName,
+                       ps.execution_count, ps.total_worker_time, ps.total_elapsed_time,
+                       ps.total_logical_reads, ps.total_logical_writes, ps.total_physical_reads, ps.SnapshotDate
+                FROM dbo.ObjectStats ps
+                JOIN dbo.Instances i ON ps.InstanceID=i.InstanceID
+                WHERE ps.SnapshotDate > DATEADD(hour,-@hours,GETUTCDATE()) {filter}
+                ORDER BY ps.total_worker_time DESC";
+            data = await QueryAsync(sql, ("@hours", h), ("@instanceId", instanceId ?? (object)DBNull.Value));
+        }
+        catch (Exception ex)
+        {
+            note = $"ObjectExecutionStats/ObjectStats not found: {ex.Message}";
+        }
+    }
+    return Results.Ok(new { data, note });
+}).RequireAuthorization();
+
+// ── Waits Timeline ───────────────────────────────────────────────────────
+app.MapGet("/api/performance/waits-timeline", async (int? instanceId, int? hours) =>
+{
+    var h = hours ?? 24;
+    var data = Array.Empty<object>() as object;
+    var note = "";
+
+    if (!instanceId.HasValue) return Results.Ok(new { data, note = "instanceId required" });
+
+    try
+    {
+        var sql = @"
+            SELECT w.InstanceID, w.SnapshotDate, wt.WaitType, w.wait_time_ms,
+                   w.waiting_tasks_count, w.signal_wait_time_ms
+            FROM dbo.Waits w
+            JOIN dbo.WaitType wt ON w.WaitTypeID=wt.WaitTypeID
+            WHERE w.InstanceID=@instanceId AND w.SnapshotDate > DATEADD(hour,-@hours,GETUTCDATE())
+            ORDER BY w.SnapshotDate";
+        data = await QueryAsync(sql, ("@instanceId", instanceId.Value), ("@hours", h));
+    }
+    catch (Exception ex)
+    {
+        note = $"Waits/WaitType not found: {ex.Message}";
+    }
+    return Results.Ok(new { data, note });
+}).RequireAuthorization();
+
+// ── Performance Counters ─────────────────────────────────────────────────
+app.MapGet("/api/performance/counters", async (int? instanceId, int? hours) =>
+{
+    var h = hours ?? 24;
+    var data = Array.Empty<object>() as object;
+    var note = "";
+
+    if (!instanceId.HasValue) return Results.Ok(new { data, note = "instanceId required" });
+
+    try
+    {
+        var sql = @"
+            SELECT pc.InstanceID, i.InstanceDisplayName, pc.object_name, pc.counter_name,
+                   pc.instance_name, pc.cntr_value, pc.SnapshotDate
+            FROM dbo.PerformanceCounters pc
+            JOIN dbo.Instances i ON pc.InstanceID=i.InstanceID
+            WHERE pc.InstanceID=@instanceId AND pc.SnapshotDate > DATEADD(hour,-@hours,GETUTCDATE())
+            ORDER BY pc.SnapshotDate";
+        data = await QueryAsync(sql, ("@instanceId", instanceId.Value), ("@hours", h));
+    }
+    catch
+    {
+        try
+        {
+            var sql = @"
+                SELECT pc.InstanceID, i.InstanceDisplayName, pc.object_name, pc.counter_name,
+                       pc.instance_name, pc.cntr_value, pc.SnapshotDate
+                FROM dbo.Counters pc
+                JOIN dbo.Instances i ON pc.InstanceID=i.InstanceID
+                WHERE pc.InstanceID=@instanceId AND pc.SnapshotDate > DATEADD(hour,-@hours,GETUTCDATE())
+                ORDER BY pc.SnapshotDate";
+            data = await QueryAsync(sql, ("@instanceId", instanceId.Value), ("@hours", h));
+        }
+        catch (Exception ex)
+        {
+            note = $"PerformanceCounters/Counters not found: {ex.Message}";
+        }
+    }
+    return Results.Ok(new { data, note });
+}).RequireAuthorization();
+
+// ── Job Timeline ─────────────────────────────────────────────────────────
+app.MapGet("/api/monitoring/job-timeline", async (int? instanceId, int? hours) =>
+{
+    var h = hours ?? 24;
+    var data = Array.Empty<object>() as object;
+    var note = "";
+
+    if (!instanceId.HasValue) return Results.Ok(new { data, note = "instanceId required" });
+
+    try
+    {
+        var sql = @"
+            SELECT jh.InstanceID, i.InstanceDisplayName, j.name as job_name,
+                   jh.step_id, jh.step_name, jh.run_status, jh.RunDateTime,
+                   jh.RunDurationSec, DATEADD(second, jh.RunDurationSec, jh.RunDateTime) as EndDateTime
+            FROM dbo.JobHistory jh
+            JOIN dbo.Instances i ON jh.InstanceID=i.InstanceID
+            JOIN dbo.Jobs j ON jh.job_id=j.job_id AND jh.InstanceID=j.InstanceID
+            WHERE jh.RunDateTime > DATEADD(hour,-@hours,GETUTCDATE()) AND jh.step_id=0
+            ORDER BY jh.RunDateTime";
+        data = await QueryAsync(sql, ("@instanceId", instanceId.Value), ("@hours", h));
+    }
+    catch (Exception ex)
+    {
+        note = $"JobHistory/Jobs not found: {ex.Message}";
+    }
+    return Results.Ok(new { data, note });
+}).RequireAuthorization();
+
+// ── Configuration ────────────────────────────────────────────────────────
+app.MapGet("/api/monitoring/configuration", async (int? instanceId) =>
+{
+    var data = Array.Empty<object>() as object;
+    var note = "";
+
+    if (!instanceId.HasValue) return Results.Ok(new { data, note = "instanceId required" });
+
+    try
+    {
+        var sql = @"
+            SELECT sc.InstanceID, i.InstanceDisplayName, sc.name, sc.value, sc.value_in_use,
+                   sc.minimum, sc.maximum, sc.is_dynamic, sc.is_advanced, sc.SnapshotDate
+            FROM dbo.SysConfig sc
+            JOIN dbo.Instances i ON sc.InstanceID=i.InstanceID
+            WHERE sc.InstanceID=@instanceId
+              AND sc.SnapshotDate = (SELECT MAX(SnapshotDate) FROM dbo.SysConfig sc2 WHERE sc2.InstanceID=sc.InstanceID)
+            ORDER BY sc.name";
+        data = await QueryAsync(sql, ("@instanceId", instanceId.Value));
+    }
+    catch
+    {
+        try
+        {
+            var sql = @"
+                SELECT sc.InstanceID, i.InstanceDisplayName, sc.name, sc.value, sc.value_in_use,
+                       sc.minimum, sc.maximum, sc.is_dynamic, sc.is_advanced, sc.SnapshotDate
+                FROM dbo.Configuration sc
+                JOIN dbo.Instances i ON sc.InstanceID=i.InstanceID
+                WHERE sc.InstanceID=@instanceId
+                  AND sc.SnapshotDate = (SELECT MAX(SnapshotDate) FROM dbo.Configuration sc2 WHERE sc2.InstanceID=sc.InstanceID)
+                ORDER BY sc.name";
+            data = await QueryAsync(sql, ("@instanceId", instanceId.Value));
+        }
+        catch (Exception ex)
+        {
+            note = $"SysConfig/Configuration not found: {ex.Message}";
+        }
+    }
+    return Results.Ok(new { data, note });
+}).RequireAuthorization();
+
+app.MapGet("/api/monitoring/configuration/changes", async (int? instanceId, int? days) =>
+{
+    var d = days ?? 30;
+    var data = Array.Empty<object>() as object;
+    var note = "";
+
+    if (!instanceId.HasValue) return Results.Ok(new { data, note = "instanceId required" });
+
+    try
+    {
+        var sql = @"
+            ;WITH Ranked AS (
+                SELECT sc.name, sc.value, sc.value_in_use, sc.SnapshotDate,
+                       LAG(sc.value) OVER (PARTITION BY sc.name ORDER BY sc.SnapshotDate) as prev_value
+                FROM dbo.SysConfig sc
+                WHERE sc.InstanceID=@instanceId AND sc.SnapshotDate > DATEADD(day,-@days,GETUTCDATE())
+            )
+            SELECT name, prev_value as old_value, value as new_value, SnapshotDate as ChangeDate
+            FROM Ranked
+            WHERE prev_value IS NOT NULL AND prev_value <> value
+            ORDER BY SnapshotDate DESC";
+        data = await QueryAsync(sql, ("@instanceId", instanceId.Value), ("@days", d));
+    }
+    catch
+    {
+        try
+        {
+            var sql = @"
+                ;WITH Ranked AS (
+                    SELECT sc.name, sc.value, sc.value_in_use, sc.SnapshotDate,
+                           LAG(sc.value) OVER (PARTITION BY sc.name ORDER BY sc.SnapshotDate) as prev_value
+                    FROM dbo.Configuration sc
+                    WHERE sc.InstanceID=@instanceId AND sc.SnapshotDate > DATEADD(day,-@days,GETUTCDATE())
+                )
+                SELECT name, prev_value as old_value, value as new_value, SnapshotDate as ChangeDate
+                FROM Ranked
+                WHERE prev_value IS NOT NULL AND prev_value <> value
+                ORDER BY SnapshotDate DESC";
+            data = await QueryAsync(sql, ("@instanceId", instanceId.Value), ("@days", d));
+        }
+        catch (Exception ex)
+        {
+            note = $"Configuration change detection failed: {ex.Message}";
+        }
+    }
+    return Results.Ok(new { data, note });
+}).RequireAuthorization();
+
 // SPA fallback — serve index.html for all non-API routes
 app.MapFallbackToFile("index.html");
 

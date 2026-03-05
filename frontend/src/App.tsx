@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, Server, Database, Bell, HardDrive, Network, AlertTriangle,
   ChevronLeft, ChevronRight, ChevronDown, LogOut, User, RefreshCw, Sun, Moon,
-  Activity, Search, FileText, Users, Tag, Clock, Shield
+  Activity, Search, FileText, Users, Tag, Clock, Shield, Zap, Gauge, CalendarClock, Settings
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import LoginPage from './pages/LoginPage';
@@ -34,6 +34,11 @@ import BlockingPage from './pages/BlockingPage';
 import SlowQueriesPage from './pages/SlowQueriesPage';
 import MemoryPage from './pages/MemoryPage';
 import IOPerformancePage from './pages/IOPerformancePage';
+import ExecStatsPage from './pages/ExecStatsPage';
+import WaitsTimelinePage from './pages/WaitsTimelinePage';
+import PerformanceCountersPage from './pages/PerformanceCountersPage';
+import JobTimelinePage from './pages/JobTimelinePage';
+import ConfigurationPage from './pages/ConfigurationPage';
 import SearchDialog from './components/SearchDialog';
 import Breadcrumbs from './components/Breadcrumbs';
 import TimeRangePicker from './components/TimeRangePicker';
@@ -69,6 +74,9 @@ const navGroups: NavGroup[] = [
       { path: '/performance/slow-queries', icon: Clock, label: 'Slow Queries' },
       { path: '/performance/memory', icon: HardDrive, label: 'Memory' },
       { path: '/performance/io', icon: HardDrive, label: 'IO Performance' },
+      { path: '/performance/exec-stats', icon: Zap, label: 'Object Exec Stats' },
+      { path: '/performance/waits-timeline', icon: Clock, label: 'Waits Timeline' },
+      { path: '/performance/counters', icon: Gauge, label: 'Perf Counters' },
     ],
   },
   {
@@ -77,6 +85,8 @@ const navGroups: NavGroup[] = [
       { path: '/alerts', icon: Bell, label: 'Alerts' },
       { path: '/analysis', icon: Activity, label: 'Analysis' },
       { path: '/queries', icon: Search, label: 'Queries' },
+      { path: '/monitoring/job-timeline', icon: CalendarClock, label: 'Job Timeline' },
+      { path: '/monitoring/configuration', icon: Settings, label: 'Configuration' },
     ],
   },
   {
@@ -340,6 +350,11 @@ export default function App() {
                 <Route path="/performance/slow-queries" element={<SlowQueriesPage key={refreshKey} />} />
                 <Route path="/performance/memory" element={<MemoryPage key={refreshKey} />} />
                 <Route path="/performance/io" element={<IOPerformancePage key={refreshKey} />} />
+                <Route path="/performance/exec-stats" element={<ExecStatsPage key={refreshKey} />} />
+                <Route path="/performance/waits-timeline" element={<WaitsTimelinePage key={refreshKey} />} />
+                <Route path="/performance/counters" element={<PerformanceCountersPage key={refreshKey} />} />
+                <Route path="/monitoring/job-timeline" element={<JobTimelinePage key={refreshKey} />} />
+                <Route path="/monitoring/configuration" element={<ConfigurationPage key={refreshKey} />} />
               </Routes>
             </Layout>
           </AuthGuard>

@@ -82,4 +82,16 @@ export const api = {
     request<{ clerks: any[]; counters: any[]; clerkNote: string; counterNote: string }>(`/api/performance/memory${instanceId ? `?instanceId=${instanceId}` : ''}`),
   performanceIO: (instanceId?: number) =>
     request<{ fileStats: any[]; drivePerf: any[]; fileNote: string; driveNote: string }>(`/api/performance/io${instanceId ? `?instanceId=${instanceId}` : ''}`),
+  performanceExecStats: (instanceId?: number, hours = 24) =>
+    request<{ data: any[]; note: string }>(`/api/performance/exec-stats?hours=${hours}${instanceId ? `&instanceId=${instanceId}` : ''}`),
+  performanceWaitsTimeline: (instanceId: number, hours = 24) =>
+    request<{ data: any[]; note: string }>(`/api/performance/waits-timeline?instanceId=${instanceId}&hours=${hours}`),
+  performanceCounters: (instanceId: number, hours = 24) =>
+    request<{ data: any[]; note: string }>(`/api/performance/counters?instanceId=${instanceId}&hours=${hours}`),
+  monitoringJobTimeline: (instanceId: number, hours = 24) =>
+    request<{ data: any[]; note: string }>(`/api/monitoring/job-timeline?instanceId=${instanceId}&hours=${hours}`),
+  monitoringConfiguration: (instanceId: number) =>
+    request<{ data: any[]; note: string }>(`/api/monitoring/configuration?instanceId=${instanceId}`),
+  monitoringConfigurationChanges: (instanceId: number, days = 30) =>
+    request<{ data: any[]; note: string }>(`/api/monitoring/configuration/changes?instanceId=${instanceId}&days=${days}`),
 };
