@@ -1471,7 +1471,7 @@ app.MapGet("/api/tree", async () =>
     {
         var rows = await QueryAsync(@"
             SELECT i.InstanceID, COALESCE(i.InstanceDisplayName, i.Instance) as InstanceName,
-                   i.ProductVersion,
+                   i.ProductVersion, i.ProductMajorVersion,
                    d.DatabaseID, d.name as DatabaseName,
                    CASE WHEN d.database_id <= 4 THEN 1 ELSE 0 END as IsSystem
             FROM dbo.Instances i
@@ -1492,7 +1492,8 @@ app.MapGet("/api/tree", async () =>
                 {
                     ["instanceId"] = instId,
                     ["instanceName"] = row["InstanceName"],
-                    ["productVersion"] = row["ProductVersion"]
+                    ["productVersion"] = row["ProductVersion"],
+                    ["productMajorVersion"] = row["ProductMajorVersion"] != null ? Convert.ToInt32(row["ProductMajorVersion"]) : 0
                 };
                 dbLists[instId] = new List<object>();
             }
