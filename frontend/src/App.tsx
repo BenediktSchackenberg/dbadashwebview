@@ -187,6 +187,8 @@ export default function App() {
                 <Route path="/instances" element={<InstancesPage key={refreshKey} />} />
                 <Route path="/instances/:id" element={<InstanceDetailPage key={refreshKey} />} />
                 <Route path="/instances/:id/databases/:dbId" element={<DatabaseDetailPage key={refreshKey} />} />
+                <Route path="/instances/:id/backups" element={<BackupsPage key={refreshKey} />} />
+                <Route path="/instances/:id/drives" element={<DrivesPage key={refreshKey} />} />
                 <Route path="/jobs" element={<JobsPage key={refreshKey} />} />
                 <Route path="/backups" element={<BackupsPage key={refreshKey} />} />
                 <Route path="/alerts" element={<AlertsPage key={refreshKey} />} />

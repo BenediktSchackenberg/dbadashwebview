@@ -40,6 +40,8 @@ const instanceCategories = [
   { key: 'hadr', icon: Shield, label: 'HA/DR', path: (id: number) => `/availability-groups?instanceId=${id}` },
   { key: 'storage', icon: HardDrive, label: 'Storage', path: (id: number) => `/drives?instanceId=${id}` },
   { key: 'databases', icon: Database, label: 'Databases', path: (_id: number) => '' },
+  { key: 'backups', icon: Database, label: 'Backups', path: (id: number) => `/instances/${id}/backups` },
+  { key: 'drives', icon: HardDrive, label: 'Drives', path: (id: number) => `/instances/${id}/drives` },
   { key: 'jobs', icon: Play, label: 'Jobs', path: (id: number) => `/monitoring/job-timeline?instanceId=${id}` },
   { key: 'reports', icon: BarChart3, label: 'Reports', path: (id: number) => `/reports?instanceId=${id}` },
 ];

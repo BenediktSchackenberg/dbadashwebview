@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
 import { api } from '../api/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import EmptyState from '../components/EmptyState';
 import StatusBadge from '../components/StatusBadge';
 
 export default function BackupsPage() {
+  const { id } = useParams();
   const [summary, setSummary] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -24,7 +26,7 @@ export default function BackupsPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold text-white">Backups</h1>
+      <h1 className="text-2xl font-bold text-white">{id ? 'Instance Backups' : 'Backups'}</h1>
       <p className="text-sm text-gray-400">Backup status overview across all instances</p>
       <div className="glass rounded-xl overflow-hidden">
         <table className="w-full text-sm">

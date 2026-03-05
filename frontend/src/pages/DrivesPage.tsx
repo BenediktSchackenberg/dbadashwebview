@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
 import { api } from '../api/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import EmptyState from '../components/EmptyState';
@@ -8,6 +9,7 @@ import { motion } from 'framer-motion';
 import { clsx } from 'clsx';
 
 export default function DrivesPage() {
+  const { id } = useParams();
   const [drives, setDrives] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [sortDesc, setSortDesc] = useState(true);
@@ -25,6 +27,8 @@ export default function DrivesPage() {
 
   if (loading) return <LoadingSpinner />;
 
+  const filteredDrives = id ? drives.filter((d: any) => String(d.instanceID || d.InstanceID) === id) : drives;
+
   const formatBytes = (b: number) => {
     if (!b) return '—';
     if (b > 1e12) return `${(b / 1e12).toFixed(1)} TB`;
@@ -34,14 +38,14 @@ export default function DrivesPage() {
 
   const getPct = (d: any) => d.Capacity > 0 ? ((d.Capacity - d.FreeSpace) / d.Capacity) * 100 : 0;
 
-  const sorted = [...drives].sort((a, b) => sortDesc ? getPct(b) - getPct(a) : getPct(a) - getPct(b));
+  const sorted = [...filteredDrives].sort((a, b) => sortDesc ? getPct(b) - getPct(a) : getPct(a) - getPct(b));
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Drives</h1>
-          <p className="text-sm text-gray-400">{drives.length} drives across all instances</p>
+          <h1 className="text-2xl font-bold text-white">{id ? 'Instance Drives' : 'Drives'}</h1>
+          <p className="text-sm text-gray-400">{filteredDrives.length} drives{id ? '' : ' across all instances'}</p>
         </div>
         <button
           onClick={() => setSortDesc(!sortDesc)}
