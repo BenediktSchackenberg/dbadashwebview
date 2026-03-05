@@ -3,24 +3,19 @@ import { api } from '../api/api';
 import { useRefresh } from '../App';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { Loader2 } from 'lucide-react';
 
-function ageHours(dateStr: string | null): number | null {
+function ageHours(dateStr: string | null | undefined): number | null {
   if (!dateStr) return null;
   return (Date.now() - new Date(dateStr).getTime()) / 3600000;
 }
 
-function ageColor(hours: number | null): string {
-  if (hours == null) return 'text-gray-500';
-  if (hours < 24) return 'text-emerald-400';
-  if (hours < 48) return 'text-yellow-400';
-  return 'text-red-400';
-}
-
-function ageBg(hours: number | null): string {
-  if (hours == null) return 'bg-gray-500/10';
-  if (hours < 24) return 'bg-emerald-500/10';
-  if (hours < 48) return 'bg-yellow-500/10';
-  return 'bg-red-500/10';
+function ageBadge(hours: number | null): { text: string; cls: string } {
+  if (hours == null) return { text: 'No Backup', cls: 'text-gray-500 bg-gray-500/10' };
+  if (hours < 24) return { text: `${hours.toFixed(1)}h ago`, cls: 'text-emerald-400 bg-emerald-500/10' };
+  if (hours < 48) return { text: `${hours.toFixed(0)}h ago`, cls: 'text-yellow-400 bg-yellow-500/10' };
+  const days = Math.floor(hours / 24);
+  return { text: `${days}d ago`, cls: 'text-red-400 bg-red-500/10' };
 }
 
 export default function EstateBackupsPage() {
@@ -34,111 +29,111 @@ export default function EstateBackupsPage() {
       .finally(() => setLoading(false));
   }, [lastRefresh]);
 
-  const { grouped, rpoChart, complianceScore } = useMemo(() => {
-    const byInstance = new Map<string, Map<string, { full: string | null; diff: string | null; log: string | null }>>();
+  const { grouped, rpoChart } = useMemo(() => {
+    const byInstance = new Map<string, { id: number; dbs: any[] }>();
 
-    data.forEach((b: any) => {
-      const inst = b.InstanceDisplayName || `Instance ${b.InstanceID}`;
-      const db = b.DatabaseName || `DB ${b.DatabaseID}`;
-      if (!byInstance.has(inst)) byInstance.set(inst, new Map());
-      const dbs = byInstance.get(inst)!;
-      if (!dbs.has(db)) dbs.set(db, { full: null, diff: null, log: null });
-      const entry = dbs.get(db)!;
-      const type = b.type;
-      const date = b.backup_start_date;
-      if (type === 'D' && (!entry.full || date > entry.full)) entry.full = date;
-      if (type === 'I' && (!entry.diff || date > entry.diff)) entry.diff = date;
-      if (type === 'L' && (!entry.log || date > entry.log)) entry.log = date;
+    data.forEach((row: any) => {
+      const inst = row.instanceDisplayName || row.InstanceDisplayName || `Instance ${row.instanceID || row.InstanceID}`;
+      const id = row.instanceID || row.InstanceID;
+      if (!byInstance.has(inst)) byInstance.set(inst, { id, dbs: [] });
+      byInstance.get(inst)!.dbs.push({
+        db: row.databaseName || row.DatabaseName || `DB ${row.databaseID || row.DatabaseID}`,
+        full: row.fullBackupDate || row.FullBackupDate || null,
+        diff: row.diffBackupDate || row.DiffBackupDate || null,
+        log: row.logBackupDate || row.LogBackupDate || null,
+      });
     });
 
-    const grouped = [...byInstance.entries()].map(([inst, dbs]) => ({
+    const grouped = [...byInstance.entries()].map(([inst, v]) => ({
       instance: inst,
-      databases: [...dbs.entries()].map(([db, b]) => ({ db, ...b })),
+      instanceId: v.id,
+      databases: v.dbs,
     }));
 
-    // RPO distribution
-    const buckets = { '<1h': 0, '1-4h': 0, '4-12h': 0, '12-24h': 0, '>24h': 0 };
-    let totalDbs = 0, compliant = 0;
+    // RPO distribution based on full backups
+    const buckets = { '<1h': 0, '1-4h': 0, '4-12h': 0, '12-24h': 0, '>24h': 0, 'None': 0 };
     grouped.forEach(g => g.databases.forEach(d => {
-      totalDbs++;
       const h = ageHours(d.full);
-      if (h == null) { buckets['>24h']++; return; }
-      if (h < 1) buckets['<1h']++;
+      if (h == null) buckets['None']++;
+      else if (h < 1) buckets['<1h']++;
       else if (h < 4) buckets['1-4h']++;
       else if (h < 12) buckets['4-12h']++;
-      else if (h < 24) { buckets['12-24h']++; compliant++; }
+      else if (h < 24) buckets['12-24h']++;
       else buckets['>24h']++;
-      if (h < 24) compliant++;
     }));
+    const rpoChart = Object.entries(buckets).filter(([,c]) => c > 0).map(([name, count]) => ({ name, count }));
 
-    const rpoChart = Object.entries(buckets).map(([name, count]) => ({ name, count }));
-    const complianceScore = totalDbs > 0 ? Math.round((compliant / totalDbs) * 100) : 0;
-
-    return { grouped, rpoChart, complianceScore };
+    return { grouped, rpoChart };
   }, [data]);
 
-  if (loading) return <LoadingSpinner />;
+  if (loading) return (
+    <div className="glass rounded-xl p-12 flex flex-col items-center justify-center gap-4">
+      <Loader2 className="w-10 h-10 text-blue-400 animate-spin" />
+      <p className="text-gray-300 text-lg">Loading backup status across all instances...</p>
+      <p className="text-gray-500 text-sm">This may take a moment</p>
+    </div>
+  );
+
+  const totalDbs = grouped.reduce((s, g) => s + g.databases.length, 0);
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-white">Estate Backups & RPO</h1>
-        <div className="glass rounded-lg px-4 py-2">
-          <span className="text-sm text-gray-400">Compliance: </span>
-          <span className={`text-lg font-bold ${complianceScore >= 90 ? 'text-emerald-400' : complianceScore >= 70 ? 'text-yellow-400' : 'text-red-400'}`}>
-            {complianceScore}%
-          </span>
+        <div>
+          <h1 className="text-2xl font-bold text-white">Backups</h1>
+          <p className="text-sm text-gray-400 mt-1">Backup status overview across all instances — {grouped.length} instances, {totalDbs} databases</p>
         </div>
       </div>
 
-      <div className="glass rounded-xl p-6 gradient-border">
-        <h3 className="text-lg font-semibold text-white mb-3">RPO Distribution</h3>
-        <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={rpoChart}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-            <XAxis dataKey="name" stroke="#6b7280" tick={{ fontSize: 12 }} />
-            <YAxis stroke="#6b7280" tick={{ fontSize: 12 }} />
-            <Tooltip contentStyle={{ backgroundColor: '#1e1e2e', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }} />
-            <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-
-      {grouped.map(g => (
-        <div key={g.instance} className="glass rounded-xl p-6 gradient-border">
-          <h3 className="text-lg font-semibold text-white mb-3">{g.instance}</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-white/10 text-left">
-                  <th className="pb-2 text-gray-300 font-semibold">Database</th>
-                  <th className="pb-2 text-gray-300 font-semibold">Full Backup</th>
-                  <th className="pb-2 text-gray-300 font-semibold">Diff Backup</th>
-                  <th className="pb-2 text-gray-300 font-semibold">Log Backup</th>
-                </tr>
-              </thead>
-              <tbody>
-                {g.databases.map(d => (
-                  <tr key={d.db} className="border-b border-white/5">
-                    <td className="py-2 text-gray-300">{d.db}</td>
-                    {(['full', 'diff', 'log'] as const).map(t => {
-                      const val = d[t];
-                      const h = ageHours(val);
-                      return (
-                        <td key={t} className="py-2">
-                          <span className={`inline-block px-2 py-0.5 rounded text-xs ${ageBg(h)} ${ageColor(h)}`}>
-                            {val ? `${h!.toFixed(1)}h ago` : 'None'}
-                          </span>
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+      {rpoChart.length > 0 && (
+        <div className="glass rounded-xl p-6">
+          <h3 className="text-sm font-semibold text-gray-300 mb-3 uppercase tracking-wider">Full Backup Age Distribution</h3>
+          <ResponsiveContainer width="100%" height={160}>
+            <BarChart data={rpoChart}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+              <XAxis dataKey="name" stroke="#6b7280" tick={{ fontSize: 12 }} />
+              <YAxis stroke="#6b7280" tick={{ fontSize: 12 }} />
+              <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff' }} />
+              <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
         </div>
-      ))}
+      )}
+
+      <div className="glass rounded-xl overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-slate-800/80">
+              <th className="py-2 px-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-400">Instance</th>
+              <th className="py-2 px-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-400">Database</th>
+              <th className="py-2 px-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-400">Full</th>
+              <th className="py-2 px-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-400">Diff</th>
+              <th className="py-2 px-3 text-center text-xs font-semibold uppercase tracking-wider text-gray-400">Log</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5">
+            {grouped.flatMap(g => g.databases.map((d, i) => (
+              <tr key={`${g.instance}-${d.db}`} className="hover:bg-slate-800/50 transition-colors">
+                <td className="py-2 px-3 text-gray-300 whitespace-nowrap">
+                  {i === 0 ? <span className="font-medium text-white">{g.instance}</span> : ''}
+                </td>
+                <td className="py-2 px-3 text-gray-300">{d.db}</td>
+                {(['full', 'diff', 'log'] as const).map(t => {
+                  const h = ageHours(d[t]);
+                  const badge = ageBadge(h);
+                  return (
+                    <td key={t} className="py-2 px-3 text-center">
+                      <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${badge.cls}`}>
+                        {badge.text}
+                      </span>
+                    </td>
+                  );
+                })}
+              </tr>
+            )))}
+          </tbody>
+        </table>
+      </div>
 
       {grouped.length === 0 && <p className="text-gray-500 text-sm text-center py-8">No backup data available.</p>}
     </div>

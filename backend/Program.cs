@@ -773,18 +773,52 @@ app.MapGet("/api/instances/{id:int}/queries", async (int id) =>
 
 app.MapGet("/api/backups/estate", async () =>
 {
+    var connStr = app.Configuration.GetConnectionString("DBADashDB");
     try
     {
-        var data = await QueryAsync(@"
-            SELECT i.InstanceID, i.InstanceDisplayName, d.DatabaseID, d.name AS DatabaseName,
-                   b.type, b.backup_start_date, b.backup_finish_date,
-                   b.backup_size, b.compressed_backup_size
+        using var conn = new SqlConnection(connStr);
+        await conn.OpenAsync();
+        using var cmd = new SqlCommand(@"
+            ;WITH LatestFull AS (
+                SELECT DatabaseID, backup_start_date, backup_size, compressed_backup_size,
+                       ROW_NUMBER() OVER (PARTITION BY DatabaseID ORDER BY backup_start_date DESC) as rn
+                FROM dbo.Backups WHERE type='D'
+            ), LatestDiff AS (
+                SELECT DatabaseID, backup_start_date,
+                       ROW_NUMBER() OVER (PARTITION BY DatabaseID ORDER BY backup_start_date DESC) as rn
+                FROM dbo.Backups WHERE type='I'
+            ), LatestLog AS (
+                SELECT DatabaseID, backup_start_date,
+                       ROW_NUMBER() OVER (PARTITION BY DatabaseID ORDER BY backup_start_date DESC) as rn
+                FROM dbo.Backups WHERE type='L'
+            )
+            SELECT i.InstanceID, COALESCE(i.InstanceDisplayName, i.Instance) as InstanceDisplayName,
+                   d.DatabaseID, d.name AS DatabaseName,
+                   f.backup_start_date as FullBackupDate, f.backup_size as FullBackupSize,
+                   df.backup_start_date as DiffBackupDate,
+                   l.backup_start_date as LogBackupDate
             FROM dbo.Instances i
             JOIN dbo.Databases d ON i.InstanceID = d.InstanceID
-            LEFT JOIN dbo.Backups b ON d.DatabaseID = b.DatabaseID
+            LEFT JOIN LatestFull f ON d.DatabaseID = f.DatabaseID AND f.rn = 1
+            LEFT JOIN LatestDiff df ON d.DatabaseID = df.DatabaseID AND df.rn = 1
+            LEFT JOIN LatestLog l ON d.DatabaseID = l.DatabaseID AND l.rn = 1
             WHERE i.IsActive = 1 AND d.IsActive = 1
-            ORDER BY i.InstanceDisplayName, d.name, b.backup_start_date DESC");
-        return Results.Ok(data);
+            ORDER BY COALESCE(i.InstanceDisplayName, i.Instance), d.name", conn);
+        cmd.CommandTimeout = 60;
+        using var r = await cmd.ExecuteReaderAsync();
+        var list = new List<object>();
+        while (await r.ReadAsync())
+        {
+            var dict = new Dictionary<string, object?>();
+            for (int i2 = 0; i2 < r.FieldCount; i2++)
+            {
+                var name = r.GetName(i2);
+                var key = char.ToLowerInvariant(name[0]) + name.Substring(1);
+                dict[key] = r.IsDBNull(i2) ? null : r.GetValue(i2);
+            }
+            list.Add(dict);
+        }
+        return Results.Ok(list);
     }
     catch (Exception ex)
     {
