@@ -739,7 +739,7 @@ app.MapGet("/api/instances/{id:int}/hadr", async (int id) =>
             JOIN dbo.Databases d ON dh.DatabaseID = d.DatabaseID
             WHERE dh.group_id IN (
                 SELECT ag.group_id FROM dbo.AvailabilityGroups ag WHERE ag.InstanceID = @id
-            )");
+            )", ("@id", id));
 
         return Results.Ok(new { ags, replicas, databases });
     }
