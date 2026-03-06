@@ -841,8 +841,8 @@ app.MapGet("/api/hadr/overview", async () =>
             while (await r4.ReadAsync())
             {
                 var instId = r4.GetInt32(0);
-                var sqlCpu = r4.IsDBNull(1) ? 0 : r4.GetInt32(1);
-                var idle = r4.IsDBNull(2) ? 0 : r4.GetInt32(2);
+                var sqlCpu = r4.IsDBNull(1) ? 0 : Convert.ToInt32(r4.GetValue(1));
+                var idle = r4.IsDBNull(2) ? 0 : Convert.ToInt32(r4.GetValue(2));
                 cpuMap[instId] = (sqlCpu, idle);
             }
         }
