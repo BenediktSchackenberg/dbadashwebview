@@ -32,7 +32,7 @@ const globalViews = [
   { path: '/alerts', icon: Bell, label: 'Alerts' },
   { path: '/estate/backups', icon: Database, label: 'Backups' },
   { path: '/drives', icon: HardDrive, label: 'Drives' },
-  { path: '/availability-groups', icon: Network, label: 'AG Overview' },
+  { path: '/availability-groups', icon: Network, label: 'AlwaysOn Overview' },
 ];
 
 const instanceCategories = [

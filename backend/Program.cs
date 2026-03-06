@@ -703,44 +703,73 @@ app.MapGet("/api/availability-groups", async () =>
     }
 }).RequireAuthorization();
 
-app.MapGet("/api/availability-groups/{id:int}", async (int id) =>
+// ── HA/DR per instance ──
+app.MapGet("/api/instances/{id:int}/hadr", async (int id) =>
 {
     try
     {
-        var ag = await QueryAsync(@"
-            SELECT ag.*, i.InstanceDisplayName
+        var ags = await QueryAsync(@"
+            SELECT ag.group_id, ag.name, ag.failure_condition_level, ag.health_check_timeout,
+                   ag.automated_backup_preference_desc, ag.basic_features, ag.dtc_support,
+                   ag.db_failover, ag.is_distributed, ag.cluster_type, ag.is_contained
             FROM dbo.AvailabilityGroups ag
-            JOIN dbo.Instances i ON ag.InstanceID = i.InstanceID
-            WHERE ag.AGId = @id", ("@id", id));
-        if (ag.Count == 0) return Results.NotFound();
+            WHERE ag.InstanceID = @id", ("@id", id));
 
-        List<Dictionary<string, object?>> replicas = new();
-        try
-        {
-            replicas = await QueryAsync(@"
-                SELECT ar.*, i.InstanceDisplayName
-                FROM dbo.AvailabilityReplicas ar
-                LEFT JOIN dbo.Instances i ON ar.InstanceID = i.InstanceID
-                WHERE ar.AGId = @id", ("@id", id));
-        }
-        catch { }
+        var replicas = await QueryAsync(@"
+            SELECT ar.replica_id, ar.group_id, ar.replica_server_name, ar.endpoint_url,
+                   ar.availability_mode_desc, ar.failover_mode_desc,
+                   ar.primary_role_allow_connections_desc, ar.secondary_role_allow_connections_desc,
+                   ar.backup_priority, ar.seeding_mode_desc, ar.session_timeout,
+                   ar.read_only_routing_url
+            FROM dbo.AvailabilityReplicas ar
+            WHERE ar.group_id IN (
+                SELECT ag.group_id FROM dbo.AvailabilityGroups ag WHERE ag.InstanceID = @id
+            )", ("@id", id));
 
-        List<Dictionary<string, object?>> databases = new();
-        try
-        {
-            databases = await QueryAsync(@"
-                SELECT dh.*, d.name AS DatabaseName
-                FROM dbo.DatabasesHADR dh
-                LEFT JOIN dbo.Databases d ON dh.DatabaseID = d.DatabaseID
-                WHERE dh.AGId = @id", ("@id", id));
-        }
-        catch { }
+        var databases = await QueryAsync(@"
+            SELECT dh.DatabaseID, dh.group_id, dh.replica_id, dh.is_primary_replica,
+                   dh.synchronization_state_desc, dh.synchronization_health_desc,
+                   dh.is_suspended, dh.suspend_reason_desc, dh.database_state_desc,
+                   dh.secondary_lag_seconds, dh.log_send_queue_size, dh.log_send_rate,
+                   dh.redo_queue_size, dh.redo_rate,
+                   dh.last_sent_time, dh.last_received_time, dh.last_hardened_time,
+                   dh.last_redone_time,
+                   d.name AS DatabaseName
+            FROM dbo.DatabasesHADR dh
+            JOIN dbo.Databases d ON dh.DatabaseID = d.DatabaseID
+            WHERE dh.group_id IN (
+                SELECT ag.group_id FROM dbo.AvailabilityGroups ag WHERE ag.InstanceID = @id
+            )");
 
-        return Results.Ok(new { ag = ag[0], replicas, databases });
+        return Results.Ok(new { ags, replicas, databases });
     }
     catch (Exception ex)
     {
-        return Results.Ok(new { error = ex.Message });
+        return Results.Ok(new { error = ex.Message, ags = Array.Empty<object>(), replicas = Array.Empty<object>(), databases = Array.Empty<object>() });
+    }
+}).RequireAuthorization();
+
+app.MapGet("/api/hadr/overview", async () =>
+{
+    try
+    {
+        var data = await QueryAsync(@"
+            SELECT ag.group_id, ag.name as AGName, ag.InstanceID,
+                   COALESCE(i.InstanceDisplayName, i.Instance) as InstanceName,
+                   ag.automated_backup_preference_desc, ag.basic_features,
+                   ag.cluster_type, ag.is_distributed,
+                   i.ProductMajorVersion,
+                   (SELECT COUNT(DISTINCT dh.DatabaseID) FROM dbo.DatabasesHADR dh WHERE dh.group_id = ag.group_id) as DatabaseCount,
+                   (SELECT COUNT(*) FROM dbo.AvailabilityReplicas ar WHERE ar.group_id = ag.group_id) as ReplicaCount
+            FROM dbo.AvailabilityGroups ag
+            JOIN dbo.Instances i ON ag.InstanceID = i.InstanceID
+            WHERE i.IsActive = 1
+            ORDER BY COALESCE(i.InstanceDisplayName, i.Instance)");
+        return Results.Ok(data);
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new { error = ex.Message, data = Array.Empty<object>() });
     }
 }).RequireAuthorization();
 
