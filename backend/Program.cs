@@ -753,23 +753,121 @@ app.MapGet("/api/hadr/overview", async () =>
 {
     try
     {
-        var data = await QueryAsync(@"
-            SELECT ag.group_id, ag.name as AGName, ag.InstanceID,
-                   COALESCE(i.InstanceDisplayName, i.Instance) as InstanceName,
+        using var conn = new SqlConnection(connStr);
+        await conn.OpenAsync();
+
+        // 1. All AGs with instance info
+        using var cmd1 = new SqlCommand(@"
+            SELECT ag.group_id, ag.name AS AGName, ag.InstanceID,
+                   COALESCE(i.InstanceDisplayName, i.Instance) AS InstanceName,
                    ag.automated_backup_preference_desc, ag.basic_features,
-                   ag.cluster_type, ag.is_distributed,
-                   i.ProductMajorVersion,
-                   (SELECT COUNT(DISTINCT dh.DatabaseID) FROM dbo.DatabasesHADR dh WHERE dh.group_id = ag.group_id) as DatabaseCount,
-                   (SELECT COUNT(*) FROM dbo.AvailabilityReplicas ar WHERE ar.group_id = ag.group_id) as ReplicaCount
+                   ag.db_failover, ag.is_distributed, ag.cluster_type,
+                   i.ProductMajorVersion, i.Edition, i.cpu_count, i.physical_memory_kb
             FROM dbo.AvailabilityGroups ag
             JOIN dbo.Instances i ON ag.InstanceID = i.InstanceID
             WHERE i.IsActive = 1
-            ORDER BY COALESCE(i.InstanceDisplayName, i.Instance)");
-        return Results.Ok(data);
+            ORDER BY ag.name", conn);
+        cmd1.CommandTimeout = 60;
+        var ags = new List<Dictionary<string, object?>>();
+        using (var r1 = await cmd1.ExecuteReaderAsync())
+        {
+            while (await r1.ReadAsync())
+            {
+                var row = new Dictionary<string, object?>();
+                for (int i = 0; i < r1.FieldCount; i++)
+                    row[r1.GetName(i)] = r1.IsDBNull(i) ? null : r1.GetValue(i);
+                ags.Add(row);
+            }
+        }
+
+        // 2. All replicas
+        using var cmd2 = new SqlCommand(@"
+            SELECT ar.group_id, ar.replica_id, ar.replica_server_name,
+                   ar.availability_mode_desc, ar.failover_mode_desc,
+                   ar.backup_priority, ar.seeding_mode_desc, ar.endpoint_url,
+                   ar.session_timeout
+            FROM dbo.AvailabilityReplicas ar", conn);
+        cmd2.CommandTimeout = 60;
+        var replicas = new List<Dictionary<string, object?>>();
+        using (var r2 = await cmd2.ExecuteReaderAsync())
+        {
+            while (await r2.ReadAsync())
+            {
+                var row = new Dictionary<string, object?>();
+                for (int i = 0; i < r2.FieldCount; i++)
+                    row[r2.GetName(i)] = r2.IsDBNull(i) ? null : r2.GetValue(i);
+                replicas.Add(row);
+            }
+        }
+
+        // 3. All HADR database states
+        using var cmd3 = new SqlCommand(@"
+            SELECT dh.group_id, dh.replica_id, dh.DatabaseID,
+                   dh.is_primary_replica, dh.synchronization_state_desc,
+                   dh.synchronization_health_desc, dh.is_suspended,
+                   dh.suspend_reason_desc, dh.secondary_lag_seconds,
+                   dh.log_send_queue_size, dh.log_send_rate,
+                   dh.redo_queue_size, dh.redo_rate,
+                   d.name AS DatabaseName
+            FROM dbo.DatabasesHADR dh
+            JOIN dbo.Databases d ON dh.DatabaseID = d.DatabaseID", conn);
+        cmd3.CommandTimeout = 60;
+        var databases = new List<Dictionary<string, object?>>();
+        using (var r3 = await cmd3.ExecuteReaderAsync())
+        {
+            while (await r3.ReadAsync())
+            {
+                var row = new Dictionary<string, object?>();
+                for (int i = 0; i < r3.FieldCount; i++)
+                    row[r3.GetName(i)] = r3.IsDBNull(i) ? null : r3.GetValue(i);
+                databases.Add(row);
+            }
+        }
+
+        // 4. Current CPU per instance (latest reading)
+        using var cmd4 = new SqlCommand(@"
+            SELECT c.InstanceID, c.SQLProcessCPU, c.SystemIdleCPU
+            FROM dbo.CPU c
+            INNER JOIN (
+                SELECT InstanceID, MAX(EventTime) AS MaxTime
+                FROM dbo.CPU
+                WHERE EventTime >= DATEADD(minute, -15, GETUTCDATE())
+                GROUP BY InstanceID
+            ) latest ON c.InstanceID = latest.InstanceID AND c.EventTime = latest.MaxTime", conn);
+        cmd4.CommandTimeout = 60;
+        var cpuMap = new Dictionary<int, (int sqlCpu, int idle)>();
+        using (var r4 = await cmd4.ExecuteReaderAsync())
+        {
+            while (await r4.ReadAsync())
+            {
+                var instId = r4.GetInt32(0);
+                var sqlCpu = r4.IsDBNull(1) ? 0 : r4.GetInt32(1);
+                var idle = r4.IsDBNull(2) ? 0 : r4.GetInt32(2);
+                cpuMap[instId] = (sqlCpu, idle);
+            }
+        }
+
+        // Build response: include CPU in ags data
+        foreach (var ag in ags)
+        {
+            var instId = Convert.ToInt32(ag["InstanceID"]);
+            if (cpuMap.TryGetValue(instId, out var cpu))
+            {
+                ag["currentCPU"] = cpu.sqlCpu;
+                ag["systemIdle"] = cpu.idle;
+            }
+            else
+            {
+                ag["currentCPU"] = null;
+                ag["systemIdle"] = null;
+            }
+        }
+
+        return Results.Ok(new { ags, replicas, databases });
     }
     catch (Exception ex)
     {
-        return Results.Ok(new { error = ex.Message, data = Array.Empty<object>() });
+        return Results.Ok(new { error = ex.Message, ags = Array.Empty<object>(), replicas = Array.Empty<object>(), databases = Array.Empty<object>() });
     }
 }).RequireAuthorization();
 
