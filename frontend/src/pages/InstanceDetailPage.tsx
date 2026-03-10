@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useAutoRefresh, diffMergeArray } from '../hooks/useAutoRefresh';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../api/api';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
@@ -8,7 +9,7 @@ import TabNav from '../components/TabNav';
 import LoadingSpinner from '../components/LoadingSpinner';
 import EmptyState from '../components/EmptyState';
 import { motion } from 'framer-motion';
-import { Server, Cpu, HardDrive, Clock, Database, Activity } from 'lucide-react';
+import { Server, Cpu, HardDrive, Clock, Database, Activity , RefreshCw, Clock } from 'lucide-react';
 import { clsx } from 'clsx';
 import { format, formatDistanceToNow } from 'date-fns';
 
@@ -123,7 +124,12 @@ export default function InstanceDetailPage() {
             <Server className="w-6 h-6 text-blue-400" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-white">{inst.InstanceDisplayName || inst.ConnectionID}</h1>
+            <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold text-white">{inst.InstanceDisplayName || inst.ConnectionID}</h1>
+        <span className="text-xs text-gray-500 flex items-center gap-1">
+          <RefreshCw className="w-3 h-3" /> Auto-refresh 30s
+        </span>
+      </div>
             <p className="text-sm text-gray-400">{inst.Edition} · {inst.ProductVersion}</p>
           </div>
         </div>

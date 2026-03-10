@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { useAutoRefresh, diffMergeArray } from '../hooks/useAutoRefresh';
+import { RefreshCw, Clock } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 import { api } from '../api/api';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -31,7 +33,12 @@ export default function BackupsPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold text-white">{id ? 'Instance Backups' : 'Backups'}</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-white">{id ? 'Instance Backups' : 'Backups'}</h1>
+        <span className="text-xs text-gray-500 flex items-center gap-1">
+          <RefreshCw className="w-3 h-3" /> Auto-refresh 30s
+        </span>
+      </div>
       <p className="text-sm text-gray-400">Backup status overview across all instances</p>
       <div className="glass rounded-xl overflow-hidden">
         <table className="w-full text-sm">

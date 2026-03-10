@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
+import { useAutoRefresh, diffMergeArray } from '../hooks/useAutoRefresh';
 import { api } from '../api/api';
 import LoadingSpinner from '../components/LoadingSpinner';
-import { AlertTriangle, AlertCircle, Info, Search, CheckCircle, Inbox } from 'lucide-react';
+import { AlertTriangle, AlertCircle, Info, Search, CheckCircle, Inbox , RefreshCw, Clock } from 'lucide-react';
 import { clsx } from 'clsx';
 
 type SeverityFilter = 'all' | 'critical' | 'warning' | 'info';
@@ -75,7 +76,12 @@ export default function AlertsPage() {
   if (enriched.length === 0) {
     return (
       <div className="space-y-4">
+        <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-white">Alerts</h1>
+        <span className="text-xs text-gray-500 flex items-center gap-1">
+          <RefreshCw className="w-3 h-3" /> Auto-refresh 30s
+        </span>
+      </div>
         <div className="glass rounded-xl p-16 flex flex-col items-center gap-4">
           <Inbox className="w-16 h-16 text-gray-600" />
           <p className="text-gray-400">No alerts — everything looks good!</p>

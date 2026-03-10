@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useAutoRefresh, diffMergeArray } from '../hooks/useAutoRefresh';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/api';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -8,7 +9,7 @@ import clsx from 'clsx';
 import {
   Shield, Server, Database, ArrowRight, ArrowDown, ChevronDown, ChevronRight,
   Activity, AlertTriangle, Network, Crown
-} from 'lucide-react';
+, RefreshCw, Clock } from 'lucide-react';
 
 /* ── helpers ── */
 
@@ -313,7 +314,12 @@ function InstanceHadrView({ instanceId }: { instanceId: number }) {
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <Shield className="w-6 h-6 text-blue-400" />
+        <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-white">HA/DR — {instanceName}</h1>
+        <span className="text-xs text-gray-500 flex items-center gap-1">
+          <RefreshCw className="w-3 h-3" /> Auto-refresh 30s
+        </span>
+      </div>
       </div>
       <EmptyState message="No Availability Groups configured on this instance" />
     </div>

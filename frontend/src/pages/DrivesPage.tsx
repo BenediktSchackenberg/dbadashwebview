@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
+import { useAutoRefresh, diffMergeArray } from '../hooks/useAutoRefresh';
 import { useParams } from 'react-router-dom';
 import { api } from '../api/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import EmptyState from '../components/EmptyState';
 import CapacityBar from '../components/CapacityBar';
-import { HardDrive, ArrowUpDown } from 'lucide-react';
+import { HardDrive, ArrowUpDown , RefreshCw, Clock } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { clsx } from 'clsx';
 
@@ -44,7 +45,12 @@ export default function DrivesPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">{id ? 'Instance Drives' : 'Drives'}</h1>
+          <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-white">{id ? 'Instance Drives' : 'Drives'}</h1>
+        <span className="text-xs text-gray-500 flex items-center gap-1">
+          <RefreshCw className="w-3 h-3" /> Auto-refresh 30s
+        </span>
+      </div>
           <p className="text-sm text-gray-400">{filteredDrives.length} drives{id ? '' : ' across all instances'}</p>
         </div>
         <button

@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
+import { useAutoRefresh, diffMergeArray } from '../hooks/useAutoRefresh';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../api/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import EmptyState from '../components/EmptyState';
 import StatusBadge from '../components/StatusBadge';
-import { Database, ArrowLeft } from 'lucide-react';
+import { Database, ArrowLeft , RefreshCw, Clock } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 
 export default function DatabaseDetailPage() {
@@ -77,7 +78,12 @@ export default function DatabaseDetailPage() {
             <Database className="w-6 h-6 text-purple-400" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-white">{db.name}</h1>
+            <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold text-white">{db.name}</h1>
+        <span className="text-xs text-gray-500 flex items-center gap-1">
+          <RefreshCw className="w-3 h-3" /> Auto-refresh 30s
+        </span>
+      </div>
             <p className="text-sm text-gray-400">{instName} · {stateLabel} · {recoveryLabel}</p>
           </div>
           <div className="ml-auto">

@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { useAutoRefresh, diffMergeArray } from '../hooks/useAutoRefresh';
+import { RefreshCw, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/api';
 import DataTable from '../components/DataTable';
@@ -76,7 +78,12 @@ export default function InstancesPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold text-white">Instances</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-white">Instances</h1>
+        <span className="text-xs text-gray-500 flex items-center gap-1">
+          <RefreshCw className="w-3 h-3" /> Auto-refresh 30s
+        </span>
+      </div>
       <DataTable
         columns={columns}
         data={merged}

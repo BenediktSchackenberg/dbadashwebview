@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { useAutoRefresh, diffMergeArray } from '../hooks/useAutoRefresh';
+import { RefreshCw, Clock } from 'lucide-react';
 import { api } from '../api/api';
 import TabNav from '../components/TabNav';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -39,7 +41,12 @@ export default function JobsPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold text-white">Jobs</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-white">Jobs</h1>
+        <span className="text-xs text-gray-500 flex items-center gap-1">
+          <RefreshCw className="w-3 h-3" /> Auto-refresh 30s
+        </span>
+      </div>
       <TabNav
         tabs={[
           { key: 'all', label: 'All Recent', count: recent.length },
