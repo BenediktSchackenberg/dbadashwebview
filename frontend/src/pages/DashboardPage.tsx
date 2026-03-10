@@ -53,7 +53,26 @@ export default function DashboardPage() {
         api.dashboardPerformanceSummary().catch(() => ({ data: [], note: '' })),
         api.getThresholds().catch(() => ({ thresholds: {} })),
       ]);
-      setData(perfRes.data || []);
+      const incoming = perfRes.data || [];
+      // Diff-merge: only update rows that actually changed
+      setData(prev => {
+        if (prev.length === 0) return incoming;
+        const prevMap = new Map(prev.map(r => [r.instanceID, r]));
+        let changed = false;
+        const merged = incoming.map(row => {
+          const old = prevMap.get(row.instanceID);
+          if (!old) { changed = true; return row; }
+          // Compare all numeric fields — if identical, keep old reference (skip re-render)
+          const keys = Object.keys(row);
+          const same = keys.every(k => row[k] === old[k]);
+          if (same) return old;
+          changed = true;
+          return row;
+        });
+        // Also detect removed rows
+        if (merged.length !== prev.length) changed = true;
+        return changed ? merged : prev;
+      });
       setThresholds(thRes.thresholds || {});
       setLastRefresh(new Date());
     } finally {

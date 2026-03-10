@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
-import { useState, useEffect, useCallback, createContext, useContext } from 'react';
+import { useState, useCallback, createContext, useContext } from 'react';
 import { isAuthenticated, clearToken, api } from './api/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sun, Moon, RefreshCw } from 'lucide-react';
@@ -165,18 +165,11 @@ function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  const [refreshKey, setRefreshKey] = useState(0);
   const [lastRefresh, setLastRefresh] = useState(new Date());
 
   const refresh = useCallback(() => {
-    setRefreshKey(k => k + 1);
     setLastRefresh(new Date());
   }, []);
-
-  useEffect(() => {
-    const interval = setInterval(refresh, 60000);
-    return () => clearInterval(interval);
-  }, [refresh]);
 
   return (
     <RefreshContext.Provider value={{ lastRefresh, refresh }}>
@@ -186,53 +179,53 @@ export default function App() {
           <AuthGuard>
             <Layout>
               <Routes>
-                <Route path="/" element={<DashboardPage key={refreshKey} />} />
-                <Route path="/instances" element={<InstancesPage key={refreshKey} />} />
-                <Route path="/instances/:id" element={<InstanceDetailPage key={refreshKey} />} />
-                <Route path="/instances/:id/databases/:dbId" element={<DatabaseDetailPage key={refreshKey} />} />
-                <Route path="/instances/:id/backups" element={<BackupsPage key={refreshKey} />} />
-                <Route path="/instances/:id/drives" element={<DrivesPage key={refreshKey} />} />
-                <Route path="/instances/:id/configuration" element={<ConfigurationPage key={refreshKey} />} />
-                <Route path="/instances/:id/hadr" element={<AvailabilityGroupsPage key={refreshKey} />} />
-                <Route path="/instances/:id/jobs" element={<JobTimelinePage key={refreshKey} />} />
-                <Route path="/instances/:id/reports" element={<ReportsPage key={refreshKey} />} />
-                <Route path="/jobs" element={<JobsPage key={refreshKey} />} />
-                <Route path="/backups" element={<BackupsPage key={refreshKey} />} />
-                <Route path="/alerts" element={<AlertsPage key={refreshKey} />} />
-                <Route path="/drives" element={<DrivesPage key={refreshKey} />} />
-                <Route path="/availability-groups" element={<AvailabilityGroupsPage key={refreshKey} />} />
-                <Route path="/analysis" element={<AnalysisPage key={refreshKey} />} />
-                <Route path="/queries" element={<QueriesPage key={refreshKey} />} />
-                <Route path="/reports" element={<ReportsPage key={refreshKey} />} />
-                <Route path="/estate/disks" element={<EstateDiskPage key={refreshKey} />} />
-                <Route path="/estate/backups" element={<EstateBackupsPage key={refreshKey} />} />
-                <Route path="/estate/availability-groups" element={<EstateAGsPage key={refreshKey} />} />
-                <Route path="/settings/alerts" element={<AlertSettingsPage key={refreshKey} />} />
-                <Route path="/settings/servers" element={<ConfigServersPage key={refreshKey} />} />
-                <Route path="/settings/groups" element={<ConfigGroupsPage key={refreshKey} />} />
-                <Route path="/settings/users" element={<ConfigUsersPage key={refreshKey} />} />
-                <Route path="/settings/retention" element={<ConfigRetentionPage key={refreshKey} />} />
-                <Route path="/performance/running-queries" element={<RunningQueriesPage key={refreshKey} />} />
-                <Route path="/performance/blocking" element={<BlockingPage key={refreshKey} />} />
-                <Route path="/performance/slow-queries" element={<SlowQueriesPage key={refreshKey} />} />
-                <Route path="/performance/memory" element={<MemoryPage key={refreshKey} />} />
-                <Route path="/performance/io" element={<IOPerformancePage key={refreshKey} />} />
-                <Route path="/performance/exec-stats" element={<ExecStatsPage key={refreshKey} />} />
-                <Route path="/performance/waits-timeline" element={<WaitsTimelinePage key={refreshKey} />} />
-                <Route path="/performance/counters" element={<PerformanceCountersPage key={refreshKey} />} />
-                <Route path="/monitoring/job-timeline" element={<JobTimelinePage key={refreshKey} />} />
-                <Route path="/monitoring/configuration" element={<ConfigurationPage key={refreshKey} />} />
-                <Route path="/monitoring/patching" element={<PatchingPage key={refreshKey} />} />
-                <Route path="/monitoring/schema-changes" element={<SchemaChangesPage key={refreshKey} />} />
-                <Route path="/monitoring/identity-columns" element={<IdentityColumnsPage key={refreshKey} />} />
-                <Route path="/monitoring/tempdb" element={<TempDBPage key={refreshKey} />} />
-                <Route path="/monitoring/db-space" element={<DBSpacePage key={refreshKey} />} />
-                <Route path="/performance/query-store" element={<QueryStorePage key={refreshKey} />} />
+                <Route path="/" element={<DashboardPage />} />
+                <Route path="/instances" element={<InstancesPage />} />
+                <Route path="/instances/:id" element={<InstanceDetailPage />} />
+                <Route path="/instances/:id/databases/:dbId" element={<DatabaseDetailPage />} />
+                <Route path="/instances/:id/backups" element={<BackupsPage />} />
+                <Route path="/instances/:id/drives" element={<DrivesPage />} />
+                <Route path="/instances/:id/configuration" element={<ConfigurationPage />} />
+                <Route path="/instances/:id/hadr" element={<AvailabilityGroupsPage />} />
+                <Route path="/instances/:id/jobs" element={<JobTimelinePage />} />
+                <Route path="/instances/:id/reports" element={<ReportsPage />} />
+                <Route path="/jobs" element={<JobsPage />} />
+                <Route path="/backups" element={<BackupsPage />} />
+                <Route path="/alerts" element={<AlertsPage />} />
+                <Route path="/drives" element={<DrivesPage />} />
+                <Route path="/availability-groups" element={<AvailabilityGroupsPage />} />
+                <Route path="/analysis" element={<AnalysisPage />} />
+                <Route path="/queries" element={<QueriesPage />} />
+                <Route path="/reports" element={<ReportsPage />} />
+                <Route path="/estate/disks" element={<EstateDiskPage />} />
+                <Route path="/estate/backups" element={<EstateBackupsPage />} />
+                <Route path="/estate/availability-groups" element={<EstateAGsPage />} />
+                <Route path="/settings/alerts" element={<AlertSettingsPage />} />
+                <Route path="/settings/servers" element={<ConfigServersPage />} />
+                <Route path="/settings/groups" element={<ConfigGroupsPage />} />
+                <Route path="/settings/users" element={<ConfigUsersPage />} />
+                <Route path="/settings/retention" element={<ConfigRetentionPage />} />
+                <Route path="/performance/running-queries" element={<RunningQueriesPage />} />
+                <Route path="/performance/blocking" element={<BlockingPage />} />
+                <Route path="/performance/slow-queries" element={<SlowQueriesPage />} />
+                <Route path="/performance/memory" element={<MemoryPage />} />
+                <Route path="/performance/io" element={<IOPerformancePage />} />
+                <Route path="/performance/exec-stats" element={<ExecStatsPage />} />
+                <Route path="/performance/waits-timeline" element={<WaitsTimelinePage />} />
+                <Route path="/performance/counters" element={<PerformanceCountersPage />} />
+                <Route path="/monitoring/job-timeline" element={<JobTimelinePage />} />
+                <Route path="/monitoring/configuration" element={<ConfigurationPage />} />
+                <Route path="/monitoring/patching" element={<PatchingPage />} />
+                <Route path="/monitoring/schema-changes" element={<SchemaChangesPage />} />
+                <Route path="/monitoring/identity-columns" element={<IdentityColumnsPage />} />
+                <Route path="/monitoring/tempdb" element={<TempDBPage />} />
+                <Route path="/monitoring/db-space" element={<DBSpacePage />} />
+                <Route path="/performance/query-store" element={<QueryStorePage />} />
                 <Route path="/about" element={<AboutPage />} />
-                <Route path="/reports/licenses" element={<LicenseOverviewPage key={refreshKey} />} />
-                <Route path="/reports/underutilized" element={<UnderutilizedPage key={refreshKey} />} />
-                <Route path="/reports/fleet-stats" element={<FleetStatsPage key={refreshKey} />} />
-                <Route path="/settings/thresholds" element={<ThresholdsPage key={refreshKey} />} />
+                <Route path="/reports/licenses" element={<LicenseOverviewPage />} />
+                <Route path="/reports/underutilized" element={<UnderutilizedPage />} />
+                <Route path="/reports/fleet-stats" element={<FleetStatsPage />} />
+                <Route path="/settings/thresholds" element={<ThresholdsPage />} />
               </Routes>
             </Layout>
           </AuthGuard>
