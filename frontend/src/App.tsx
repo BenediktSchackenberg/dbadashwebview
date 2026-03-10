@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
-import { useState, useCallback, createContext, useContext } from 'react';
+import { useState, useEffect, useCallback, createContext, useContext } from 'react';
 import { isAuthenticated, clearToken, api } from './api/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sun, Moon, RefreshCw } from 'lucide-react';
