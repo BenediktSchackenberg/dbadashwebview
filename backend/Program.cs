@@ -1976,70 +1976,117 @@ app.MapGet("/api/reports/backup-ampel", async () =>
 {
     try
     {
-        // Per-instance backup health: last full, last diff, last log, log interval stats
-        var instances = await QueryAsync(@"
-            SELECT 
-                i.InstanceID,
-                COALESCE(i.InstanceDisplayName, i.Instance) as InstanceName,
-                i.Edition, i.ProductVersion,
-                COUNT(DISTINCT d.DatabaseID) as DatabaseCount,
-                MAX(CASE WHEN b.type='D' THEN b.backup_start_date END) as LastFullBackup,
-                MAX(CASE WHEN b.type='I' THEN b.backup_start_date END) as LastDiffBackup,
-                MAX(CASE WHEN b.type='L' THEN b.backup_start_date END) as LastLogBackup,
-                SUM(CASE WHEN b.backup_start_date >= DATEADD(hour,-24,GETUTCDATE()) THEN CAST(b.backup_size as float)/1024/1024/1024 ELSE 0 END) as BackupVolumeGB24h,
-                COUNT(DISTINCT CASE WHEN b.backup_start_date >= DATEADD(hour,-24,GETUTCDATE()) THEN b.DatabaseID END) as BackedUpDBs24h
-            FROM dbo.Instances i
-            JOIN dbo.Databases d ON i.InstanceID = d.InstanceID AND d.IsActive = 1
-            LEFT JOIN dbo.Backups b ON d.DatabaseID = b.DatabaseID
-            WHERE i.IsActive = 1
-            GROUP BY i.InstanceID, i.InstanceDisplayName, i.Instance, i.Edition, i.ProductVersion
-            ORDER BY COALESCE(i.InstanceDisplayName, i.Instance)");
-
-        // Log backup interval stats per instance (last 24h)
-        var logStats = await QueryAsync(@"
-            ;WITH LogBackups AS (
-                SELECT b.DatabaseID, d.InstanceID, b.backup_start_date,
-                       LAG(b.backup_start_date) OVER (PARTITION BY b.DatabaseID ORDER BY b.backup_start_date) as prev_backup
-                FROM dbo.Backups b
-                JOIN dbo.Databases d ON b.DatabaseID = d.DatabaseID
-                WHERE b.type = 'L' AND b.backup_start_date >= DATEADD(hour, -24, GETUTCDATE())
-            )
-            SELECT InstanceID,
-                   AVG(CAST(DATEDIFF(minute, prev_backup, backup_start_date) as float)) as AvgLogIntervalMin,
-                   MAX(DATEDIFF(minute, prev_backup, backup_start_date)) as MaxLogIntervalMin
-            FROM LogBackups
-            WHERE prev_backup IS NOT NULL
-            GROUP BY InstanceID");
-
-        var logMap = new Dictionary<int, (double avg, int max)>();
-        foreach (var row in logStats)
+        // Per-instance backup health
+        List<Dictionary<string, object?>> instances;
+        try
         {
-            var instId = Convert.ToInt32(row["InstanceID"]);
-            var avg = row["AvgLogIntervalMin"] != null ? Convert.ToDouble(row["AvgLogIntervalMin"]) : 0;
-            var max = row["MaxLogIntervalMin"] != null ? Convert.ToInt32(row["MaxLogIntervalMin"]) : 0;
-            logMap[instId] = (avg, max);
+            instances = await QueryAsync(@"
+                SELECT 
+                    i.InstanceID,
+                    COALESCE(i.InstanceDisplayName, i.Instance) as InstanceName,
+                    i.Edition, i.ProductVersion,
+                    COUNT(DISTINCT d.DatabaseID) as DatabaseCount,
+                    MAX(CASE WHEN b.type='D' THEN b.backup_start_date END) as LastFullBackup,
+                    MAX(CASE WHEN b.type='I' THEN b.backup_start_date END) as LastDiffBackup,
+                    MAX(CASE WHEN b.type='L' THEN b.backup_start_date END) as LastLogBackup,
+                    SUM(CASE WHEN b.backup_start_date >= DATEADD(hour,-24,GETUTCDATE()) THEN CAST(COALESCE(b.backup_size,0) as float)/1024/1024/1024 ELSE 0 END) as BackupVolumeGB24h,
+                    COUNT(DISTINCT CASE WHEN b.backup_start_date >= DATEADD(hour,-24,GETUTCDATE()) THEN b.DatabaseID END) as BackedUpDBs24h
+                FROM dbo.Instances i
+                JOIN dbo.Databases d ON i.InstanceID = d.InstanceID AND d.IsActive = 1
+                LEFT JOIN dbo.Backups b ON d.DatabaseID = b.DatabaseID
+                WHERE i.IsActive = 1
+                GROUP BY i.InstanceID, i.InstanceDisplayName, i.Instance, i.Edition, i.ProductVersion
+                ORDER BY COALESCE(i.InstanceDisplayName, i.Instance)");
+        }
+        catch
+        {
+            // Fallback without backup join
+            instances = await QueryAsync(@"
+                SELECT i.InstanceID,
+                       COALESCE(i.InstanceDisplayName, i.Instance) as InstanceName,
+                       i.Edition, i.ProductVersion,
+                       (SELECT COUNT(*) FROM dbo.Databases d2 WHERE d2.InstanceID=i.InstanceID AND d2.IsActive=1) as DatabaseCount,
+                       NULL as LastFullBackup, NULL as LastDiffBackup, NULL as LastLogBackup,
+                       0 as BackupVolumeGB24h, 0 as BackedUpDBs24h
+                FROM dbo.Instances i WHERE i.IsActive = 1
+                ORDER BY COALESCE(i.InstanceDisplayName, i.Instance)");
         }
 
-        // Per-database detail
-        var dbDetails = await QueryAsync(@"
-            ;WITH LatestBackups AS (
-                SELECT b.DatabaseID, b.type, b.backup_start_date, b.backup_size,
-                       ROW_NUMBER() OVER (PARTITION BY b.DatabaseID, b.type ORDER BY b.backup_start_date DESC) as rn
-                FROM dbo.Backups b
-            )
-            SELECT d.InstanceID, d.DatabaseID, d.name as DatabaseName,
-                   d.recovery_model_desc as RecoveryModel,
-                   d.compatibility_level as CompatLevel,
-                   d.is_encrypted as IsEncrypted,
-                   f.backup_start_date as LastFullDate, f.backup_size as FullBackupSize,
-                   df.backup_start_date as LastDiffDate,
-                   l.backup_start_date as LastLogDate
-            FROM dbo.Databases d
-            LEFT JOIN LatestBackups f ON d.DatabaseID = f.DatabaseID AND f.type='D' AND f.rn=1
-            LEFT JOIN LatestBackups df ON d.DatabaseID = df.DatabaseID AND df.type='I' AND df.rn=1
-            LEFT JOIN LatestBackups l ON d.DatabaseID = l.DatabaseID AND l.type='L' AND l.rn=1
-            WHERE d.IsActive = 1
-            ORDER BY d.InstanceID, d.name");
+        // Log backup interval stats
+        var logMap = new Dictionary<int, (double avg, int max)>();
+        try
+        {
+            var logStats = await QueryAsync(@"
+                ;WITH LogBackups AS (
+                    SELECT b.DatabaseID, d.InstanceID, b.backup_start_date,
+                           LAG(b.backup_start_date) OVER (PARTITION BY b.DatabaseID ORDER BY b.backup_start_date) as prev_backup
+                    FROM dbo.Backups b
+                    JOIN dbo.Databases d ON b.DatabaseID = d.DatabaseID
+                    WHERE b.type = 'L' AND b.backup_start_date >= DATEADD(hour, -24, GETUTCDATE())
+                )
+                SELECT InstanceID,
+                       AVG(CAST(DATEDIFF(minute, prev_backup, backup_start_date) as float)) as AvgLogIntervalMin,
+                       MAX(DATEDIFF(minute, prev_backup, backup_start_date)) as MaxLogIntervalMin
+                FROM LogBackups
+                WHERE prev_backup IS NOT NULL
+                GROUP BY InstanceID");
+            foreach (var row in logStats)
+            {
+                var instId = Convert.ToInt32(row["InstanceID"]);
+                var avg = row["AvgLogIntervalMin"] != null ? Convert.ToDouble(row["AvgLogIntervalMin"]) : 0;
+                var max = row["MaxLogIntervalMin"] != null ? Convert.ToInt32(row["MaxLogIntervalMin"]) : 0;
+                logMap[instId] = (avg, max);
+            }
+        }
+        catch { }
+
+        // Per-database detail (with fallback for missing columns)
+        List<Dictionary<string, object?>> dbDetails = new();
+        try
+        {
+            dbDetails = await QueryAsync(@"
+                ;WITH LatestBackups AS (
+                    SELECT b.DatabaseID, b.type, b.backup_start_date, b.backup_size,
+                           ROW_NUMBER() OVER (PARTITION BY b.DatabaseID, b.type ORDER BY b.backup_start_date DESC) as rn
+                    FROM dbo.Backups b
+                )
+                SELECT d.InstanceID, d.DatabaseID, d.name as DatabaseName,
+                       d.recovery_model_desc as RecoveryModel,
+                       d.compatibility_level as CompatLevel,
+                       d.is_encrypted as IsEncrypted,
+                       f.backup_start_date as LastFullDate, f.backup_size as FullBackupSize,
+                       df.backup_start_date as LastDiffDate,
+                       l.backup_start_date as LastLogDate
+                FROM dbo.Databases d
+                LEFT JOIN LatestBackups f ON d.DatabaseID = f.DatabaseID AND f.type='D' AND f.rn=1
+                LEFT JOIN LatestBackups df ON d.DatabaseID = df.DatabaseID AND df.type='I' AND df.rn=1
+                LEFT JOIN LatestBackups l ON d.DatabaseID = l.DatabaseID AND l.type='L' AND l.rn=1
+                WHERE d.IsActive = 1
+                ORDER BY d.InstanceID, d.name");
+        }
+        catch
+        {
+            try
+            {
+                dbDetails = await QueryAsync(@"
+                    ;WITH LatestBackups AS (
+                        SELECT b.DatabaseID, b.type, b.backup_start_date, b.backup_size,
+                               ROW_NUMBER() OVER (PARTITION BY b.DatabaseID, b.type ORDER BY b.backup_start_date DESC) as rn
+                        FROM dbo.Backups b
+                    )
+                    SELECT d.InstanceID, d.DatabaseID, d.name as DatabaseName,
+                           f.backup_start_date as LastFullDate, f.backup_size as FullBackupSize,
+                           df.backup_start_date as LastDiffDate,
+                           l.backup_start_date as LastLogDate
+                    FROM dbo.Databases d
+                    LEFT JOIN LatestBackups f ON d.DatabaseID = f.DatabaseID AND f.type='D' AND f.rn=1
+                    LEFT JOIN LatestBackups df ON d.DatabaseID = df.DatabaseID AND df.type='I' AND df.rn=1
+                    LEFT JOIN LatestBackups l ON d.DatabaseID = l.DatabaseID AND l.type='L' AND l.rn=1
+                    WHERE d.IsActive = 1
+                    ORDER BY d.InstanceID, d.name");
+            }
+            catch { }
+        }
 
         // Merge log stats into instances
         var result = instances.Select(row =>
@@ -2062,9 +2109,10 @@ app.MapGet("/api/reports/backup-ampel", async () =>
     }
     catch (Exception ex)
     {
-        return Results.Ok(new { error = ex.Message });
+        return Results.Ok(new { error = ex.Message, instances = Array.Empty<object>(), databases = Array.Empty<object>() });
     }
 }).RequireAuthorization();
+
 
 // ── SQL Monitor Overview (SQLMonitor-style dashboard) ─────────────────────
 

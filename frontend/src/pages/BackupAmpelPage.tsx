@@ -113,6 +113,7 @@ export default function BackupAmpelPage() {
 
   useEffect(() => {
     api.reportsBackupAmpel().then(res => {
+      if ((res as any).error) console.error('Backup Ampel API error:', (res as any).error);
       const inst = (res.instances || []).map(computeAmpel);
       setInstances(inst);
       setDatabases(res.databases || []);
