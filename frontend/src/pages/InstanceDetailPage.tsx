@@ -75,11 +75,15 @@ export default function InstanceDetailPage() {
 
   const statusFields = [
     { key: 'FullBackupStatus', label: 'Full Backup' },
+    { key: 'LogBackupStatus', label: 'Log Backup' },
+    { key: 'DiffBackupStatus', label: 'Diff Backup' },
     { key: 'LastGoodCheckDBStatus', label: 'DBCC' },
     { key: 'DriveStatus', label: 'Drives' },
     { key: 'JobStatus', label: 'Jobs' },
     { key: 'AGStatus', label: 'AG' },
     { key: 'CorruptionStatus', label: 'Corruption' },
+    { key: 'SnapshotAgeStatus', label: 'Collection Age' },
+    { key: 'UptimeStatus', label: 'Uptime' },
   ];
 
   const formatBytes = (b: number) => {
@@ -145,11 +149,11 @@ export default function InstanceDetailPage() {
       {/* Overview */}
       {tab === 'overview' && (
         <div className="space-y-6">
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             {statusFields.map(f => (
               <div key={f.key} className="glass rounded-xl p-4">
                 <p className="text-xs text-gray-400 mb-2">{f.label}</p>
-                <StatusBadge status={sum[f.key] || 3} size="md" />
+                <StatusBadge status={sum[f.key] != null ? Number(sum[f.key]) : 3} size="md" />
               </div>
             ))}
           </div>
