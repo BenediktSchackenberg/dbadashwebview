@@ -2121,7 +2121,8 @@ app.MapGet("/api/dashboard/monitor", async () =>
     try
     {
         // 1. Summary_Get gives us per-instance health statuses
-        var summary = await SpAsync("dbo.Summary_Get");
+        List<Dictionary<string, object?>> summary = new();
+        try { summary = await SpAsync("dbo.Summary_Get"); } catch { }
 
         // 2. Active instance list with versions
         var instances = await QueryAsync(@"
@@ -2141,7 +2142,7 @@ app.MapGet("/api/dashboard/monitor", async () =>
         var cpuData = await QueryAsync(@"
             SELECT c.InstanceID,
                    AVG(CAST(c.SQLProcessCPU as float)) as AvgCPU,
-                   AVG(CAST(c.SystemCPU as float)) as SysCPU
+                   AVG(CAST((100 - c.SystemIdleCPU - c.SQLProcessCPU) as float)) as SysCPU
             FROM dbo.CPU c
             WHERE c.EventTime >= DATEADD(minute, -5, GETUTCDATE())
             GROUP BY c.InstanceID");
@@ -2179,13 +2180,11 @@ app.MapGet("/api/dashboard/monitor", async () =>
         try
         {
             ioData = await QueryAsync(@"
-                SELECT i.InstanceID,
+                SELECT io.InstanceID,
                        SUM(CAST(COALESCE(io.num_of_bytes_read,0) + COALESCE(io.num_of_bytes_written,0) as float)) / 1024.0 as DiskIOKB
-                FROM dbo.IOStats io
-                JOIN dbo.Databases d ON io.DatabaseID = d.DatabaseID
-                JOIN dbo.Instances i ON d.InstanceID = i.InstanceID
+                FROM dbo.DBIOStats io
                 WHERE io.SnapshotDate >= DATEADD(minute, -5, GETUTCDATE())
-                GROUP BY i.InstanceID");
+                GROUP BY io.InstanceID");
         }
         catch { }
         var ioMap = new Dictionary<int, double>();
@@ -2200,8 +2199,8 @@ app.MapGet("/api/dashboard/monitor", async () =>
         try
         {
             agData = await QueryAsync(@"
-                SELECT DISTINCT ar.InstanceID, ag.group_name, ar.role_desc
-                FROM dbo.AvailabilityGroupReplicas ar
+                SELECT DISTINCT ar.InstanceID, ag.name as group_name
+                FROM dbo.AvailabilityReplicas ar
                 JOIN dbo.AvailabilityGroups ag ON ar.group_id = ag.group_id
                 WHERE ar.InstanceID IS NOT NULL");
         }
@@ -2211,8 +2210,7 @@ app.MapGet("/api/dashboard/monitor", async () =>
         {
             var id = Convert.ToInt32(r["InstanceID"]);
             var name = r["group_name"]?.ToString() ?? "";
-            var role = r["role_desc"]?.ToString() ?? "";
-            agMap[id] = (name, role);
+            agMap[id] = (name, "");
         }
 
         // 7. Active alerts
