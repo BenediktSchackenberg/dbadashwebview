@@ -1991,15 +1991,27 @@ app.MapGet("/api/reports/backup-ampel", async () =>
                     COALESCE(i.InstanceDisplayName, i.Instance) as InstanceName,
                     i.Edition, i.ProductVersion,
                     COUNT(DISTINCT d.DatabaseID) as DatabaseCount,
-                    MAX(CASE WHEN b.type='D' THEN b.backup_start_date END) as LastFullBackup,
+                    -- Worst-case: oldest 'latest full backup' across all primary/standalone DBs
+                    MIN(lf.LatestFull) as LastFullBackup,
                     MAX(CASE WHEN b.type='I' THEN b.backup_start_date END) as LastDiffBackup,
-                    MAX(CASE WHEN b.type='L' THEN b.backup_start_date END) as LastLogBackup,
+                    MIN(ll.LatestLog) as LastLogBackup,
                     SUM(CASE WHEN b.backup_start_date >= DATEADD(hour,-24,GETUTCDATE()) THEN CAST(COALESCE(b.backup_size,0) as float)/1024/1024/1024 ELSE 0 END) as BackupVolumeGB24h,
-                    COUNT(DISTINCT CASE WHEN b.backup_start_date >= DATEADD(hour,-24,GETUTCDATE()) THEN b.DatabaseID END) as BackedUpDBs24h
+                    COUNT(DISTINCT CASE WHEN b.backup_start_date >= DATEADD(hour,-24,GETUTCDATE()) THEN b.DatabaseID END) as BackedUpDBs24h,
+                    -- Also include the best case for display
+                    MAX(lf.LatestFull) as NewestFullBackup,
+                    MAX(ll.LatestLog) as NewestLogBackup
                 FROM dbo.Instances i
                 JOIN dbo.Databases d ON i.InstanceID = d.InstanceID AND d.IsActive = 1 AND d.name NOT IN ('master','model','msdb','tempdb')
                 LEFT JOIN dbo.DatabasesHADR h ON d.DatabaseID = h.DatabaseID AND h.is_local = 1
                 LEFT JOIN dbo.Backups b ON d.DatabaseID = b.DatabaseID
+                OUTER APPLY (
+                    SELECT MAX(b2.backup_start_date) as LatestFull
+                    FROM dbo.Backups b2 WHERE b2.DatabaseID = d.DatabaseID AND b2.type = 'D'
+                ) lf
+                OUTER APPLY (
+                    SELECT MAX(b3.backup_start_date) as LatestLog
+                    FROM dbo.Backups b3 WHERE b3.DatabaseID = d.DatabaseID AND b3.type = 'L'
+                ) ll
                 WHERE i.IsActive = 1 AND (h.is_primary_replica IS NULL OR h.is_primary_replica = 1)
                 GROUP BY i.InstanceID, i.InstanceDisplayName, i.Instance, i.Edition, i.ProductVersion
                 ORDER BY COALESCE(i.InstanceDisplayName, i.Instance)");
