@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { TrendingDown, Info, Server, Cpu, MemoryStick, Search, X, Filter, ChevronDown, ChevronRight } from 'lucide-react';
+import { TrendingDown, Info, Server, Cpu, MemoryStick, Search, X, Filter } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { api } from '../api/api';
 
