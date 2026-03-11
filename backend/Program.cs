@@ -2265,17 +2265,17 @@ app.MapGet("/api/dashboard/monitor", async () =>
             var activeAlerts = new List<string>();
             if (sum != null)
             {
-                if (sum.TryGetValue("FullBackupStatus", out var fb) && fb != null && Convert.ToInt32(fb) >= 2)
+                if (sum.TryGetValue("FullBackupStatus", out var fb) && fb != null && (Convert.ToInt32(fb) == 2 || Convert.ToInt32(fb) == 4))
                     activeAlerts.Add("Backup");
-                if (sum.TryGetValue("DriveStatus", out var ds) && ds != null && Convert.ToInt32(ds) >= 2)
+                if (sum.TryGetValue("DriveStatus", out var ds) && ds != null && (Convert.ToInt32(ds) == 2 || Convert.ToInt32(ds) == 4))
                     activeAlerts.Add("Disk space");
-                if (sum.TryGetValue("JobStatus", out var js) && js != null && Convert.ToInt32(js) >= 2)
+                if (sum.TryGetValue("JobStatus", out var js) && js != null && (Convert.ToInt32(js) == 2 || Convert.ToInt32(js) == 4))
                     activeAlerts.Add("Job failing");
-                if (sum.TryGetValue("AGStatus", out var ags) && ags != null && Convert.ToInt32(ags) >= 2)
+                if (sum.TryGetValue("AGStatus", out var ags) && ags != null && (Convert.ToInt32(ags) == 2 || Convert.ToInt32(ags) == 4))
                     activeAlerts.Add("AG");
-                if (sum.TryGetValue("CorruptionStatus", out var cs) && cs != null && Convert.ToInt32(cs) >= 2)
+                if (sum.TryGetValue("CorruptionStatus", out var cs) && cs != null && (Convert.ToInt32(cs) == 2 || Convert.ToInt32(cs) == 4))
                     activeAlerts.Add("Corruption");
-                if (sum.TryGetValue("LogBackupStatus", out var lb) && lb != null && Convert.ToInt32(lb) >= 2)
+                if (sum.TryGetValue("LogBackupStatus", out var lb) && lb != null && (Convert.ToInt32(lb) == 2 || Convert.ToInt32(lb) == 4))
                     activeAlerts.Add("Log backup");
             }
 
