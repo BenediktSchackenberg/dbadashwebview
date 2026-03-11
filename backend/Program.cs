@@ -2051,7 +2051,7 @@ app.MapGet("/api/reports/backup-ampel", async () =>
                     FROM dbo.Backups b
                 )
                 SELECT d.InstanceID, d.DatabaseID, d.name as DatabaseName,
-                       d.recovery_model_desc as RecoveryModel,
+                       CASE d.recovery_model WHEN 1 THEN 'FULL' WHEN 2 THEN 'BULK_LOGGED' WHEN 3 THEN 'SIMPLE' ELSE 'UNKNOWN' END as RecoveryModel,
                        d.compatibility_level as CompatLevel,
                        d.is_encrypted as IsEncrypted,
                        f.backup_start_date as LastFullDate, f.backup_size as FullBackupSize,
