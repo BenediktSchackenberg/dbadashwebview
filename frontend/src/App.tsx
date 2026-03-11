@@ -9,6 +9,7 @@ import InstancesPage from './pages/InstancesPage';
 import InstanceDetailPage from './pages/InstanceDetailPage';
 import JobsPage from './pages/JobsPage';
 import BackupsPage from './pages/BackupsPage';
+import BackupAmpelPage from './pages/BackupAmpelPage';
 import AlertsPage from './pages/AlertsPage';
 import DrivesPage from './pages/DrivesPage';
 import AvailabilityGroupsPage from './pages/AvailabilityGroupsPage';
@@ -225,6 +226,7 @@ export default function App() {
                 <Route path="/reports/licenses" element={<LicenseOverviewPage />} />
                 <Route path="/reports/underutilized" element={<UnderutilizedPage />} />
                 <Route path="/reports/fleet-stats" element={<FleetStatsPage />} />
+                <Route path="/reports/backup-ampel" element={<BackupAmpelPage />} />
                 <Route path="/settings/thresholds" element={<ThresholdsPage />} />
               </Routes>
             </Layout>
