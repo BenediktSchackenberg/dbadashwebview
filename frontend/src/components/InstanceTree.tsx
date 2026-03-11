@@ -164,6 +164,7 @@ export default function InstanceTree({ onLogout }: { onLogout: () => void }) {
             { path: '/reports/licenses', icon: FileSpreadsheet, label: 'License Overview' },
             { path: '/reports/underutilized', icon: TrendingDown, label: 'Underutilized Servers' },
             { path: '/reports/fleet-stats', icon: Activity, label: 'Fleet Statistics' },
+            { path: '/reports/backup-ampel', icon: Shield, label: 'Backup Ampel Report' },
           ].map(item => (
             <Link key={item.path} to={item.path}
               className={`flex items-center gap-2.5 py-1.5 px-2 rounded text-sm transition-all ${

@@ -115,6 +115,7 @@ export const api = {
   reportsLicenses: () => request<any[]>('/api/reports/licenses'),
   reportsUnderutilized: () => request<any[]>('/api/reports/underutilized'),
   reportsFleetStats: () => request<any[]>('/api/reports/fleet-stats'),
+  reportsBackupAmpel: () => request<{ instances: any[]; databases: any[] }>('/api/reports/backup-ampel'),
   getThresholds: () =>
     request<{ thresholds: Record<string, { warning: number; critical: number }> }>('/api/settings/thresholds'),
   saveThresholds: (thresholds: Record<string, { warning: number; critical: number }>) =>
