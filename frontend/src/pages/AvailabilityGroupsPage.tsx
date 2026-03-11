@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { useAutoRefresh, diffMergeArray } from '../hooks/useAutoRefresh';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/api';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -8,8 +7,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
 import {
   Shield, Server, Database, ArrowRight, ArrowDown, ChevronDown, ChevronRight,
-  Activity, AlertTriangle, Network, Crown
-, RefreshCw, Clock } from 'lucide-react';
+  Activity, AlertTriangle, Network, Crown, RefreshCw
+} from 'lucide-react';
 
 /* ── helpers ── */
 

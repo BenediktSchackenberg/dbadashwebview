@@ -255,7 +255,7 @@ export default function UnderutilizedPage() {
                   <Cell key={i} fill={VERSION_COLORS[v.version] || '#64748b'} opacity={versionFilter && versionFilter !== v.version ? 0.3 : 1} />
                 ))}
               </Pie>
-              <Tooltip contentStyle={tooltipStyle} formatter={(v: any, n: any, p: any) => [`${v} instances`, p.payload.name]} />
+              <Tooltip contentStyle={tooltipStyle} formatter={(v: any, _n: any, p: any) => [`${v} instances`, p.payload.name]} />
               <Legend formatter={(v: any) => <span className="text-gray-300 text-sm">{v}</span>} />
             </PieChart>
           </ResponsiveContainer>
@@ -268,7 +268,7 @@ export default function UnderutilizedPage() {
               <Pie data={editionDist} dataKey="count" nameKey="name" cx="50%" cy="50%" outerRadius={90} innerRadius={45} stroke="none">
                 {editionDist.map((_, i) => <Cell key={i} fill={EDITION_COLORS[i % EDITION_COLORS.length]} />)}
               </Pie>
-              <Tooltip contentStyle={tooltipStyle} formatter={(v: any, n: any, p: any) => [`${v} instances`, p.payload.name]} />
+              <Tooltip contentStyle={tooltipStyle} formatter={(v: any, _n: any, p: any) => [`${v} instances`, p.payload.name]} />
               <Legend formatter={(v: any) => <span className="text-gray-300 text-sm">{v}</span>} />
             </PieChart>
           </ResponsiveContainer>
@@ -285,7 +285,7 @@ export default function UnderutilizedPage() {
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
               <XAxis type="number" domain={[0, 5]} stroke="#374151" tick={{ fill: '#6b7280', fontSize: 12 }} />
               <YAxis type="category" dataKey="name" width={180} stroke="#374151" tick={{ fill: '#6b7280', fontSize: 11 }} />
-              <Tooltip contentStyle={tooltipStyle} formatter={(v: any, n: any, p: any) => [`${v.toFixed(2)}% (SQL ${p.payload.version})`, 'Avg CPU']} />
+              <Tooltip contentStyle={tooltipStyle} formatter={(v: any, _n: any, p: any) => [`${v.toFixed(2)}% (SQL ${p.payload.version})`, 'Avg CPU']} />
               <Bar dataKey="avgCpu" radius={[0, 4, 4, 0]}>
                 {chartData.map((r, i) => <Cell key={i} fill={r.fill} />)}
               </Bar>

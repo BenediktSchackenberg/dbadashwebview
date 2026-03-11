@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
-import { useAutoRefresh, diffMergeArray } from '../hooks/useAutoRefresh';
 import { useParams } from 'react-router-dom';
 import { api } from '../api/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import EmptyState from '../components/EmptyState';
 import CapacityBar from '../components/CapacityBar';
-import { HardDrive, ArrowUpDown , RefreshCw, Clock } from 'lucide-react';
+import { HardDrive, ArrowUpDown , RefreshCw } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { clsx } from 'clsx';
 

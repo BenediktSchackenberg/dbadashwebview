@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useAutoRefresh, diffMergeArray } from '../hooks/useAutoRefresh';
-import { RefreshCw, Clock } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 import { api } from '../api/api';
 import LoadingSpinner from '../components/LoadingSpinner';

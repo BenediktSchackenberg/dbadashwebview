@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { useAutoRefresh, diffMergeArray } from '../hooks/useAutoRefresh';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../api/api';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
@@ -9,7 +8,7 @@ import TabNav from '../components/TabNav';
 import LoadingSpinner from '../components/LoadingSpinner';
 import EmptyState from '../components/EmptyState';
 import { motion } from 'framer-motion';
-import { Server, Cpu, HardDrive, Clock, Database, Activity , RefreshCw, Clock } from 'lucide-react';
+import { Server, Cpu, HardDrive, Database, Activity , RefreshCw, Clock } from 'lucide-react';
 import { clsx } from 'clsx';
 import { format, formatDistanceToNow } from 'date-fns';
 
