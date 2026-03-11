@@ -2242,6 +2242,8 @@ app.MapGet("/api/dashboard/monitor", async () =>
             var waitMs = waitsMap.GetValueOrDefault(id, 0);
             var diskIO = ioMap.GetValueOrDefault(id, 0);
             var ag = agMap.GetValueOrDefault(id, ("", ""));
+            var agName = ag.Item1;
+            var agRole = ag.Item2;
             var sum = summaryMap.GetValueOrDefault(id);
 
             // Compute worst status from Summary_Get
@@ -2293,8 +2295,8 @@ app.MapGet("/api/dashboard/monitor", async () =>
                 sysCpu,
                 waitMs,
                 diskIOKB = diskIO,
-                agName = ag.name,
-                agRole = ag.role,
+                agName = agName,
+                agRole = agRole,
                 status = worstStatus,
                 activeAlerts
             };
