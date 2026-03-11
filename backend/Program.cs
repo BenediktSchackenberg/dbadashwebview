@@ -2066,6 +2066,212 @@ app.MapGet("/api/reports/backup-ampel", async () =>
     }
 }).RequireAuthorization();
 
+// ── SQL Monitor Overview (SQLMonitor-style dashboard) ─────────────────────
+
+app.MapGet("/api/dashboard/monitor", async () =>
+{
+    try
+    {
+        // 1. Summary_Get gives us per-instance health statuses
+        var summary = await SpAsync("dbo.Summary_Get");
+
+        // 2. Active instance list with versions
+        var instances = await QueryAsync(@"
+            SELECT i.InstanceID, COALESCE(i.InstanceDisplayName, i.Instance) as InstanceName,
+                   i.Edition, i.ProductVersion, i.cpu_count, i.physical_memory_kb,
+                   i.sqlserver_start_time,
+                   CASE WHEN cd.LastCollected > DATEADD(minute, -10, GETUTCDATE()) THEN 1 ELSE 0 END as IsOnline
+            FROM dbo.Instances i
+            OUTER APPLY (
+                SELECT MAX(SnapshotDate) AS LastCollected
+                FROM dbo.CollectionDates c WHERE c.InstanceID = i.InstanceID
+            ) cd
+            WHERE i.IsActive = 1
+            ORDER BY COALESCE(i.InstanceDisplayName, i.Instance)");
+
+        // 3. Latest CPU per instance (last 5 min avg)
+        var cpuData = await QueryAsync(@"
+            SELECT c.InstanceID,
+                   AVG(CAST(c.SQLProcessCPU as float)) as AvgCPU,
+                   AVG(CAST(c.SystemCPU as float)) as SysCPU
+            FROM dbo.CPU c
+            WHERE c.EventTime >= DATEADD(minute, -5, GETUTCDATE())
+            GROUP BY c.InstanceID");
+        var cpuMap = new Dictionary<int, (double sql, double sys)>();
+        foreach (var r in cpuData)
+        {
+            var id = Convert.ToInt32(r["InstanceID"]);
+            var sql = r["AvgCPU"] != null ? Convert.ToDouble(r["AvgCPU"]) : 0;
+            var sys = r["SysCPU"] != null ? Convert.ToDouble(r["SysCPU"]) : 0;
+            cpuMap[id] = (Math.Round(sql, 1), Math.Round(sys, 1));
+        }
+
+        // 4. Latest waits per instance (last 5 min)
+        List<Dictionary<string, object?>> waitsData = new();
+        try
+        {
+            waitsData = await QueryAsync(@"
+                SELECT InstanceID,
+                       SUM(CAST(wait_time_ms as float)) / 1000.0 as WaitSec,
+                       SUM(CAST(signal_wait_time_ms as float)) / 1000.0 as SignalWaitSec
+                FROM dbo.Waits
+                WHERE SnapshotDate >= DATEADD(minute, -5, GETUTCDATE())
+                GROUP BY InstanceID");
+        }
+        catch { }
+        var waitsMap = new Dictionary<int, double>();
+        foreach (var r in waitsData)
+        {
+            var id = Convert.ToInt32(r["InstanceID"]);
+            waitsMap[id] = r["WaitSec"] != null ? Math.Round(Convert.ToDouble(r["WaitSec"]), 0) : 0;
+        }
+
+        // 5. Disk I/O per instance
+        List<Dictionary<string, object?>> ioData = new();
+        try
+        {
+            ioData = await QueryAsync(@"
+                SELECT i.InstanceID,
+                       SUM(CAST(COALESCE(io.num_of_bytes_read,0) + COALESCE(io.num_of_bytes_written,0) as float)) / 1024.0 as DiskIOKB
+                FROM dbo.IOStats io
+                JOIN dbo.Databases d ON io.DatabaseID = d.DatabaseID
+                JOIN dbo.Instances i ON d.InstanceID = i.InstanceID
+                WHERE io.SnapshotDate >= DATEADD(minute, -5, GETUTCDATE())
+                GROUP BY i.InstanceID");
+        }
+        catch { }
+        var ioMap = new Dictionary<int, double>();
+        foreach (var r in ioData)
+        {
+            var id = Convert.ToInt32(r["InstanceID"]);
+            ioMap[id] = r["DiskIOKB"] != null ? Math.Round(Convert.ToDouble(r["DiskIOKB"]), 0) : 0;
+        }
+
+        // 6. AG membership
+        List<Dictionary<string, object?>> agData = new();
+        try
+        {
+            agData = await QueryAsync(@"
+                SELECT DISTINCT ar.InstanceID, ag.group_name, ar.role_desc
+                FROM dbo.AvailabilityGroupReplicas ar
+                JOIN dbo.AvailabilityGroups ag ON ar.group_id = ag.group_id
+                WHERE ar.InstanceID IS NOT NULL");
+        }
+        catch { }
+        var agMap = new Dictionary<int, (string name, string role)>();
+        foreach (var r in agData)
+        {
+            var id = Convert.ToInt32(r["InstanceID"]);
+            var name = r["group_name"]?.ToString() ?? "";
+            var role = r["role_desc"]?.ToString() ?? "";
+            agMap[id] = (name, role);
+        }
+
+        // 7. Active alerts
+        List<Dictionary<string, object?>> alerts = new();
+        try
+        {
+            alerts = await QueryAsync(@"
+                SELECT TOP 100 InstanceID, ErrorDate, ErrorMessage, ErrorContext
+                FROM dbo.CollectionErrorLog
+                ORDER BY ErrorDate DESC");
+        }
+        catch { }
+
+        // Build summary map
+        var summaryMap = new Dictionary<int, Dictionary<string, object?>>();
+        foreach (var s in summary)
+        {
+            if (s.TryGetValue("InstanceID", out var v) && v != null)
+                summaryMap[Convert.ToInt32(v)] = s;
+        }
+
+        // Merge into unified response
+        var result = instances.Select(inst =>
+        {
+            var id = Convert.ToInt32(inst["InstanceID"]);
+            var (sqlCpu, sysCpu) = cpuMap.GetValueOrDefault(id, (0, 0));
+            var waitMs = waitsMap.GetValueOrDefault(id, 0);
+            var diskIO = ioMap.GetValueOrDefault(id, 0);
+            var ag = agMap.GetValueOrDefault(id, ("", ""));
+            var sum = summaryMap.GetValueOrDefault(id);
+
+            // Compute worst status from Summary_Get
+            int worstStatus = 1;
+            if (sum != null)
+            {
+                var statusKeys = new[] { "FullBackupStatus", "DriveStatus", "JobStatus", "AGStatus",
+                    "CorruptionStatus", "LastGoodCheckDBStatus", "LogBackupStatus" };
+                foreach (var k in statusKeys)
+                {
+                    if (sum.TryGetValue(k, out var sv) && sv != null)
+                    {
+                        var val = Convert.ToInt32(sv);
+                        if (val == 4) { worstStatus = 4; break; }
+                        if (val == 2 && worstStatus < 2) worstStatus = 2;
+                    }
+                }
+            }
+
+            // Collect active alerts for this instance
+            var activeAlerts = new List<string>();
+            if (sum != null)
+            {
+                if (sum.TryGetValue("FullBackupStatus", out var fb) && fb != null && Convert.ToInt32(fb) >= 2)
+                    activeAlerts.Add("Backup");
+                if (sum.TryGetValue("DriveStatus", out var ds) && ds != null && Convert.ToInt32(ds) >= 2)
+                    activeAlerts.Add("Disk space");
+                if (sum.TryGetValue("JobStatus", out var js) && js != null && Convert.ToInt32(js) >= 2)
+                    activeAlerts.Add("Job failing");
+                if (sum.TryGetValue("AGStatus", out var ags) && ags != null && Convert.ToInt32(ags) >= 2)
+                    activeAlerts.Add("AG");
+                if (sum.TryGetValue("CorruptionStatus", out var cs) && cs != null && Convert.ToInt32(cs) >= 2)
+                    activeAlerts.Add("Corruption");
+                if (sum.TryGetValue("LogBackupStatus", out var lb) && lb != null && Convert.ToInt32(lb) >= 2)
+                    activeAlerts.Add("Log backup");
+            }
+
+            return new
+            {
+                instanceId = id,
+                instanceName = inst["InstanceName"],
+                edition = inst["Edition"],
+                productVersion = inst["ProductVersion"],
+                cpuCount = inst["cpu_count"],
+                memoryKb = inst["physical_memory_kb"],
+                startTime = inst["sqlserver_start_time"],
+                isOnline = Convert.ToInt32(inst["IsOnline"] ?? 0) == 1,
+                sqlCpu,
+                sysCpu,
+                waitMs,
+                diskIOKB = diskIO,
+                agName = ag.name,
+                agRole = ag.role,
+                status = worstStatus,
+                activeAlerts
+            };
+        }).ToList();
+
+        // Alert type counts for sidebar
+        var alertCounts = new Dictionary<string, int>
+        {
+            ["Monitoring stopped"] = result.Count(r => !(bool)r.isOnline),
+            ["Backup"] = result.Count(r => r.activeAlerts.Contains("Backup")),
+            ["Job failing"] = result.Count(r => r.activeAlerts.Contains("Job failing")),
+            ["Disk space"] = result.Count(r => r.activeAlerts.Contains("Disk space")),
+            ["AG"] = result.Count(r => r.activeAlerts.Contains("AG")),
+            ["Corruption"] = result.Count(r => r.activeAlerts.Contains("Corruption")),
+            ["Log backup"] = result.Count(r => r.activeAlerts.Contains("Log backup")),
+        };
+
+        return Results.Ok(new { instances = result, alertCounts, recentErrors = alerts.Take(20) });
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new { error = ex.Message });
+    }
+}).RequireAuthorization();
+
 // SPA fallback — serve index.html for all non-API routes
 app.MapFallbackToFile("index.html");
 

@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import {
   Database, ChevronRight, ChevronDown, LayoutDashboard, Bell, HardDrive, Network,
   Settings, ClipboardCheck, Shield, Play, BarChart3, Search, LogOut, User, Folder, Server,
-  FileSpreadsheet, TrendingDown, Activity
+  FileSpreadsheet, TrendingDown, Activity, Monitor
 } from 'lucide-react';
 import { api } from '../api/api';
 
@@ -29,6 +29,7 @@ const versionMap: Record<number, string> = {
 
 const globalViews = [
   { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
+  { path: '/monitor', icon: Monitor, label: 'SQL Monitor' },
   { path: '/alerts', icon: Bell, label: 'Alerts' },
   { path: '/estate/backups', icon: Database, label: 'Backups' },
   { path: '/drives', icon: HardDrive, label: 'Drives' },

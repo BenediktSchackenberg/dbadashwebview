@@ -116,6 +116,7 @@ export const api = {
   reportsUnderutilized: () => request<any[]>('/api/reports/underutilized'),
   reportsFleetStats: () => request<any[]>('/api/reports/fleet-stats'),
   reportsBackupAmpel: () => request<{ instances: any[]; databases: any[] }>('/api/reports/backup-ampel'),
+  dashboardMonitor: () => request<{ instances: any[]; alertCounts: Record<string, number>; recentErrors: any[] }>('/api/dashboard/monitor'),
   getThresholds: () =>
     request<{ thresholds: Record<string, { warning: number; critical: number }> }>('/api/settings/thresholds'),
   saveThresholds: (thresholds: Record<string, { warning: number; critical: number }>) =>

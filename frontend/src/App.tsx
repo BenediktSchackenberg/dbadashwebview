@@ -10,6 +10,7 @@ import InstanceDetailPage from './pages/InstanceDetailPage';
 import JobsPage from './pages/JobsPage';
 import BackupsPage from './pages/BackupsPage';
 import BackupAmpelPage from './pages/BackupAmpelPage';
+import SqlMonitorPage from './pages/SqlMonitorPage';
 import AlertsPage from './pages/AlertsPage';
 import DrivesPage from './pages/DrivesPage';
 import AvailabilityGroupsPage from './pages/AvailabilityGroupsPage';
@@ -227,6 +228,7 @@ export default function App() {
                 <Route path="/reports/underutilized" element={<UnderutilizedPage />} />
                 <Route path="/reports/fleet-stats" element={<FleetStatsPage />} />
                 <Route path="/reports/backup-ampel" element={<BackupAmpelPage />} />
+                <Route path="/monitor" element={<SqlMonitorPage />} />
                 <Route path="/settings/thresholds" element={<ThresholdsPage />} />
               </Routes>
             </Layout>
