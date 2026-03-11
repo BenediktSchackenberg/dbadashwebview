@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shield, ShieldAlert, ShieldCheck, Clock, Database, Server, HardDrive, Search, X, Filter, ChevronDown, ChevronRight, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Shield, ShieldAlert, ShieldCheck, Clock, Database, HardDrive, Search, X, ChevronDown, ChevronRight } from 'lucide-react';
 import { PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { api } from '../api/api';
 
@@ -270,7 +270,7 @@ export default function BackupAmpelPage() {
             <motion.div key={s} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
               onClick={() => setStatusFilter(statusFilter === s ? null : s)}
               className={`glass rounded-xl p-4 cursor-pointer transition-all ${statusFilter === s ? `ring-2 ${cfg.bg}` : 'hover:bg-white/5'}`}
-              style={statusFilter === s ? { ringColor: cfg.color } : {}}
+              style={statusFilter === s ? { borderColor: cfg.color } as React.CSSProperties : undefined}
             >
               <div className="flex items-center gap-2 mb-1">
                 <Icon className={`w-4 h-4 ${cfg.text}`} />
@@ -385,7 +385,7 @@ export default function BackupAmpelPage() {
           <tbody>
             {sorted.map((r) => {
               const isExpanded = expandedInstance === r.InstanceID;
-              const cfg = STATUS_CONFIG[r.status];
+              
               return (
                 <motion.tr key={r.InstanceID} layout
                   onClick={() => setExpandedInstance(isExpanded ? null : r.InstanceID)}

@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useAutoRefresh, diffMergeArray } from '../hooks/useAutoRefresh';
 import { api } from '../api/api';
 import LoadingSpinner from '../components/LoadingSpinner';
-import { AlertTriangle, AlertCircle, Info, Search, CheckCircle, Inbox , RefreshCw, Clock } from 'lucide-react';
+import { AlertTriangle, AlertCircle, Info, Search, CheckCircle, Inbox, RefreshCw  } from 'lucide-react';
 import { clsx } from 'clsx';
 
 type SeverityFilter = 'all' | 'critical' | 'warning' | 'info';

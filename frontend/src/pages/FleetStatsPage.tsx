@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Activity, Cpu, MemoryStick, HardDrive, Server, Database, ChevronDown, ChevronRight, Filter, Search, X } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, Treemap } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { api } from '../api/api';
 
 const tooltipStyle = { backgroundColor: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff' };
@@ -290,7 +290,7 @@ export default function FleetStatsPage() {
                   <Cell key={i} fill={VERSION_COLORS[v.version] || '#64748b'} opacity={versionFilter && versionFilter !== v.version ? 0.3 : 1} />
                 ))}
               </Pie>
-              <Tooltip contentStyle={tooltipStyle} formatter={(v: any, n: any, p: any) => [`${v} instances (${(p.percent * 100).toFixed(0)}%)`, p.payload.name]} />
+              <Tooltip contentStyle={tooltipStyle} formatter={(v: any, _n: any, p: any) => [`${v} instances (${(p.percent * 100).toFixed(0)}%)`, p.payload.name]} />
               <Legend formatter={(value: any) => <span className="text-gray-300 text-sm">{value}</span>} />
             </PieChart>
           </ResponsiveContainer>
@@ -306,7 +306,7 @@ export default function FleetStatsPage() {
               >
                 {editionDist.map((_, i) => <Cell key={i} fill={EDITION_COLORS[i % EDITION_COLORS.length]} opacity={editionFilter && editionFilter !== editionDist[i].name ? 0.3 : 1} />)}
               </Pie>
-              <Tooltip contentStyle={tooltipStyle} formatter={(v: any, n: any, p: any) => [`${v} instances (${(p.percent * 100).toFixed(0)}%)`, p.payload.name]} />
+              <Tooltip contentStyle={tooltipStyle} formatter={(v: any, _n: any, p: any) => [`${v} instances (${(p.percent * 100).toFixed(0)}%)`, p.payload.name]} />
               <Legend formatter={(value: any) => <span className="text-gray-300 text-sm">{value}</span>} />
             </PieChart>
           </ResponsiveContainer>
@@ -354,7 +354,7 @@ export default function FleetStatsPage() {
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
               <XAxis type="number" stroke="#374151" tick={{ fill: '#6b7280', fontSize: 12 }} />
               <YAxis type="category" dataKey="name" width={150} stroke="#374151" tick={{ fill: '#6b7280', fontSize: 11 }} />
-              <Tooltip contentStyle={tooltipStyle} formatter={(v: any, n: any, p: any) => [`${v}% (SQL ${p.payload.version})`, 'Avg CPU']} />
+              <Tooltip contentStyle={tooltipStyle} formatter={(v: any, _n: any, p: any) => [`${v}% (SQL ${p.payload.version})`, 'Avg CPU']} />
               <Bar dataKey="value" radius={[0, 4, 4, 0]}>
                 {top10Cpu.map((r, i) => <Cell key={i} fill={r.fill} />)}
               </Bar>
@@ -368,7 +368,7 @@ export default function FleetStatsPage() {
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
               <XAxis type="number" stroke="#374151" tick={{ fill: '#6b7280', fontSize: 12 }} />
               <YAxis type="category" dataKey="name" width={150} stroke="#374151" tick={{ fill: '#6b7280', fontSize: 11 }} />
-              <Tooltip contentStyle={tooltipStyle} formatter={(v: any, n: any, p: any) => [`${v} GB (SQL ${p.payload.version})`, 'Used']} />
+              <Tooltip contentStyle={tooltipStyle} formatter={(v: any, _n: any, p: any) => [`${v} GB (SQL ${p.payload.version})`, 'Used']} />
               <Bar dataKey="value" radius={[0, 4, 4, 0]}>
                 {top10Storage.map((r, i) => <Cell key={i} fill={r.fill} />)}
               </Bar>
