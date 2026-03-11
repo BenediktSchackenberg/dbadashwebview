@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Server, Cpu, HardDrive, Activity, AlertTriangle, ShieldCheck, ShieldAlert,
+  Server, HardDrive, Activity, AlertTriangle, ShieldCheck, ShieldAlert,
   Shield, ChevronDown, ChevronRight, Search, X, Monitor, Database, Clock
 } from 'lucide-react';
 import { api } from '../api/api';
@@ -28,27 +28,9 @@ interface MonitorInstance {
   activeAlerts: string[];
 }
 
-interface AlertCount {
-  type: string;
-  count: number;
-  icon: typeof AlertTriangle;
-  color: string;
-}
 
 /* ── Helpers ───────────────────────────────────────────────────────────── */
 
-function parseVersion(pv: string | null): string {
-  if (!pv) return '?';
-  const major = parseInt(pv);
-  if (major >= 16) return '2022';
-  if (major >= 15) return '2019';
-  if (major >= 14) return '2017';
-  if (major >= 13) return '2016';
-  if (major >= 12) return '2014';
-  if (major >= 11) return '2012';
-  if (major >= 10) return '2008';
-  return pv.split('.')[0];
-}
 
 function formatIO(kb: number): string {
   if (kb >= 1048576) return `${(kb / 1048576).toFixed(1)}GB/s`;
