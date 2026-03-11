@@ -1992,7 +1992,7 @@ app.MapGet("/api/reports/backup-ampel", async () =>
                     SUM(CASE WHEN b.backup_start_date >= DATEADD(hour,-24,GETUTCDATE()) THEN CAST(COALESCE(b.backup_size,0) as float)/1024/1024/1024 ELSE 0 END) as BackupVolumeGB24h,
                     COUNT(DISTINCT CASE WHEN b.backup_start_date >= DATEADD(hour,-24,GETUTCDATE()) THEN b.DatabaseID END) as BackedUpDBs24h
                 FROM dbo.Instances i
-                JOIN dbo.Databases d ON i.InstanceID = d.InstanceID AND d.IsActive = 1
+                JOIN dbo.Databases d ON i.InstanceID = d.InstanceID AND d.IsActive = 1 AND d.name NOT IN ('master','model','msdb','tempdb')
                 LEFT JOIN dbo.Backups b ON d.DatabaseID = b.DatabaseID
                 WHERE i.IsActive = 1
                 GROUP BY i.InstanceID, i.InstanceDisplayName, i.Instance, i.Edition, i.ProductVersion
@@ -2005,7 +2005,7 @@ app.MapGet("/api/reports/backup-ampel", async () =>
                 SELECT i.InstanceID,
                        COALESCE(i.InstanceDisplayName, i.Instance) as InstanceName,
                        i.Edition, i.ProductVersion,
-                       (SELECT COUNT(*) FROM dbo.Databases d2 WHERE d2.InstanceID=i.InstanceID AND d2.IsActive=1) as DatabaseCount,
+                       (SELECT COUNT(*) FROM dbo.Databases d2 WHERE d2.InstanceID=i.InstanceID AND d2.IsActive=1 AND d2.name NOT IN ('master','model','msdb','tempdb')) as DatabaseCount,
                        NULL as LastFullBackup, NULL as LastDiffBackup, NULL as LastLogBackup,
                        0 as BackupVolumeGB24h, 0 as BackedUpDBs24h
                 FROM dbo.Instances i WHERE i.IsActive = 1
@@ -2061,7 +2061,7 @@ app.MapGet("/api/reports/backup-ampel", async () =>
                 LEFT JOIN LatestBackups f ON d.DatabaseID = f.DatabaseID AND f.type='D' AND f.rn=1
                 LEFT JOIN LatestBackups df ON d.DatabaseID = df.DatabaseID AND df.type='I' AND df.rn=1
                 LEFT JOIN LatestBackups l ON d.DatabaseID = l.DatabaseID AND l.type='L' AND l.rn=1
-                WHERE d.IsActive = 1
+                WHERE d.IsActive = 1 AND d.name NOT IN ('master','model','msdb','tempdb')
                 ORDER BY d.InstanceID, d.name");
         }
         catch
@@ -2082,7 +2082,7 @@ app.MapGet("/api/reports/backup-ampel", async () =>
                     LEFT JOIN LatestBackups f ON d.DatabaseID = f.DatabaseID AND f.type='D' AND f.rn=1
                     LEFT JOIN LatestBackups df ON d.DatabaseID = df.DatabaseID AND df.type='I' AND df.rn=1
                     LEFT JOIN LatestBackups l ON d.DatabaseID = l.DatabaseID AND l.type='L' AND l.rn=1
-                    WHERE d.IsActive = 1
+                    WHERE d.IsActive = 1 AND d.name NOT IN ('master','model','msdb','tempdb')
                     ORDER BY d.InstanceID, d.name");
             }
             catch { }
