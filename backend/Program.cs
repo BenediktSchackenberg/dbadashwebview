@@ -570,9 +570,14 @@ app.MapGet("/api/instances/{id:int}/databases", async (int id) =>
     try
     {
         var data = await QueryAsync(@"
-            SELECT DatabaseID, name, state, recovery_model, LastGoodCheckDbTime, IsActive
-            FROM dbo.Databases WHERE InstanceID = @id AND IsActive = 1
-            ORDER BY name", ("@id", id));
+            SELECT d.DatabaseID, d.name, d.state, d.recovery_model, d.LastGoodCheckDbTime, d.IsActive,
+                   h.is_primary_replica, h.synchronization_state, h.synchronization_health,
+                   ag.name as ag_name
+            FROM dbo.Databases d
+            LEFT JOIN dbo.DatabasesHADR h ON d.DatabaseID = h.DatabaseID AND h.is_local = 1
+            LEFT JOIN dbo.AvailabilityGroups ag ON h.group_id = ag.group_id AND ag.InstanceID = d.InstanceID
+            WHERE d.InstanceID = @id AND d.IsActive = 1
+            ORDER BY d.name", ("@id", id));
         return Results.Ok(data);
     }
     catch (Exception ex)
@@ -1993,8 +1998,9 @@ app.MapGet("/api/reports/backup-ampel", async () =>
                     COUNT(DISTINCT CASE WHEN b.backup_start_date >= DATEADD(hour,-24,GETUTCDATE()) THEN b.DatabaseID END) as BackedUpDBs24h
                 FROM dbo.Instances i
                 JOIN dbo.Databases d ON i.InstanceID = d.InstanceID AND d.IsActive = 1 AND d.name NOT IN ('master','model','msdb','tempdb')
+                LEFT JOIN dbo.DatabasesHADR h ON d.DatabaseID = h.DatabaseID AND h.is_local = 1
                 LEFT JOIN dbo.Backups b ON d.DatabaseID = b.DatabaseID
-                WHERE i.IsActive = 1
+                WHERE i.IsActive = 1 AND (h.is_primary_replica IS NULL OR h.is_primary_replica = 1)
                 GROUP BY i.InstanceID, i.InstanceDisplayName, i.Instance, i.Edition, i.ProductVersion
                 ORDER BY COALESCE(i.InstanceDisplayName, i.Instance)");
         }
@@ -2005,7 +2011,7 @@ app.MapGet("/api/reports/backup-ampel", async () =>
                 SELECT i.InstanceID,
                        COALESCE(i.InstanceDisplayName, i.Instance) as InstanceName,
                        i.Edition, i.ProductVersion,
-                       (SELECT COUNT(*) FROM dbo.Databases d2 WHERE d2.InstanceID=i.InstanceID AND d2.IsActive=1 AND d2.name NOT IN ('master','model','msdb','tempdb')) as DatabaseCount,
+                       (SELECT COUNT(*) FROM dbo.Databases d2 LEFT JOIN dbo.DatabasesHADR h2 ON d2.DatabaseID=h2.DatabaseID AND h2.is_local=1 WHERE d2.InstanceID=i.InstanceID AND d2.IsActive=1 AND d2.name NOT IN ('master','model','msdb','tempdb') AND (h2.is_primary_replica IS NULL OR h2.is_primary_replica=1)) as DatabaseCount,
                        NULL as LastFullBackup, NULL as LastDiffBackup, NULL as LastLogBackup,
                        0 as BackupVolumeGB24h, 0 as BackedUpDBs24h
                 FROM dbo.Instances i WHERE i.IsActive = 1
@@ -2054,10 +2060,14 @@ app.MapGet("/api/reports/backup-ampel", async () =>
                        CASE d.recovery_model WHEN 1 THEN 'FULL' WHEN 2 THEN 'BULK_LOGGED' WHEN 3 THEN 'SIMPLE' ELSE 'UNKNOWN' END as RecoveryModel,
                        d.compatibility_level as CompatLevel,
                        d.is_encrypted as IsEncrypted,
+                       h.is_primary_replica as IsPrimaryReplica,
+                       ag.name as AGName,
                        f.backup_start_date as LastFullDate, f.backup_size as FullBackupSize,
                        df.backup_start_date as LastDiffDate,
                        l.backup_start_date as LastLogDate
                 FROM dbo.Databases d
+                LEFT JOIN dbo.DatabasesHADR h ON d.DatabaseID = h.DatabaseID AND h.is_local = 1
+                LEFT JOIN dbo.AvailabilityGroups ag ON h.group_id = ag.group_id AND ag.InstanceID = d.InstanceID
                 LEFT JOIN LatestBackups f ON d.DatabaseID = f.DatabaseID AND f.type='D' AND f.rn=1
                 LEFT JOIN LatestBackups df ON d.DatabaseID = df.DatabaseID AND df.type='I' AND df.rn=1
                 LEFT JOIN LatestBackups l ON d.DatabaseID = l.DatabaseID AND l.type='L' AND l.rn=1
@@ -2075,10 +2085,12 @@ app.MapGet("/api/reports/backup-ampel", async () =>
                         FROM dbo.Backups b
                     )
                     SELECT d.InstanceID, d.DatabaseID, d.name as DatabaseName,
+                           h.is_primary_replica as IsPrimaryReplica,
                            f.backup_start_date as LastFullDate, f.backup_size as FullBackupSize,
                            df.backup_start_date as LastDiffDate,
                            l.backup_start_date as LastLogDate
                     FROM dbo.Databases d
+                    LEFT JOIN dbo.DatabasesHADR h ON d.DatabaseID = h.DatabaseID AND h.is_local = 1
                     LEFT JOIN LatestBackups f ON d.DatabaseID = f.DatabaseID AND f.type='D' AND f.rn=1
                     LEFT JOIN LatestBackups df ON d.DatabaseID = df.DatabaseID AND df.type='I' AND df.rn=1
                     LEFT JOIN LatestBackups l ON d.DatabaseID = l.DatabaseID AND l.type='L' AND l.rn=1

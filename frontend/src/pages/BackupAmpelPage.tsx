@@ -434,6 +434,7 @@ export default function BackupAmpelPage() {
                   <thead>
                     <tr className="border-b border-white/10">
                       <th className="px-2 py-2 text-left text-gray-500">Datenbank</th>
+                      <th className="px-2 py-2 text-left text-gray-500">AG Rolle</th>
                       <th className="px-2 py-2 text-left text-gray-500">Recovery</th>
                       <th className="px-2 py-2 text-left text-gray-500">TDE</th>
                       <th className="px-2 py-2 text-left text-gray-500">Letzte Full</th>
@@ -444,23 +445,33 @@ export default function BackupAmpelPage() {
                   </thead>
                   <tbody>
                     {instanceDbs.map((db, i) => {
+                      const isSecondary = db.IsPrimaryReplica === false || db.IsPrimaryReplica === 0;
+                      const isInAG = db.IsPrimaryReplica != null;
                       const fullDate = db.LastFullDate ? new Date(db.LastFullDate) : null;
                       const fullAge = fullDate ? (Date.now() - fullDate.getTime()) / 3600000 : null;
                       const logDate = db.LastLogDate ? new Date(db.LastLogDate) : null;
                       const logAge = logDate ? (Date.now() - logDate.getTime()) / 60000 : null;
                       return (
-                        <tr key={i} className="border-b border-white/5 hover:bg-white/5">
-                          <td className="px-2 py-1.5 text-gray-200 font-medium">{db.DatabaseName}</td>
+                        <tr key={i} className={`border-b border-white/5 hover:bg-white/5 ${isSecondary ? 'opacity-60' : ''}`}>
+                          <td className="px-2 py-1.5 text-gray-200 font-medium">
+                            {db.DatabaseName}
+                            {db.AGName && <span className="ml-1.5 text-[10px] text-blue-400/70">({db.AGName})</span>}
+                          </td>
+                          <td className="px-2 py-1.5">
+                            {!isInAG ? <span className="text-gray-600">—</span> :
+                             isSecondary ? <span className="text-blue-400 text-xs">Secondary</span> :
+                             <span className="text-emerald-400 text-xs">Primary</span>}
+                          </td>
                           <td className="px-2 py-1.5 text-gray-400">{db.RecoveryModel || '—'}</td>
                           <td className="px-2 py-1.5">{db.IsEncrypted ? <span className="text-green-400">✓</span> : <span className="text-gray-600">—</span>}</td>
-                          <td className={`px-2 py-1.5 ${fullAge === null ? 'text-red-400' : fullAge > 48 ? 'text-red-400' : fullAge > 24 ? 'text-yellow-400' : 'text-green-400'}`}>
-                            {fullDate ? fullDate.toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'nie'}
+                          <td className={`px-2 py-1.5 ${isSecondary ? 'text-gray-600' : fullAge === null ? 'text-red-400' : fullAge > 48 ? 'text-red-400' : fullAge > 24 ? 'text-yellow-400' : 'text-green-400'}`}>
+                            {isSecondary ? 'via Primary' : fullDate ? fullDate.toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'nie'}
                           </td>
                           <td className="px-2 py-1.5 text-gray-400">
-                            {db.LastDiffDate ? new Date(db.LastDiffDate).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'}
+                            {isSecondary ? '—' : db.LastDiffDate ? new Date(db.LastDiffDate).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'}
                           </td>
-                          <td className={`px-2 py-1.5 ${logAge === null ? 'text-gray-600' : logAge > 30 ? 'text-red-400' : logAge > 15 ? 'text-yellow-400' : 'text-green-400'}`}>
-                            {logDate ? logDate.toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'}
+                          <td className={`px-2 py-1.5 ${isSecondary ? 'text-gray-600' : logAge === null ? 'text-gray-600' : logAge > 30 ? 'text-red-400' : logAge > 15 ? 'text-yellow-400' : 'text-green-400'}`}>
+                            {isSecondary ? 'via Primary' : logDate ? logDate.toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'}
                           </td>
                           <td className="px-2 py-1.5 text-right text-gray-300">
                             {db.FullBackupSize ? `${(db.FullBackupSize / 1073741824).toFixed(1)} GB` : '—'}
