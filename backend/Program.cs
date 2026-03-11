@@ -2320,6 +2320,23 @@ app.MapGet("/api/dashboard/monitor", async () =>
     }
 }).RequireAuthorization();
 
+// Debug: raw Summary table for an instance
+app.MapGet("/api/debug/summary/{id:int}", async (int id) =>
+{
+    try
+    {
+        var raw = await QueryAsync(@"
+            SELECT *
+            FROM dbo.Summary
+            WHERE InstanceID = @id", ("@id", id));
+        return Results.Ok(raw.Count > 0 ? raw[0] : new Dictionary<string, object?>{ ["error"] = "No summary row for this instance" });
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new { error = ex.Message });
+    }
+}).RequireAuthorization();
+
 // SPA fallback — serve index.html for all non-API routes
 app.MapFallbackToFile("index.html");
 
