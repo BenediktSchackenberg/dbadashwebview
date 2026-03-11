@@ -1750,13 +1750,14 @@ app.MapGet("/api/reports/fleet-stats", async () =>
         var cpuData = await QueryAsync(@"
             SELECT i.InstanceID,
                    COALESCE(i.InstanceDisplayName, i.Instance) as InstanceName,
+                   i.Edition, i.ProductVersion,
                    i.cpu_count, i.physical_memory_kb,
                    AVG(CAST(c.SQLProcessCPU as float)) as AvgCPU24h,
                    MAX(c.SQLProcessCPU) as MaxCPU24h
             FROM dbo.InstanceInfo i
             LEFT JOIN dbo.CPU c ON i.InstanceID = c.InstanceID AND c.EventTime >= DATEADD(hour, -24, GETUTCDATE())
             WHERE i.IsActive = 1
-            GROUP BY i.InstanceID, i.InstanceDisplayName, i.Instance, i.cpu_count, i.physical_memory_kb
+            GROUP BY i.InstanceID, i.InstanceDisplayName, i.Instance, i.Edition, i.ProductVersion, i.cpu_count, i.physical_memory_kb
             ORDER BY AVG(CAST(c.SQLProcessCPU as float)) DESC");
 
         // Get storage data
@@ -1800,13 +1801,14 @@ app.MapGet("/api/reports/fleet-stats", async () =>
             var cpuData = await QueryAsync(@"
                 SELECT i.InstanceID,
                        COALESCE(i.InstanceDisplayName, i.Instance) as InstanceName,
+                       i.Edition, i.ProductVersion,
                        i.cpu_count, i.physical_memory_kb,
                        AVG(CAST(c.SQLProcessCPU as float)) as AvgCPU24h,
                        MAX(c.SQLProcessCPU) as MaxCPU24h
                 FROM dbo.Instances i
                 LEFT JOIN dbo.CPU c ON i.InstanceID = c.InstanceID AND c.EventTime >= DATEADD(hour, -24, GETUTCDATE())
                 WHERE i.IsActive = 1
-                GROUP BY i.InstanceID, i.InstanceDisplayName, i.Instance, i.cpu_count, i.physical_memory_kb
+                GROUP BY i.InstanceID, i.InstanceDisplayName, i.Instance, i.Edition, i.ProductVersion, i.cpu_count, i.physical_memory_kb
                 ORDER BY AVG(CAST(c.SQLProcessCPU as float)) DESC");
 
             var storageData = new Dictionary<int, (long capacity, long free, long used)>();
