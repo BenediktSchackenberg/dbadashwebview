@@ -1,211 +1,344 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../api/api';
+import { useRefresh } from '../App';
 import LoadingSpinner from '../components/LoadingSpinner';
-import { AlertTriangle, AlertCircle, Info, Search, CheckCircle, Inbox, RefreshCw  } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  AlertTriangle, AlertCircle, Info, Search, X, Inbox, Server,
+  Clock, Briefcase, ChevronRight, ExternalLink, Filter
+} from 'lucide-react';
 import { clsx } from 'clsx';
+import { format, formatDistanceToNow } from 'date-fns';
 
-type SeverityFilter = 'all' | 'critical' | 'warning' | 'info';
-type StatusFilter = 'all' | 'active' | 'acknowledged';
+/* ── Helpers ── */
 
-function guessSeverity(alert: any): 'critical' | 'warning' | 'info' {
-  const msg = (alert.ErrorMessage || alert.message || '').toLowerCase();
-  if (msg.includes('error') || msg.includes('fail') || msg.includes('critical')) return 'critical';
-  if (msg.includes('warning') || msg.includes('warn')) return 'warning';
+type Severity = 'critical' | 'warning' | 'info';
+type AlertType = 'error' | 'job_failure';
+
+interface ParsedAlert {
+  instanceId: number;
+  instanceName: string;
+  date: Date;
+  dateStr: string;
+  message: string;
+  context: string;
+  alertType: AlertType;
+  severity: Severity;
+}
+
+function parseSeverity(a: any): Severity {
+  const msg = ((a.ErrorMessage || '') + ' ' + (a.ErrorContext || '')).toLowerCase();
+  if (a.AlertType === 'job_failure') return 'warning';
+  if (msg.includes('error') || msg.includes('fail') || msg.includes('timeout') || msg.includes('cannot')) return 'critical';
+  if (msg.includes('warning') || msg.includes('retry')) return 'warning';
   return 'info';
 }
 
-const severityIcon = (s: string) => {
-  if (s === 'critical') return <AlertCircle className="w-4 h-4 text-red-400" />;
-  if (s === 'warning') return <AlertTriangle className="w-4 h-4 text-yellow-400" />;
-  return <Info className="w-4 h-4 text-blue-400" />;
+function parseAlert(raw: any): ParsedAlert {
+  const date = raw.ErrorDate ? new Date(raw.ErrorDate) : new Date(0);
+  return {
+    instanceId: raw.InstanceID || 0,
+    instanceName: raw.InstanceName || `Instance ${raw.InstanceID || '?'}`,
+    date,
+    dateStr: raw.ErrorDate || '',
+    message: raw.ErrorMessage || '—',
+    context: raw.ErrorContext || '',
+    alertType: raw.AlertType === 'job_failure' ? 'job_failure' : 'error',
+    severity: parseSeverity(raw),
+  };
+}
+
+const SEV_CONFIG = {
+  critical: { label: 'Critical', icon: AlertCircle, color: 'text-red-400', bg: 'bg-red-400/10', border: 'border-red-500/20', dot: 'bg-red-400', ring: 'ring-red-500/20' },
+  warning: { label: 'Warning', icon: AlertTriangle, color: 'text-yellow-400', bg: 'bg-yellow-400/10', border: 'border-yellow-500/20', dot: 'bg-yellow-400', ring: 'ring-yellow-500/20' },
+  info: { label: 'Info', icon: Info, color: 'text-blue-400', bg: 'bg-blue-400/10', border: 'border-blue-500/20', dot: 'bg-blue-400', ring: 'ring-blue-500/20' },
 };
 
-const severityBadge = (s: string) => {
-  const colors = s === 'critical' ? 'bg-red-400/10 text-red-400' : s === 'warning' ? 'bg-yellow-400/10 text-yellow-400' : 'bg-blue-400/10 text-blue-400';
-  return <span className={clsx('text-[10px] px-1.5 py-0.5 rounded font-medium uppercase', colors)}>{s}</span>;
-};
+/* ── Component ── */
 
 export default function AlertsPage() {
-  const [alerts, setAlerts] = useState<any[]>([]);
+  const { lastRefresh } = useRefresh();
+  const navigate = useNavigate();
+  const [raw, setRaw] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [search, setSearch] = useState('');
-  const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('all');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [acknowledged, setAcknowledged] = useState<Set<number>>(new Set());
+  const [sevFilter, setSevFilter] = useState<Severity | 'all'>('all');
+  const [typeFilter, setTypeFilter] = useState<AlertType | 'all'>('all');
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
 
   useEffect(() => {
-    (async () => {
-      try {
-        const a = await api.alertsRecent().catch(() => []);
-        setAlerts(Array.isArray(a) ? a : []);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
+    setLoading(true);
+    api.alertsRecent()
+      .then(d => setRaw(Array.isArray(d) ? d : []))
+      .catch(() => setRaw([]))
+      .finally(() => setLoading(false));
+  }, [lastRefresh]);
+
+  const alerts = useMemo(() => raw.map(parseAlert).sort((a, b) => b.date.getTime() - a.date.getTime()), [raw]);
+
+  const q = search.toLowerCase();
+  const filtered = useMemo(() => alerts.filter(a => {
+    if (sevFilter !== 'all' && a.severity !== sevFilter) return false;
+    if (typeFilter !== 'all' && a.alertType !== typeFilter) return false;
+    if (q && !a.message.toLowerCase().includes(q) && !a.instanceName.toLowerCase().includes(q) && !a.context.toLowerCase().includes(q)) return false;
+    return true;
+  }), [alerts, sevFilter, typeFilter, q]);
+
+  const counts = useMemo(() => ({
+    total: alerts.length,
+    critical: alerts.filter(a => a.severity === 'critical').length,
+    warning: alerts.filter(a => a.severity === 'warning').length,
+    info: alerts.filter(a => a.severity === 'info').length,
+    errors: alerts.filter(a => a.alertType === 'error').length,
+    jobs: alerts.filter(a => a.alertType === 'job_failure').length,
+  }), [alerts]);
+
+  const selected = selectedIdx !== null && selectedIdx < filtered.length ? filtered[selectedIdx] : null;
+
+  // Group by instance for sidebar stats
+  const byInstance = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const a of filtered) {
+      m.set(a.instanceName, (m.get(a.instanceName) || 0) + 1);
+    }
+    return Array.from(m.entries()).sort((a, b) => b[1] - a[1]);
+  }, [filtered]);
 
   if (loading) return <LoadingSpinner />;
 
-  const enriched = alerts.map((a, i) => ({
-    ...a,
-    _idx: i,
-    _severity: guessSeverity(a),
-    _acknowledged: acknowledged.has(i),
-    _message: a.ErrorMessage || a.message || JSON.stringify(a).slice(0, 200),
-    _object: a.ErrorContext || a.InstanceDisplayName || '—',
-    _date: a.ErrorDate || a.timestamp || '',
-  }));
-
-  const q = search.toLowerCase();
-  const filtered = enriched.filter(a => {
-    if (severityFilter !== 'all' && a._severity !== severityFilter) return false;
-    if (statusFilter === 'active' && a._acknowledged) return false;
-    if (statusFilter === 'acknowledged' && !a._acknowledged) return false;
-    if (q && !a._message.toLowerCase().includes(q) && !a._object.toLowerCase().includes(q)) return false;
-    return true;
-  });
-
-  const selected = selectedIdx !== null ? enriched[selectedIdx] : null;
-
-  const handleAcknowledge = (idx: number) => {
-    setAcknowledged(prev => new Set(prev).add(idx));
-  };
-
-  if (enriched.length === 0) {
+  if (alerts.length === 0) {
     return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-white">Alerts</h1>
-        <span className="text-xs text-gray-500 flex items-center gap-1">
-          <RefreshCw className="w-3 h-3" /> Auto-refresh 30s
-        </span>
-      </div>
-        <div className="glass rounded-xl p-16 flex flex-col items-center gap-4">
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+        <h1 className="text-2xl font-bold text-white">Alerts & Errors</h1>
+        <div className="glass rounded-2xl p-16 flex flex-col items-center gap-4">
           <Inbox className="w-16 h-16 text-gray-600" />
-          <p className="text-gray-400">No alerts — everything looks good!</p>
+          <p className="text-lg font-medium text-gray-400">Keine Alerts — alles im grünen Bereich!</p>
+          <p className="text-sm text-gray-500">Collection-Fehler und fehlgeschlagene Jobs erscheinen hier</p>
         </div>
-      </div>
+      </motion.div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-bold text-white">Alerts</h1>
-
-      {/* Filter Bar */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search alerts..."
-            className="w-full pl-9 pr-4 py-2 bg-slate-800 border border-slate-600 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50"
-          />
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Alerts & Errors</h1>
+          <p className="text-xs text-gray-500 mt-1">Collection-Fehler und fehlgeschlagene Jobs · neueste zuerst · Auto-Refresh 30s</p>
         </div>
-        <select
-          value={severityFilter}
-          onChange={e => setSeverityFilter(e.target.value as SeverityFilter)}
-          className="px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-sm text-gray-300 focus:outline-none"
-        >
-          <option value="all">All Severities</option>
-          <option value="critical">Critical</option>
-          <option value="warning">Warning</option>
-          <option value="info">Info</option>
-        </select>
-        <select
-          value={statusFilter}
-          onChange={e => setStatusFilter(e.target.value as StatusFilter)}
-          className="px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-sm text-gray-300 focus:outline-none"
-        >
-          <option value="all">All Status</option>
-          <option value="active">Active</option>
-          <option value="acknowledged">Acknowledged</option>
-        </select>
       </div>
 
-      {/* Alert List + Detail */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* List */}
-        <div className="lg:col-span-2 space-y-1.5 max-h-[70vh] overflow-y-auto">
-          {filtered.map((a) => (
-            <div
-              key={a._idx}
-              onClick={() => setSelectedIdx(a._idx)}
-              className={clsx(
-                'glass rounded-xl p-4 cursor-pointer transition-all border',
-                selectedIdx === a._idx ? 'border-blue-500/30 bg-blue-500/5' : 'border-white/5 hover:border-white/10 hover:bg-slate-800/50',
-                a._acknowledged && 'opacity-60'
-              )}
-            >
-              <div className="flex items-start gap-3">
-                {severityIcon(a._severity)}
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    {severityBadge(a._severity)}
-                    {a._acknowledged && <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-400/10 text-emerald-400">ACK</span>}
+      {/* KPI Strip */}
+      <div className="flex flex-wrap gap-3">
+        {([
+          { key: 'all' as const, label: 'Gesamt', count: counts.total, color: 'text-white', bg: 'bg-white/5' },
+          { key: 'critical' as const, label: 'Critical', count: counts.critical, color: SEV_CONFIG.critical.color, bg: SEV_CONFIG.critical.bg },
+          { key: 'warning' as const, label: 'Warning', count: counts.warning, color: SEV_CONFIG.warning.color, bg: SEV_CONFIG.warning.bg },
+          { key: 'info' as const, label: 'Info', count: counts.info, color: SEV_CONFIG.info.color, bg: SEV_CONFIG.info.bg },
+        ]).map(k => (
+          <button key={k.key}
+            onClick={() => setSevFilter(sevFilter === k.key ? 'all' : k.key)}
+            className={clsx(
+              'flex items-center gap-2 px-4 py-2 rounded-xl text-sm transition-all border',
+              sevFilter === k.key ? `${k.bg} border-current ${k.color}` : 'bg-white/5 border-white/5 text-gray-400 hover:bg-white/10'
+            )}>
+            <span className={clsx('text-lg font-bold', k.color)}>{k.count}</span>
+            <span>{k.label}</span>
+          </button>
+        ))}
+        <div className="border-l border-white/10 mx-1" />
+        {([
+          { key: 'all' as const, label: 'Alle Typen', icon: Filter },
+          { key: 'error' as const, label: 'Fehler', icon: AlertCircle },
+          { key: 'job_failure' as const, label: 'Jobs', icon: Briefcase },
+        ]).map(k => (
+          <button key={k.key}
+            onClick={() => setTypeFilter(typeFilter === k.key ? 'all' : k.key)}
+            className={clsx(
+              'flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs transition-all border',
+              typeFilter === k.key ? 'bg-white/10 border-white/20 text-white' : 'bg-white/5 border-white/5 text-gray-500 hover:bg-white/10'
+            )}>
+            <k.icon className="w-3.5 h-3.5" />
+            {k.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+        <input
+          value={search}
+          onChange={e => { setSearch(e.target.value); setSelectedIdx(null); }}
+          placeholder="Suche nach Server, Fehlermeldung, Kontext..."
+          className="w-full pl-10 pr-10 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50"
+        />
+        {search && (
+          <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2">
+            <X className="w-4 h-4 text-gray-500 hover:text-gray-300" />
+          </button>
+        )}
+      </div>
+
+      {/* Main Grid: Alert List + Detail */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        {/* Alert List */}
+        <div className="lg:col-span-2 space-y-1 max-h-[72vh] overflow-y-auto pr-1 scrollbar-thin">
+          <AnimatePresence initial={false}>
+            {filtered.map((a, i) => {
+              const cfg = SEV_CONFIG[a.severity];
+              const Icon = cfg.icon;
+              const isSelected = selectedIdx === i;
+              return (
+                <motion.div
+                  key={`${a.dateStr}-${a.instanceId}-${i}`}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 10 }}
+                  transition={{ duration: 0.15, delay: Math.min(i * 0.02, 0.3) }}
+                  onClick={() => setSelectedIdx(isSelected ? null : i)}
+                  className={clsx(
+                    'rounded-xl p-4 cursor-pointer transition-all border',
+                    isSelected ? `${cfg.bg} ${cfg.border} ring-1 ${cfg.ring}` : 'glass border-white/5 hover:border-white/10 hover:bg-white/[0.03]'
+                  )}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className={clsx('mt-0.5 p-1.5 rounded-lg', cfg.bg)}>
+                      <Icon className={clsx('w-4 h-4', cfg.color)} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      {/* Top row: Instance + Time */}
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className={clsx('text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase', cfg.bg, cfg.color)}>
+                            {a.alertType === 'job_failure' ? 'JOB' : cfg.label}
+                          </span>
+                          <span className="text-xs font-medium text-gray-300 truncate flex items-center gap-1">
+                            <Server className="w-3 h-3 text-gray-500 flex-shrink-0" />
+                            {a.instanceName}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-gray-500 whitespace-nowrap flex items-center gap-1 flex-shrink-0">
+                          <Clock className="w-3 h-3" />
+                          {a.date.getTime() > 0 ? formatDistanceToNow(a.date, { addSuffix: true }) : '—'}
+                        </span>
+                      </div>
+                      {/* Message */}
+                      <p className={clsx('text-sm leading-snug', isSelected ? 'text-white' : 'text-gray-300 line-clamp-2')}>
+                        {a.message}
+                      </p>
+                      {/* Context */}
+                      {a.context && (
+                        <p className="text-[11px] text-gray-500 mt-1 truncate">
+                          {a.context}
+                        </p>
+                      )}
+                    </div>
+                    <ChevronRight className={clsx('w-4 h-4 text-gray-600 mt-1 flex-shrink-0 transition-transform', isSelected && 'rotate-90')} />
                   </div>
-                  <p className="text-sm text-white truncate">{a._message}</p>
-                  <div className="flex items-center gap-3 mt-1 text-[10px] text-gray-500">
-                    <span>{a._object}</span>
-                    <span>{a._date}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
           {filtered.length === 0 && (
-            <div className="text-center py-8 text-gray-500 text-sm">No alerts match your filters</div>
+            <div className="text-center py-12">
+              <Search className="w-8 h-8 text-gray-600 mx-auto mb-3" />
+              <p className="text-gray-400">Keine Alerts für diesen Filter</p>
+              <button onClick={() => { setSearch(''); setSevFilter('all'); setTypeFilter('all'); }}
+                className="text-sm text-blue-400 hover:text-blue-300 mt-2">Filter zurücksetzen</button>
+            </div>
           )}
         </div>
 
         {/* Detail Panel */}
-        <div className="glass rounded-xl p-6 h-fit sticky top-6">
-          {selected ? (
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                {severityIcon(selected._severity)}
-                <h3 className="text-sm font-semibold text-white">Alert Detail</h3>
-              </div>
-              <div className="space-y-3 text-sm">
-                <div>
-                  <p className="text-xs text-gray-500">Severity</p>
-                  {severityBadge(selected._severity)}
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500">Object</p>
-                  <p className="text-white">{selected._object}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500">Message</p>
-                  <p className="text-gray-300 text-xs">{selected._message}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500">Time</p>
-                  <p className="text-gray-300">{selected._date}</p>
-                </div>
-                {selected._acknowledged ? (
-                  <div className="flex items-center gap-2 text-emerald-400 text-xs">
-                    <CheckCircle className="w-4 h-4" /> Acknowledged
+        <div className="space-y-4">
+          {/* Selected Alert Detail */}
+          <div className="glass rounded-2xl p-6 sticky top-4">
+            {selected ? (() => {
+              const cfg = SEV_CONFIG[selected.severity];
+              const Icon = cfg.icon;
+              return (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className={clsx('p-2 rounded-xl', cfg.bg)}>
+                      <Icon className={clsx('w-5 h-5', cfg.color)} />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-white">Alert Details</h3>
+                      <span className={clsx('text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase', cfg.bg, cfg.color)}>
+                        {selected.alertType === 'job_failure' ? 'Failed Job' : cfg.label}
+                      </span>
+                    </div>
                   </div>
-                ) : (
-                  <button
-                    onClick={() => handleAcknowledge(selected._idx)}
-                    className="w-full py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 text-sm font-medium rounded-lg transition-all flex items-center justify-center gap-2"
-                  >
-                    <CheckCircle className="w-4 h-4" /> Acknowledge
-                  </button>
+
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Server</p>
+                      <button
+                        onClick={() => navigate(`/instances/${selected.instanceId}`)}
+                        className="text-sm text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors"
+                      >
+                        <Server className="w-3.5 h-3.5" />
+                        {selected.instanceName}
+                        <ExternalLink className="w-3 h-3" />
+                      </button>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Zeitpunkt</p>
+                      <p className="text-sm text-gray-300">
+                        {selected.date.getTime() > 0 ? format(selected.date, 'dd.MM.yyyy HH:mm:ss') : '—'}
+                      </p>
+                      <p className="text-[10px] text-gray-500">
+                        {selected.date.getTime() > 0 ? formatDistanceToNow(selected.date, { addSuffix: true }) : ''}
+                      </p>
+                    </div>
+                    {selected.context && (
+                      <div>
+                        <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Kontext</p>
+                        <p className="text-sm text-gray-300 font-mono bg-white/5 rounded-lg p-2 break-all">{selected.context}</p>
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Fehlermeldung</p>
+                      <div className="text-sm text-gray-300 bg-white/5 rounded-lg p-3 max-h-48 overflow-y-auto font-mono text-xs leading-relaxed break-all whitespace-pre-wrap">
+                        {selected.message}
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })() : (
+              <div className="text-center py-10">
+                <AlertCircle className="w-8 h-8 text-gray-600 mx-auto mb-3" />
+                <p className="text-sm text-gray-500">Alert auswählen für Details</p>
+              </div>
+            )}
+          </div>
+
+          {/* Instance breakdown */}
+          {byInstance.length > 0 && (
+            <div className="glass rounded-2xl p-5">
+              <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Alerts pro Server</h4>
+              <div className="space-y-1.5">
+                {byInstance.slice(0, 10).map(([name, count]) => (
+                  <div key={name} className="flex items-center justify-between text-sm">
+                    <span className="text-gray-300 truncate">{name}</span>
+                    <span className={clsx(
+                      'text-xs font-mono px-2 py-0.5 rounded-full',
+                      count > 10 ? 'bg-red-400/10 text-red-400' : count > 3 ? 'bg-yellow-400/10 text-yellow-400' : 'bg-white/5 text-gray-400'
+                    )}>{count}</span>
+                  </div>
+                ))}
+                {byInstance.length > 10 && (
+                  <p className="text-[10px] text-gray-600">+{byInstance.length - 10} weitere Server</p>
                 )}
               </div>
-            </div>
-          ) : (
-            <div className="text-center py-8 text-gray-500 text-sm">
-              Select an alert to view details
             </div>
           )}
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }

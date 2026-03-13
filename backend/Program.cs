@@ -667,26 +667,50 @@ app.MapGet("/api/alerts/recent", async () =>
 {
     try
     {
-        var data = await QueryAsync(@"
-            SELECT TOP 50 * FROM (
-                SELECT TOP 50 * FROM dbo.Alerts ORDER BY 1 DESC
-            ) t ORDER BY 1 DESC");
-        return Results.Ok(data);
+        // Collection errors (actual errors from DBA Dash collection)
+        var errors = await QueryAsync(@"
+            SELECT TOP 100 e.InstanceID, 
+                   COALESCE(i.InstanceDisplayName, i.Instance, CAST(e.InstanceID as VARCHAR)) as InstanceName,
+                   e.ErrorDate, e.ErrorMessage, e.ErrorContext,
+                   'error' as AlertType
+            FROM dbo.CollectionErrorLog e
+            LEFT JOIN dbo.Instances i ON e.InstanceID = i.InstanceID
+            ORDER BY e.ErrorDate DESC");
+
+        // Failed jobs (last 48h)
+        List<Dictionary<string, object?>> failedJobs = new();
+        try
+        {
+            failedJobs = await QueryAsync(@"
+                SELECT TOP 50 jh.InstanceID,
+                       COALESCE(i.InstanceDisplayName, i.Instance) as InstanceName,
+                       jh.RunDateTime as ErrorDate,
+                       CONCAT('Job step failed: ', jh.step_name, ' — ', LEFT(jh.message, 500)) as ErrorMessage,
+                       jh.step_name as ErrorContext,
+                       'job_failure' as AlertType
+                FROM dbo.JobHistory jh
+                JOIN dbo.Instances i ON jh.InstanceID = i.InstanceID
+                WHERE jh.run_status = 0 AND jh.RunDateTime > DATEADD(hour,-48,GETUTCDATE())
+                ORDER BY jh.RunDateTime DESC");
+        }
+        catch { }
+
+        // Combine and sort by date descending
+        var combined = new List<Dictionary<string, object?>>();
+        combined.AddRange(errors);
+        combined.AddRange(failedJobs);
+        combined.Sort((a, b) =>
+        {
+            var da = a.ContainsKey("ErrorDate") && a["ErrorDate"] != null ? a["ErrorDate"]!.ToString() : "";
+            var db = b.ContainsKey("ErrorDate") && b["ErrorDate"] != null ? b["ErrorDate"]!.ToString() : "";
+            return string.Compare(db, da, StringComparison.Ordinal);
+        });
+
+        return Results.Ok(combined.Take(200));
     }
     catch
     {
-        try
-        {
-            var data = await QueryAsync(@"
-                SELECT TOP 50 InstanceID, ErrorDate, ErrorMessage, ErrorContext
-                FROM dbo.CollectionErrorLog
-                ORDER BY ErrorDate DESC");
-            return Results.Ok(data);
-        }
-        catch
-        {
-            return Results.Ok(Array.Empty<object>());
-        }
+        return Results.Ok(Array.Empty<object>());
     }
 }).RequireAuthorization();
 
