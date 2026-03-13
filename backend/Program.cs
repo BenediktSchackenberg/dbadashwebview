@@ -1986,33 +1986,71 @@ app.MapGet("/api/reports/backup-ampel", async () =>
         try
         {
             instances = await QueryAsync(@"
+                ;WITH PerDbFull AS (
+                    SELECT d.InstanceID, d.DatabaseID,
+                           MAX(b.backup_start_date) as LatestFull
+                    FROM dbo.Databases d
+                    LEFT JOIN dbo.DatabasesHADR h ON d.DatabaseID = h.DatabaseID AND h.is_local = 1
+                    LEFT JOIN dbo.Backups b ON d.DatabaseID = b.DatabaseID AND b.type = 'D'
+                    WHERE d.IsActive = 1 AND d.name NOT IN ('master','model','msdb','tempdb')
+                      AND (h.is_primary_replica IS NULL OR h.is_primary_replica = 1)
+                    GROUP BY d.InstanceID, d.DatabaseID
+                ),
+                PerDbLog AS (
+                    SELECT d.InstanceID, d.DatabaseID,
+                           MAX(b.backup_start_date) as LatestLog
+                    FROM dbo.Databases d
+                    LEFT JOIN dbo.DatabasesHADR h ON d.DatabaseID = h.DatabaseID AND h.is_local = 1
+                    LEFT JOIN dbo.Backups b ON d.DatabaseID = b.DatabaseID AND b.type = 'L'
+                    WHERE d.IsActive = 1 AND d.name NOT IN ('master','model','msdb','tempdb')
+                      AND (h.is_primary_replica IS NULL OR h.is_primary_replica = 1)
+                      AND d.recovery_model IN (1, 2)  -- Only FULL and BULK_LOGGED need log backups
+                    GROUP BY d.InstanceID, d.DatabaseID
+                )
                 SELECT 
                     i.InstanceID,
                     COALESCE(i.InstanceDisplayName, i.Instance) as InstanceName,
                     i.Edition, i.ProductVersion,
-                    COUNT(DISTINCT d.DatabaseID) as DatabaseCount,
-                    -- Worst-case: oldest 'latest full backup' across all primary/standalone DBs
-                    MIN(lf.LatestFull) as LastFullBackup,
-                    MAX(CASE WHEN b.type='I' THEN b.backup_start_date END) as LastDiffBackup,
-                    MIN(ll.LatestLog) as LastLogBackup,
-                    SUM(CASE WHEN b.backup_start_date >= DATEADD(hour,-24,GETUTCDATE()) THEN CAST(COALESCE(b.backup_size,0) as float)/1024/1024/1024 ELSE 0 END) as BackupVolumeGB24h,
-                    COUNT(DISTINCT CASE WHEN b.backup_start_date >= DATEADD(hour,-24,GETUTCDATE()) THEN b.DatabaseID END) as BackedUpDBs24h,
-                    -- Also include the best case for display
-                    MAX(lf.LatestFull) as NewestFullBackup,
-                    MAX(ll.LatestLog) as NewestLogBackup
+                    (SELECT COUNT(*) FROM dbo.Databases d2
+                     LEFT JOIN dbo.DatabasesHADR h2 ON d2.DatabaseID=h2.DatabaseID AND h2.is_local=1
+                     WHERE d2.InstanceID=i.InstanceID AND d2.IsActive=1 AND d2.name NOT IN ('master','model','msdb','tempdb')
+                       AND (h2.is_primary_replica IS NULL OR h2.is_primary_replica=1)) as DatabaseCount,
+                    -- Per-DB aggregated: oldest latest-full across all DBs (worst case)
+                    MIN(pf.LatestFull) as LastFullBackup,
+                    -- Per-DB aggregated: oldest latest-log, but ONLY for Full/Bulk-Logged recovery DBs
+                    MIN(pl.LatestLog) as LastLogBackup,
+                    -- Newest for context
+                    MAX(pf.LatestFull) as NewestFullBackup,
+                    MAX(pl.LatestLog) as NewestLogBackup,
+                    -- Volume & count
+                    ISNULL((SELECT SUM(CAST(COALESCE(b.backup_size,0) as float)/1024/1024/1024)
+                     FROM dbo.Backups b
+                     JOIN dbo.Databases d ON b.DatabaseID = d.DatabaseID
+                     LEFT JOIN dbo.DatabasesHADR h ON d.DatabaseID = h.DatabaseID AND h.is_local = 1
+                     WHERE d.InstanceID = i.InstanceID AND d.IsActive = 1
+                       AND d.name NOT IN ('master','model','msdb','tempdb')
+                       AND (h.is_primary_replica IS NULL OR h.is_primary_replica = 1)
+                       AND b.backup_start_date >= DATEADD(hour,-24,GETUTCDATE())), 0) as BackupVolumeGB24h,
+                    (SELECT COUNT(DISTINCT b.DatabaseID)
+                     FROM dbo.Backups b
+                     JOIN dbo.Databases d ON b.DatabaseID = d.DatabaseID
+                     LEFT JOIN dbo.DatabasesHADR h ON d.DatabaseID = h.DatabaseID AND h.is_local = 1
+                     WHERE d.InstanceID = i.InstanceID AND d.IsActive = 1
+                       AND d.name NOT IN ('master','model','msdb','tempdb')
+                       AND (h.is_primary_replica IS NULL OR h.is_primary_replica = 1)
+                       AND b.backup_start_date >= DATEADD(hour,-24,GETUTCDATE())) as BackedUpDBs24h,
+                    -- Count DBs with full backup older than 24h or no backup at all
+                    (SELECT COUNT(*) FROM PerDbFull pf2
+                     WHERE pf2.InstanceID = i.InstanceID
+                       AND (pf2.LatestFull IS NULL OR pf2.LatestFull < DATEADD(hour,-24,GETUTCDATE()))) as DbsWithOldFullBackup,
+                    -- Count Full/Bulk-Logged DBs with log backup older than 30min or none
+                    (SELECT COUNT(*) FROM PerDbLog pl2
+                     WHERE pl2.InstanceID = i.InstanceID
+                       AND (pl2.LatestLog IS NULL OR pl2.LatestLog < DATEADD(minute,-30,GETUTCDATE()))) as DbsWithOldLogBackup
                 FROM dbo.Instances i
-                JOIN dbo.Databases d ON i.InstanceID = d.InstanceID AND d.IsActive = 1 AND d.name NOT IN ('master','model','msdb','tempdb')
-                LEFT JOIN dbo.DatabasesHADR h ON d.DatabaseID = h.DatabaseID AND h.is_local = 1
-                LEFT JOIN dbo.Backups b ON d.DatabaseID = b.DatabaseID
-                OUTER APPLY (
-                    SELECT MAX(b2.backup_start_date) as LatestFull
-                    FROM dbo.Backups b2 WHERE b2.DatabaseID = d.DatabaseID AND b2.type = 'D'
-                ) lf
-                OUTER APPLY (
-                    SELECT MAX(b3.backup_start_date) as LatestLog
-                    FROM dbo.Backups b3 WHERE b3.DatabaseID = d.DatabaseID AND b3.type = 'L'
-                ) ll
-                WHERE i.IsActive = 1 AND (h.is_primary_replica IS NULL OR h.is_primary_replica = 1)
+                LEFT JOIN PerDbFull pf ON i.InstanceID = pf.InstanceID
+                LEFT JOIN PerDbLog pl ON i.InstanceID = pl.InstanceID
+                WHERE i.IsActive = 1
                 GROUP BY i.InstanceID, i.InstanceDisplayName, i.Instance, i.Edition, i.ProductVersion
                 ORDER BY COALESCE(i.InstanceDisplayName, i.Instance)");
         }

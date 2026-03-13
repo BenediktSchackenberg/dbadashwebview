@@ -20,6 +20,8 @@ interface InstanceAmpel {
   LastLogBackup: string | null;
   BackupVolumeGB24h: number;
   BackedUpDBs24h: number;
+  DbsWithOldFullBackup: number;
+  DbsWithOldLogBackup: number;
   AvgLogIntervalMin: number | null;
   MaxLogIntervalMin: number | null;
   // computed
@@ -31,8 +33,11 @@ interface InstanceAmpel {
 
 function computeAmpel(row: any): InstanceAmpel {
   const now = Date.now();
-  const fullDate = row.LastFullBackup ? new Date(row.LastFullBackup).getTime() : null;
-  const logDate = row.LastLogBackup ? new Date(row.LastLogBackup).getTime() : null;
+  // Use newest backup dates for status (matches Estate/Backups behavior)
+  const fullDate = row.NewestFullBackup ? new Date(row.NewestFullBackup).getTime() :
+                   row.LastFullBackup ? new Date(row.LastFullBackup).getTime() : null;
+  const logDate = row.NewestLogBackup ? new Date(row.NewestLogBackup).getTime() :
+                  row.LastLogBackup ? new Date(row.LastLogBackup).getTime() : null;
   const fullAgeHours = fullDate ? (now - fullDate) / 3600000 : null;
   const logAgeMin = logDate ? (now - logDate) / 60000 : null;
   const avgLog = row.AvgLogIntervalMin;
@@ -42,16 +47,19 @@ function computeAmpel(row: any): InstanceAmpel {
   if (avgLog != null && logAgeMin != null) rpoMin = Math.max(avgLog, logAgeMin);
   else if (avgLog != null) rpoMin = avgLog;
   else if (logAgeMin != null) rpoMin = logAgeMin;
-  else rpoMin = 1440; // fallback 1 day
+  else rpoMin = null; // no log backups (possibly all Simple Recovery)
 
-  // Ampel rules from the SP:
-  // GREEN: last full <= 24h AND log age <= 15 min
-  // YELLOW: last full <= 48h AND log age <= 30 min  
+  // Ampel rules:
+  // GREEN: newest full <= 24h AND (newest log <= 15min OR no Full/Bulk-Logged DBs needing logs)
+  // YELLOW: newest full <= 48h AND (newest log <= 30min OR no log-needing DBs)
   // RED: everything else
+  const hasLogDbs = logDate !== null || (row.DbsWithOldLogBackup != null && row.DbsWithOldLogBackup > 0);
   let status: AmpelStatus = 'RED';
-  if (fullAgeHours !== null && logAgeMin !== null) {
-    if (fullAgeHours <= 24 && logAgeMin <= 15) status = 'GREEN';
-    else if (fullAgeHours <= 48 && logAgeMin <= 30) status = 'YELLOW';
+  if (fullAgeHours !== null) {
+    const logOk = !hasLogDbs || (logAgeMin !== null && logAgeMin <= 15);
+    const logWarn = !hasLogDbs || (logAgeMin !== null && logAgeMin <= 30);
+    if (fullAgeHours <= 24 && logOk) status = 'GREEN';
+    else if (fullAgeHours <= 48 && logWarn) status = 'YELLOW';
   }
 
   return {
@@ -150,7 +158,7 @@ export default function BackupAmpelPage() {
     const valid = instances.filter(r => r.rpoMin !== null);
     return valid.length > 0 ? valid.reduce((s, r) => s + (r.rpoMin || 0), 0) / valid.length : 0;
   }, [instances]);
-  const worstRPO = useMemo(() => Math.max(...instances.map(r => r.rpoMin || 0), 0), [instances]);
+  const worstRPO = useMemo(() => Math.max(...instances.filter(r => r.rpoMin != null).map(r => r.rpoMin!), 0), [instances]);
 
   // RPO distribution chart
   const rpoBuckets = useMemo(() => {
@@ -163,7 +171,8 @@ export default function BackupAmpelPage() {
       { name: '>24h', min: 1440, max: Infinity, count: 0 },
     ];
     instances.forEach(r => {
-      const rpo = r.rpoMin || 1440;
+      if (r.rpoMin == null) return; // skip instances with no log-needing DBs
+      const rpo = r.rpoMin;
       const b = buckets.find(b => rpo >= b.min && rpo < b.max) || buckets[buckets.length - 1];
       b.count++;
     });
@@ -404,10 +413,10 @@ export default function BackupAmpelPage() {
                   <td className={`px-3 py-2.5 text-sm ${r.fullAgeHours === null ? 'text-red-400' : r.fullAgeHours > 48 ? 'text-red-400' : r.fullAgeHours > 24 ? 'text-yellow-400' : 'text-green-400'}`}>
                     {formatAge(r.fullAgeHours)}
                   </td>
-                  <td className={`px-3 py-2.5 text-sm ${r.logAgeMin === null ? 'text-red-400' : r.logAgeMin > 30 ? 'text-red-400' : r.logAgeMin > 15 ? 'text-yellow-400' : 'text-green-400'}`}>
-                    {r.logAgeMin !== null ? `${r.logAgeMin} min` : 'nie'}
+                  <td className={`px-3 py-2.5 text-sm ${r.logAgeMin === null ? (r.DbsWithOldLogBackup > 0 ? 'text-red-400' : 'text-gray-500') : r.logAgeMin > 30 ? 'text-red-400' : r.logAgeMin > 15 ? 'text-yellow-400' : 'text-green-400'}`}>
+                    {r.logAgeMin !== null ? `${r.logAgeMin} min` : (r.DbsWithOldLogBackup > 0 ? 'nie' : 'N/A')}
                   </td>
-                  <td className={`px-3 py-2.5 text-sm font-mono ${(r.rpoMin || 1440) > 60 ? 'text-red-400' : (r.rpoMin || 0) > 15 ? 'text-yellow-400' : 'text-green-400'}`}>
+                  <td className={`px-3 py-2.5 text-sm font-mono ${r.rpoMin == null ? 'text-gray-500' : r.rpoMin > 60 ? 'text-red-400' : r.rpoMin > 15 ? 'text-yellow-400' : 'text-green-400'}`}>
                     {r.rpoMin !== null ? (r.rpoMin >= 60 ? `${Math.round(r.rpoMin / 60)}h` : `${r.rpoMin}min`) : '—'}
                   </td>
                   <td className="px-3 py-2.5 text-xs text-gray-400 font-mono">
