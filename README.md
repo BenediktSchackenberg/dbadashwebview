@@ -34,7 +34,7 @@ DBA Dash has a powerful Windows GUI — but in modern IT environments, that's no
 | Can't share dashboards with management | One URL, everyone sees live data — **no install required** |
 | VPN required to check server health | Deploy on an internal IIS, access from anywhere on your network |
 | IT managers need high-level overviews | **Management dashboards** with RPO analysis, license costs, fleet KPIs |
-| Setting up monitoring views takes time | **40+ pre-built pages** for common DBA workflows |
+| Setting up monitoring views takes time | **44 pre-built pages** for common DBA workflows |
 
 **Zero impact on your existing setup** — WebView reads from the same `DBADashDB` your collectors already write to. No additional agents, no schema changes, no configuration needed on monitored servers.
 
@@ -42,75 +42,122 @@ DBA Dash has a powerful Windows GUI — but in modern IT environments, that's no
 
 ## ✨ Features
 
-### DBA Dash-Style Navigation
+### 🖥️ SQL Monitor Dashboard
+Real-time fleet overview inspired by Redgate SQL Monitor — card-based grid showing all instances with health indicators, CPU usage, and status at a glance. Alert sidebar with live error feed. Click any card to drill into instance details.
+
+### 🌳 DBA Dash-Style Navigation
 Full instance tree sidebar — grouped by SQL Server version (2025, 2022, 2019…), each instance expandable with categories: Configuration, HA/DR, Storage, Databases, Backups, Jobs, Reports. Click any node → filtered view for that server only.
 
-### Performance Summary Dashboard
+### 📊 Performance Summary Dashboard
 Real-time overview of your entire fleet in a single table — CPU, waits, IO latency, IOPs per instance. Sortable columns, auto-refresh every 30 seconds, user-configurable warning/critical color thresholds.
 
-### Management Reporting
-Three purpose-built reports designed for **IT managers and decision-makers**:
+### 🚦 Backup Ampel Report
+Traffic-light backup compliance across the entire fleet:
 
-- **License Overview** — SQL Server version/edition distribution, total core & RAM counts, end-of-support timeline with color-coded urgency
-- **Underutilized Servers** — Instances averaging <5% CPU over 14 days, with estimated annual savings per server (Enterprise: ~$15K/core, Standard: ~$4K/core)
-- **Fleet Statistics** — CPU distribution buckets, top 10 consumers, RAM/storage allocation across the fleet
+- **Per-instance ampel status** — GREEN (Full ≤24h & Log ≤15min), YELLOW (Full ≤48h & Log ≤30min), RED (everything else)
+- **AlwaysOn-aware** — AG secondaries correctly excluded from backup evaluation (backups run on preferred replica)
+- **Simple Recovery handling** — databases without log backups show N/A, not RED
+- **RPO analysis** — average and worst-case RPO across the fleet, distribution charts
+- **Expandable per-database details** — drill into any instance to see individual DB backup status, AG role, TDE, recovery model
+- **Interactive pie charts** — click to filter by status
 
-### Backup & Recovery Overview
-Management-grade backup dashboard sorted by CPU load (business-critical servers first):
+### 🔄 AlwaysOn Availability Groups
+Fleet-wide AG overview with cluster visualization:
 
-- **Expandable instance cards** — click to see every database's Full/Diff/Log backup status
-- **RPO indicators** — Excellent / Good / OK / Warning / Critical per database
-- **Recovery time estimates** — calculated from backup duration and size
-- **KPI cards** — backups in last 24h, total backup size, average recovery time
-- **Recovery Impact Assessment** — worst-case recovery time, databases with RPO gaps
+- **Cluster cards** with server topology — Primary/Secondary roles, CPU bars, RAM, availability mode
+- **Database sync state** — SYNCHRONIZED, SYNCHRONIZING, NOT SYNCHRONIZING with health indicators
+- **Lag monitoring** — log send queue, redo queue, send/redo rates per database
+- **Search** — filter across server names, AG names, and database names
+- **Per-instance HA/DR view** — click through to individual server AG details
 
-### Performance Deep-Dive
-- **Running Queries** — Live view of executing queries with blocking detection
-- **Blocking Analysis** — Tree view of blocking chains, root blockers highlighted
+### 📈 Instance Detail Pages
+Comprehensive per-instance view with tabbed navigation:
+
+- **Performance** (default tab) — CPU chart (24h), wait type analysis, CPU KPIs
+- **Backups** — per-database backup status with AG awareness
+- **Jobs** — filterable by status (All/Failed/Success), duration, messages
+- **Databases** — state, recovery model, AG role, sync state, last DBCC
+- **Drives** — visual capacity cards with usage percentage and color coding
+
+### 🚨 Alerts & Errors
+Unified alert feed combining Collection Errors and Failed Jobs:
+
+- **Severity filtering** — Critical, Warning, Info with KPI counters
+- **Type filtering** — Collection errors vs failed jobs
+- **Detail panel** — click any alert for full error message, context, server link
+- **Server breakdown** — which instances generate the most alerts
+- **Auto-refresh 30s** — newest alerts always on top
+
+### 📋 Management Reporting
+Purpose-built reports for IT managers:
+
+- **Fleet Statistics** — CPU distribution, top consumers, RAM/storage allocation, version/edition pie charts
+- **License Overview** — SQL Server edition distribution, core & RAM totals, end-of-support timeline
+- **Underutilized Servers** — instances averaging <5% CPU, candidates for consolidation or downsizing
+- **Backup & Recovery Overview** — RPO compliance, recovery time estimates, expandable instance cards
+
+### 🔍 Performance Deep-Dive
+- **Running Queries** — live executing queries with blocking detection
+- **Blocking Analysis** — tree view of blocking chains, root blockers highlighted
 - **Slow Queries** — Extended Events data with duration/DB/application filters
-- **Wait Statistics** — Stacked area chart of wait types over time
-- **Memory** — Buffer pool, PLE trends, memory clerk breakdown
-- **IO Performance** — Read/write latency charts, IOPS, throughput per file
-- **Object Execution Stats** — Stored procedure and function performance
-- **Performance Counters** — Custom counter monitoring with trend charts
-- **Query Store** — Top resource consumers from Query Store data
+- **Wait Statistics** — stacked area chart of wait types over time
+- **Memory** — buffer pool, PLE trends, memory clerk breakdown
+- **IO Performance** — read/write latency charts, IOPS, throughput per file
+- **Object Execution Stats** — stored procedure and function performance
+- **Performance Counters** — custom counter monitoring with trend charts
+- **Query Store** — top resource consumers from Query Store data
 
-### Daily Health Checks
+### 📅 Daily Health Checks
 - **Backup Status** — Full/Diff/Log backup age per database, RPO compliance
-- **Agent Jobs** — Job history with Gantt-style timeline visualization
-- **Drive Space** — Capacity monitoring with usage percentage and color thresholds
-- **Database Space** — File-level space tracking with growth analysis
-- **TempDB** — File configuration and usage monitoring
-- **Alerts** — Alert inbox with severity filtering and acknowledgement
+- **Agent Jobs** — job history with Gantt-style timeline visualization
+- **Drive Space** — capacity monitoring with usage percentage and color thresholds
+- **Database Space** — file-level space tracking with growth analysis
+- **TempDB** — file configuration and usage monitoring
 
-### Tracking & Compliance
-- **Configuration Tracking** — Detect sp_configure changes with before/after diff
-- **SQL Patching** — Version distribution across fleet, patch history timeline
+### 🔬 Tracking & Compliance
+- **Configuration Tracking** — detect sp_configure changes with before/after diff
+- **SQL Patching** — version distribution across fleet, patch history timeline
 - **Schema Changes** — DDL change history timeline
-- **Identity Columns** — Usage percentage with threshold alerts
+- **Identity Columns** — usage percentage with threshold alerts
 
-### Administration
-- **Configurable Thresholds** — Define warning/critical levels per metric — no colors until you set them
+### ⚙️ Administration
+- **Configurable Thresholds** — define warning/critical levels per metric
 - **Active Directory Authentication** — LDAP integration with group-based roles
-- **Local + AD Auth** — Hardcoded admin fallback when AD is down
-- **Server Management** — View monitored instances and connection details
-- **Groups & Tags** — Organize instances for filtering
+- **Local + AD Auth** — hardcoded admin fallback when AD is down
+- **Server Management** — view monitored instances and connection details
+- **Groups & Tags** — organize instances for filtering
 - **Users & RBAC** — Admin / Operator / Viewer roles
-- **Data Retention** — Configure cleanup per data category
+- **Data Retention** — configure cleanup per data category
 
-### User Experience
-- **Command Palette** (Ctrl+K) — Instant fuzzy search across instances, databases, jobs
+### 🎨 User Experience
+- **Command Palette** (Ctrl+K) — instant fuzzy search across instances, databases, jobs
 - **Auto-Refresh** — 30-second intervals with countdown indicator
-- **Dark Theme** — Glassmorphism design, optimized for NOC/SOC wall displays
-- **Instance-Aware Navigation** — Tree links pre-select the instance, no manual dropdowns
-- **Responsive** — Collapsible sidebar, works on tablets
+- **Dark Theme** — glassmorphism design, optimized for NOC/SOC wall displays
+- **Framer Motion** — smooth page transitions and animated list items
+- **Instance-Aware Navigation** — tree links pre-select the instance
+- **Responsive** — collapsible sidebar, works on tablets
 - **Fast** — React 19 + Vite, sub-second page transitions
 
 ---
 
 ## 📸 Screenshots
 
-> *Coming soon — deployment screenshots from a 200+ SQL Server environment.*
+> *Screenshots from a production environment with 200+ SQL Server instances.*
+
+![SQL Monitor Dashboard](docs/screenshots/monitor.png)
+*SQL Monitor — card-based fleet overview with real-time health indicators*
+
+![Backup Ampel](docs/screenshots/backup-ampel.png)
+*Backup Ampel — traffic-light compliance report with AG-aware logic*
+
+![AlwaysOn AGs](docs/screenshots/availability-groups.png)
+*Availability Groups — cluster topology with sync state and lag monitoring*
+
+![Instance Detail](docs/screenshots/instance-detail.png)
+*Instance Detail — Performance tab with CPU chart and wait analysis*
+
+![Alerts](docs/screenshots/alerts.png)
+*Alerts — unified error feed with severity filtering and server breakdown*
 
 ---
 
@@ -258,6 +305,7 @@ GET  /api/health                  Health check (no auth required)
 ```
 GET /api/dashboard/stats                    KPIs, top CPU, largest DBs, alerts
 GET /api/dashboard/performance-summary      Performance summary table
+GET /api/dashboard/monitor                  SQL Monitor card grid + alerts
 GET /api/tree                               Instance tree with databases (for sidebar)
 GET /api/instances                          All instances with version info
 GET /api/instances/{id}                     Instance detail
@@ -275,6 +323,7 @@ GET /api/instances/{id}/databases
 GET /api/instances/{id}/backups
 GET /api/instances/{id}/jobs
 GET /api/instances/{id}/queries
+GET /api/instances/{id}/hadr
 ```
 </details>
 
@@ -313,29 +362,31 @@ GET /api/monitoring/db-space?instanceId=
 <summary><strong>Estate & Reporting</strong></summary>
 
 ```
-GET /api/alerts/recent
+GET /api/alerts/recent                     Collection errors + failed jobs
 GET /api/jobs/recent
 GET /api/jobs/failures
 GET /api/drives
 GET /api/backups/estate
-GET /api/backups/management            Backup & Recovery management view
-GET /api/availability-groups
-GET /api/availability-groups/{id}
-GET /api/reports/licenses              License & version overview
-GET /api/reports/underutilized         Underutilized server analysis
-GET /api/reports/fleet-stats           Fleet resource statistics
+GET /api/backups/management                Backup & Recovery management view
+GET /api/availability-groups               Fleet-wide AG overview
+GET /api/availability-groups/{id}          Per-instance HA/DR
+GET /api/reports/licenses                  License & version overview
+GET /api/reports/underutilized             Underutilized server analysis
+GET /api/reports/fleet-stats               Fleet resource statistics
+GET /api/reports/backup-ampel              Backup Ampel (traffic-light report)
 ```
 </details>
 
 <details>
-<summary><strong>Settings</strong></summary>
+<summary><strong>Settings & Debug</strong></summary>
 
 ```
-GET  /api/settings/ad                  AD/LDAP configuration
-POST /api/settings/ad                  Update AD config
-POST /api/settings/ad/test             Test AD login
-GET  /api/settings/thresholds          Dashboard thresholds
-POST /api/settings/thresholds          Update thresholds
+GET  /api/settings/ad                      AD/LDAP configuration
+POST /api/settings/ad                      Update AD config
+POST /api/settings/ad/test                 Test AD login
+GET  /api/settings/thresholds              Dashboard thresholds
+POST /api/settings/thresholds              Update thresholds
+GET  /api/debug/summary/{id}               Raw Summary_Get output (troubleshooting)
 ```
 </details>
 
@@ -369,18 +420,19 @@ POST /api/settings/thresholds          Update thresholds
 | **Deployment** | IIS with ASP.NET Core Hosting Module |
 | **CI/CD** | GitHub Actions → ZIP artifact → GitHub Release |
 
-### Page Count
+### Page Count: 44
 
 | Category | Pages |
 |----------|-------|
-| Dashboard & Navigation | 3 |
-| Performance Monitoring | 10 |
-| Daily Health Checks | 6 |
-| Tracking & Compliance | 4 |
-| Management Reporting | 3 |
-| Estate Views | 4 |
-| Administration | 6 |
-| **Total** | **40+** |
+| Dashboard & Navigation | 4 (Dashboard, SQL Monitor, Performance Summary, Tree) |
+| Performance Monitoring | 10 (Running Queries, Blocking, Slow Queries, Waits, Memory, IO, Exec Stats, Counters, Query Store, Analysis) |
+| Daily Health Checks | 6 (Backups, Jobs, Job Timeline, Drives, DB Space, TempDB) |
+| Estate Views | 6 (Backup Ampel, Estate Backups, Estate Disk, Alerts, AGs, Instances) |
+| Management Reporting | 3 (Fleet Stats, License Overview, Underutilized) |
+| Tracking & Compliance | 4 (Configuration, Patching, Schema Changes, Identity Columns) |
+| Administration | 6 (Thresholds, Alert Settings, Servers, Groups, Users, Retention) |
+| Other | 5 (Instance Detail, Database Detail, Login, About, Reports Hub) |
+| **Total** | **44** |
 
 ---
 
@@ -416,10 +468,11 @@ The `publish/` folder is ready for IIS deployment.
 - [ ] Custom dashboard layouts (drag & drop widgets)
 - [ ] Webhook / Teams / Slack notifications
 - [ ] Dark/Light theme toggle
-- [ ] Grafana-style alerting rules
-- [ ] REST API for external integrations
-- [ ] Real-time SignalR push updates
+- [ ] SignalR real-time push updates (replace polling)
 - [ ] Export to CSV/Excel from any table
+- [ ] Mobile-optimized views for on-call DBAs
+- [ ] Integration with Grafana / Prometheus exporters
+- [ ] Automated health score per instance
 
 ---
 
@@ -439,9 +492,9 @@ Please ensure `npm run build` and `dotnet build` pass before submitting.
 
 ## 🙏 Acknowledgements
 
-**[DBA Dash](https://github.com/trimble-oss/dba-dash)** by [David Wiseman](https://github.com/DavidWisworker) / [Trimble](https://github.com/trimble-oss) — the outstanding open-source SQL Server monitoring tool that provides all the data WebView visualizes. Licensed under Apache 2.0.
+**[DBA Dash](https://github.com/trimble-oss/dba-dash)** by [David Wiseman](https://github.com/DavidWiseman) / [Trimble](https://github.com/trimble-oss) — the outstanding open-source SQL Server monitoring tool that provides all the data WebView visualizes. Licensed under Apache 2.0.
 
-If you're not using DBA Dash yet, [check it out](https://dbadash.com) — it's one of the best tools available for SQL Server monitoring.
+If you're not using DBA Dash yet, [check it out](https://dbadash.com) — it's one of the best SQL Server monitoring tools available, period.
 
 DBA Dash WebView is an **independent project** that provides a web frontend for DBA Dash data. It is not affiliated with or endorsed by Trimble or the DBA Dash project.
 
