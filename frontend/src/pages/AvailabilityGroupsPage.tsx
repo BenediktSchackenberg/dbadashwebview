@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
 import {
   Shield, Server, Database, ArrowRight, ArrowDown, ChevronDown, ChevronRight,
-  Activity, AlertTriangle, Network, Crown, RefreshCw
+  Activity, AlertTriangle, Network, Crown, RefreshCw, Search, X
 } from 'lucide-react';
 
 /* ── helpers ── */
@@ -534,6 +534,7 @@ function EstateView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [expandedAGs, setExpandedAGs] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -568,6 +569,24 @@ function EstateView() {
   const totalReplicas = clusters.reduce((s, c) => s + c.servers.length, 0);
   const totalDatabases = clusters.reduce((s, c) => s + c.ags.reduce((ss, ag) => ss + ag.databases.length, 0), 0);
 
+  // Search filter: match server names, AG names, or database names
+  const q = search.toLowerCase().trim();
+  const filteredClusters = q ? clusters.map(cluster => {
+    // Check if any server matches
+    const serverMatch = cluster.servers.some(s => s.instanceName.toLowerCase().includes(q));
+    // Filter AGs: keep AG if name matches or any DB matches
+    const filteredAGs = cluster.ags.map(ag => {
+      const agNameMatch = ag.name.toLowerCase().includes(q);
+      const matchingDbs = ag.databases.filter(d => d.databaseName.toLowerCase().includes(q));
+      if (agNameMatch || matchingDbs.length > 0) return { ...ag, databases: agNameMatch ? ag.databases : matchingDbs };
+      return null;
+    }).filter((ag): ag is AGGroup => ag !== null);
+    // Show cluster if server matches (show all AGs) or if filtered AGs exist
+    if (serverMatch) return cluster;
+    if (filteredAGs.length > 0) return { ...cluster, ags: filteredAGs };
+    return null;
+  }).filter((c): c is AGCluster => c !== null) : clusters;
+
   if (totalClusters === 0) {
     return (
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
@@ -592,7 +611,23 @@ function EstateView() {
           <h1 className="text-2xl font-bold text-white">AlwaysOn Availability Groups</h1>
           <p className="text-sm text-gray-400 mt-1">Fleet-wide overview of HA/DR clusters, replicas, and database synchronization</p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+            <input
+              type="text"
+              placeholder="Server, AG, Datenbank..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="bg-white/5 border border-white/10 rounded-lg pl-9 pr-8 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50 w-56"
+            />
+            {search && (
+              <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2">
+                <X className="w-3.5 h-3.5 text-gray-500 hover:text-gray-300" />
+              </button>
+            )}
+          </div>
           {[
             { label: 'Clusters', value: totalClusters },
             { label: 'AGs', value: totalAGs },
@@ -608,7 +643,14 @@ function EstateView() {
       </div>
 
       {/* Cluster cards */}
-      {clusters.map((cluster, clusterIdx) => (
+      {filteredClusters.length === 0 && q && (
+        <div className="glass rounded-xl p-8 text-center">
+          <Search className="w-8 h-8 text-gray-600 mx-auto mb-3" />
+          <p className="text-gray-400">Keine Ergebnisse für &ldquo;{search}&rdquo;</p>
+          <button onClick={() => setSearch('')} className="text-sm text-blue-400 hover:text-blue-300 mt-2">Filter zurücksetzen</button>
+        </div>
+      )}
+      {filteredClusters.map((cluster, clusterIdx) => (
         <motion.div
           key={clusterIdx}
           initial={{ opacity: 0, y: 20 }}
@@ -707,7 +749,7 @@ function EstateView() {
           <div className="p-6 pt-4 space-y-2">
             <div className="text-[10px] uppercase tracking-wider text-gray-500 mb-3 font-semibold">Availability Groups</div>
             {cluster.ags.map(ag => {
-              const isExpanded = expandedAGs.has(ag.groupId);
+              const isExpanded = expandedAGs.has(ag.groupId) || !!q;
               const allHealthy = ag.databases.every(d => d.health.toUpperCase() === 'HEALTHY');
               const someUnhealthy = ag.databases.some(d => {
                 const h = d.health.toUpperCase();
