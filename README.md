@@ -34,7 +34,7 @@ DBA Dash has a powerful Windows GUI — but in modern IT environments, that's no
 | Can't share dashboards with management | One URL, everyone sees live data — **no install required** |
 | VPN required to check server health | Deploy on an internal IIS, access from anywhere on your network |
 | IT managers need high-level overviews | **Management dashboards** with RPO analysis, license costs, fleet KPIs |
-| Setting up monitoring views takes time | **44 pre-built pages** for common DBA workflows |
+| Setting up monitoring views takes time | **46 pre-built pages** for common DBA workflows |
 
 **Zero impact on your existing setup** — WebView reads from the same `DBADashDB` your collectors already write to. No additional agents, no schema changes, no configuration needed on monitored servers.
 
@@ -42,19 +42,35 @@ DBA Dash has a powerful Windows GUI — but in modern IT environments, that's no
 
 ## ✨ Features
 
+### 📋 Summary Dashboard (NEW)
+The first thing you see — a faithful recreation of DBA Dash's original Summary tab. Status matrix showing OK / Warning / Critical / N/A / Acknowledged counts for every health check across your fleet. One glance tells you where to focus.
+
+Uses `dbo.Summary_Get` stored procedure with correct `DBADashStatusEnum` mapping:
+- **1 = Critical** (red), **2 = Warning** (yellow), **3 = N/A** (gray), **4 = OK** (green), **5 = Acknowledged** (blue)
+
+Health checks tracked: Backup FULL/DIFF/LOG, Drive Space, File Space, Log Space, Agent Jobs, Availability Groups, Corruption, Last Good CheckDB, Memory Dump, Snapshot Age, Instance Uptime, Agent Running, DB Mail, Query Store, SQL Agent Alerts, % Max Size, Collection Errors, Database State, Identity Columns, Log Shipping, Custom Checks, Mirroring, Elastic Pool Storage.
+
+### 🖥️ Tabbed Dashboard
+The main dashboard mirrors the DBA Dash GUI with **5 tabs** — exactly like the original:
+
+1. **Summary** — status matrix with instance counts per health check
+2. **Alerts** — unified error feed (collection errors + failed jobs)
+3. **Performance Summary** — fleet-wide CPU, waits, IO latency table (sorted by Max CPU)
+4. **Slow Queries** — Extended Events slow query data
+5. **Running Queries** — live executing queries with blocking detection
+
+All tabs auto-refresh every 30 seconds with countdown indicator.
+
 ### 🖥️ SQL Monitor Dashboard
 Real-time fleet overview inspired by Redgate SQL Monitor — card-based grid showing all instances with health indicators, CPU usage, and status at a glance. Alert sidebar with live error feed. Click any card to drill into instance details.
 
 ### 🌳 DBA Dash-Style Navigation
 Full instance tree sidebar — grouped by SQL Server version (2025, 2022, 2019…), each instance expandable with categories: Configuration, HA/DR, Storage, Databases, Backups, Jobs, Reports. Click any node → filtered view for that server only.
 
-### 📊 Performance Summary Dashboard
-Real-time overview of your entire fleet in a single table — CPU, waits, IO latency, IOPs per instance. Sortable columns, auto-refresh every 30 seconds, user-configurable warning/critical color thresholds.
-
 ### 🚦 Backup Ampel Report
 Traffic-light backup compliance across the entire fleet:
 
-- **Per-instance ampel status** — GREEN (Full ≤24h & Log ≤15min), YELLOW (Full ≤48h & Log ≤30min), RED (everything else)
+- **Per-instance ampel status** — GREEN (Full ≤24h & Log ≤1h), YELLOW (Full ≤48h & Log ≤2h), RED (everything else)
 - **AlwaysOn-aware** — AG secondaries correctly excluded from backup evaluation (backups run on preferred replica)
 - **Simple Recovery handling** — databases without log backups show N/A, not RED
 - **RPO analysis** — average and worst-case RPO across the fleet, distribution charts
@@ -74,10 +90,10 @@ Fleet-wide AG overview with cluster visualization:
 Comprehensive per-instance view with tabbed navigation:
 
 - **Performance** (default tab) — CPU chart (24h), wait type analysis, CPU KPIs
-- **Backups** — per-database backup status with AG awareness
+- **Backups** — per-database backup status grouped by DB with Full/Diff/Log age, AG-aware
 - **Jobs** — filterable by status (All/Failed/Success), duration, messages
 - **Databases** — state, recovery model, AG role, sync state, last DBCC
-- **Drives** — visual capacity cards with usage percentage and color coding
+- **Drives** — visual capacity cards with usage percentage and color coding (instance-filtered when navigating from tree)
 
 ### 🚨 Alerts & Errors
 Unified alert feed combining Collection Errors and Failed Jobs:
@@ -131,10 +147,10 @@ Purpose-built reports for IT managers:
 
 ### 🎨 User Experience
 - **Command Palette** (Ctrl+K) — instant fuzzy search across instances, databases, jobs
-- **Auto-Refresh** — 30-second intervals with countdown indicator
+- **Auto-Refresh** — 30-second intervals with countdown indicator, diff-based updates (no full page remount)
 - **Dark Theme** — glassmorphism design, optimized for NOC/SOC wall displays
 - **Framer Motion** — smooth page transitions and animated list items
-- **Instance-Aware Navigation** — tree links pre-select the instance
+- **Instance-Aware Navigation** — tree links filter to selected instance (drives, backups, config)
 - **Responsive** — collapsible sidebar, works on tablets
 - **Fast** — React 19 + Vite, sub-second page transitions
 
@@ -143,6 +159,9 @@ Purpose-built reports for IT managers:
 ## 📸 Screenshots
 
 > *Screenshots from a production environment with 200+ SQL Server instances.*
+
+![Summary Dashboard](docs/screenshots/summary.png)
+*Summary — status matrix with OK/Warning/Critical/N/A counts per health check*
 
 ![SQL Monitor Dashboard](docs/screenshots/monitor.png)
 *SQL Monitor — card-based fleet overview with real-time health indicators*
@@ -303,12 +322,13 @@ GET  /api/health                  Health check (no auth required)
 <summary><strong>Dashboard & Navigation</strong></summary>
 
 ```
+GET /api/dashboard/summary                  Raw Summary_Get (status matrix data)
 GET /api/dashboard/stats                    KPIs, top CPU, largest DBs, alerts
 GET /api/dashboard/performance-summary      Performance summary table
 GET /api/dashboard/monitor                  SQL Monitor card grid + alerts
 GET /api/tree                               Instance tree with databases (for sidebar)
 GET /api/instances                          All instances with version info
-GET /api/instances/{id}                     Instance detail
+GET /api/instances/{id}                     Instance detail + Summary_Get row
 ```
 </details>
 
@@ -362,11 +382,11 @@ GET /api/monitoring/db-space?instanceId=
 <summary><strong>Estate & Reporting</strong></summary>
 
 ```
-GET /api/alerts/recent                     Collection errors + failed jobs
+GET /api/alerts/recent                     Collection errors + failed jobs (48h)
 GET /api/jobs/recent
 GET /api/jobs/failures
-GET /api/drives
-GET /api/backups/estate
+GET /api/drives                            All drives across fleet
+GET /api/backups/estate                    Estate-wide backup overview
 GET /api/backups/management                Backup & Recovery management view
 GET /api/availability-groups               Fleet-wide AG overview
 GET /api/availability-groups/{id}          Per-instance HA/DR
@@ -420,19 +440,33 @@ GET  /api/debug/summary/{id}               Raw Summary_Get output (troubleshooti
 | **Deployment** | IIS with ASP.NET Core Hosting Module |
 | **CI/CD** | GitHub Actions → ZIP artifact → GitHub Release |
 
-### Page Count: 44
+### Page Count: 46
 
 | Category | Pages |
 |----------|-------|
-| Dashboard & Navigation | 4 (Dashboard, SQL Monitor, Performance Summary, Tree) |
+| Dashboard & Navigation | 5 (Summary, Tabbed Dashboard, SQL Monitor, Performance Summary, Tree) |
 | Performance Monitoring | 10 (Running Queries, Blocking, Slow Queries, Waits, Memory, IO, Exec Stats, Counters, Query Store, Analysis) |
 | Daily Health Checks | 6 (Backups, Jobs, Job Timeline, Drives, DB Space, TempDB) |
 | Estate Views | 6 (Backup Ampel, Estate Backups, Estate Disk, Alerts, AGs, Instances) |
 | Management Reporting | 3 (Fleet Stats, License Overview, Underutilized) |
 | Tracking & Compliance | 4 (Configuration, Patching, Schema Changes, Identity Columns) |
 | Administration | 6 (Thresholds, Alert Settings, Servers, Groups, Users, Retention) |
-| Other | 5 (Instance Detail, Database Detail, Login, About, Reports Hub) |
-| **Total** | **44** |
+| Other | 6 (Instance Detail, Database Detail, Login, About, Reports Hub, Debug) |
+| **Total** | **46** |
+
+### DBA Dash Status Enum
+
+WebView correctly maps the `DBADashStatusEnum` values used throughout `dbo.Summary_Get` and all status columns:
+
+| Value | Enum | Color | Meaning |
+|-------|------|-------|---------|
+| 1 | Critical | 🔴 Red | Immediate attention required |
+| 2 | Warning | 🟡 Yellow | Threshold exceeded, review needed |
+| 3 | N/A | ⚪ Gray | Check not applicable / not configured |
+| 4 | OK | 🟢 Green | All good |
+| 5 | Acknowledged | 🔵 Blue | Known issue, acknowledged by admin |
+
+> **Note:** This is the opposite of what you might expect (1=worst, not best). Verified against [`DBADashGUI/DBAChecksStatus.cs`](https://github.com/trimble-oss/dba-dash/blob/main/DBADashGUI/DBAChecksStatus.cs).
 
 ---
 
