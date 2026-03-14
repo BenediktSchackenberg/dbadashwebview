@@ -79,10 +79,6 @@ function statusLabel(val: number | null | undefined): string {
   return '';
 }
 
-function matrixBgColor(val: number): string {
-  if (val === 0) return 'bg-transparent';
-  return 'bg-white/5';
-}
 
 export default function SummaryPage() {
   const [summary, setSummary] = useState<any[]>([]);
@@ -258,7 +254,7 @@ export default function SummaryPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {filtered.map((row, i) => (
+              {filtered.map((row, _i) => (
                 <tr key={row.InstanceID || i} className="hover:bg-white/5 transition-colors">
                   {DETAIL_COLS.map(col => {
                     if (col.key === 'InstanceDisplayName') {
