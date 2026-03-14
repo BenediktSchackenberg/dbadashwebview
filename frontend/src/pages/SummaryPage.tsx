@@ -193,7 +193,7 @@ export default function SummaryPage() {
               </tr>
             </thead>
             <tbody>
-              {matrix.map((m, i) => {
+              {matrix.map((m) => {
                 const hasIssues = m.warning > 0 || m.critical > 0;
                 return (
                   <tr key={m.key} className={clsx('border-b border-white/5 transition-colors', hasIssues ? 'hover:bg-white/5' : 'hover:bg-white/3')}>
