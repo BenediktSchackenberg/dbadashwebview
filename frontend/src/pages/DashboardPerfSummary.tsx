@@ -41,8 +41,8 @@ export default function DashboardPerfSummary() {
   const [data, setData] = useState<any[]>([]);
   const [thresholds, setThresholds] = useState<Thresholds>({});
   const [loading, setLoading] = useState(true);
-  const [sortKey, setSortKey] = useState<string>('instanceDisplayName');
-  const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [sortKey, setSortKey] = useState<string>('maxCPU');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [countdown, setCountdown] = useState(30);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
