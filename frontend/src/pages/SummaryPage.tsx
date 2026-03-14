@@ -3,12 +3,15 @@ import { api } from '../api/api';
 import { RefreshCw, Clock, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-/* ─── Correct column names from dbo.Summary_Get ─── */
+/* ─── DBA Dash Status Enum (from DBADashGUI/DBAChecksStatus.cs) ───
+   Critical = 1, Warning = 2, NA = 3, OK = 4, Acknowledged = 5
+*/
 
 const STATUS_KEYS: { key: string; label: string }[] = [
   { key: 'FullBackupStatus', label: 'Backup FULL' },
   { key: 'DiffBackupStatus', label: 'Backup DIFF' },
   { key: 'LogBackupStatus', label: 'Backup LOG' },
+  { key: 'LogShippingStatus', label: 'Log Shipping' },
   { key: 'DriveStatus', label: 'Drive Space' },
   { key: 'FileFreeSpaceStatus', label: 'File Space' },
   { key: 'LogFreeSpaceStatus', label: 'Log Space' },
@@ -21,21 +24,23 @@ const STATUS_KEYS: { key: string; label: string }[] = [
   { key: 'UptimeStatus', label: 'Instance Uptime' },
   { key: 'IsAgentRunningStatus', label: 'Is Agent Running' },
   { key: 'DBMailStatus', label: 'DB Mail' },
-  { key: 'QueryStoreStatus', label: 'QS' },
+  { key: 'QueryStoreStatus', label: 'Query Store' },
   { key: 'AlertStatus', label: 'SQL Agent Alerts' },
   { key: 'PctMaxSizeStatus', label: '% Max Size' },
   { key: 'CollectionErrorStatus', label: 'DBA Dash Errors (24hrs)' },
   { key: 'DatabaseStateStatus', label: 'Database State' },
   { key: 'IdentityStatus', label: 'Identity Columns' },
-  { key: 'LogShippingStatus', label: 'Log Shipping' },
+  { key: 'CustomCheckStatus', label: 'Custom Check' },
+  { key: 'MirroringStatus', label: 'Mirroring' },
+  { key: 'ElasticPoolStorageStatus', label: 'Elastic Pool Storage' },
 ];
 
-
-function cellBg(count: number, type: 'ok' | 'warning' | 'critical' | 'na'): string {
+function cellBg(count: number, type: 'ok' | 'warning' | 'critical' | 'na' | 'ack'): string {
   if (count === 0) return 'text-gray-600';
   if (type === 'ok') return 'bg-green-600/60 text-green-100 font-semibold';
   if (type === 'warning') return 'bg-yellow-500/60 text-yellow-100 font-semibold';
   if (type === 'critical') return 'bg-red-600/60 text-red-100 font-semibold';
+  if (type === 'ack') return 'bg-blue-600/40 text-blue-200 font-semibold';
   return 'text-gray-400';
 }
 
@@ -69,24 +74,22 @@ export default function SummaryPage() {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [fetchData]);
 
-  // Build status matrix
+  // Build status matrix — DBA Dash enum: Critical=1, Warning=2, NA=3, OK=4, Acknowledged=5
   const matrix = useMemo(() => {
     return STATUS_KEYS.map(sk => {
-      let ok = 0, warning = 0, critical = 0, na = 0;
+      let ok = 0, warning = 0, critical = 0, na = 0, ack = 0;
       for (const row of summary) {
         const raw = row[sk.key];
-        if (raw == null) { na++; continue; }
-        const v = Number(raw);
-        if (v === 1) ok++;
+        const v = (raw == null) ? 3 : Number(raw);
+        if (v === 4) ok++;
         else if (v === 2) warning++;
-        else if (v === 4) critical++;
-        else if (v === 3) na++;
-        else na++;
+        else if (v === 1) critical++;
+        else if (v === 5) ack++;
+        else na++; // 3 or anything else
       }
-      // Hide rows where all instances are N/A (not relevant)
-      if (ok + warning + critical === 0 && na === summary.length) return null;
-      return { ...sk, ok, warning, critical, na, total: ok + warning + critical + na };
-    }).filter(Boolean) as { key: string; label: string; ok: number; warning: number; critical: number; na: number; total: number }[];
+      if (ok + warning + critical + ack === 0 && na === summary.length) return null;
+      return { ...sk, ok, warning, critical, na, ack, total: ok + warning + critical + na + ack };
+    }).filter(Boolean) as { key: string; label: string; ok: number; warning: number; critical: number; na: number; ack: number; total: number }[];
   }, [summary]);
 
   if (loading && summary.length === 0) {
@@ -100,7 +103,6 @@ export default function SummaryPage() {
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
-      {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white">Summary</h1>
@@ -115,7 +117,6 @@ export default function SummaryPage() {
         </div>
       </div>
 
-      {/* Status Matrix */}
       <div className="glass rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
@@ -126,7 +127,7 @@ export default function SummaryPage() {
                 <th className="px-3 py-2.5 text-center text-yellow-400 font-semibold">Instance Count Warning</th>
                 <th className="px-3 py-2.5 text-center text-red-400 font-semibold">Instance Count Critical</th>
                 <th className="px-3 py-2.5 text-center text-gray-400 font-semibold">Instance Count N/A</th>
-                <th className="px-3 py-2.5 text-center text-gray-400 font-semibold">Instance Count Acknowledged</th>
+                <th className="px-3 py-2.5 text-center text-blue-400 font-semibold">Instance Count Acknowledged</th>
               </tr>
             </thead>
             <tbody>
@@ -147,7 +148,9 @@ export default function SummaryPage() {
                   <td className="px-3 py-1.5 text-center">
                     <span className={`inline-block min-w-[2rem] px-2 py-0.5 rounded ${cellBg(m.na, 'na')}`}>{m.na}</span>
                   </td>
-                  <td className="px-3 py-1.5 text-center text-gray-600">0</td>
+                  <td className="px-3 py-1.5 text-center">
+                    <span className={`inline-block min-w-[2rem] px-2 py-0.5 rounded ${cellBg(m.ack, 'ack')}`}>{m.ack}</span>
+                  </td>
                 </tr>
               ))}
             </tbody>

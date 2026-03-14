@@ -24,7 +24,7 @@ interface MonitorInstance {
   diskIOKB: number;
   agName: string;
   agRole: string;
-  status: number; // 1=OK, 2=Warning, 4=Critical
+  status: number; // 1=Critical, 2=Warning, 3=NA, 4=OK
   activeAlerts: string[];
 }
 
@@ -44,22 +44,23 @@ function formatWaits(ms: number): string {
 }
 
 function statusColor(status: number): { bg: string; border: string; dot: string; text: string } {
-  if (status === 4) return { bg: 'bg-red-500/5', border: 'border-red-500/30', dot: 'bg-red-500', text: 'text-red-400' };
+  // DBA Dash: Critical=1, Warning=2, NA=3, OK=4
+  if (status === 1) return { bg: 'bg-red-500/5', border: 'border-red-500/30', dot: 'bg-red-500', text: 'text-red-400' };
   if (status === 2) return { bg: 'bg-yellow-500/5', border: 'border-yellow-500/30', dot: 'bg-yellow-500', text: 'text-yellow-400' };
   return { bg: 'bg-green-500/5', border: 'border-green-500/20', dot: 'bg-green-500', text: 'text-green-400' };
 }
 
 function healthBar(instances: MonitorInstance[]): { ok: number; warn: number; crit: number } {
-  const ok = instances.filter(i => i.status === 1 && i.isOnline).length;
+  const ok = instances.filter(i => i.status === 4 && i.isOnline).length;
   const warn = instances.filter(i => i.status === 2).length;
-  const crit = instances.filter(i => i.status === 4 || !i.isOnline).length;
+  const crit = instances.filter(i => i.status === 1 || !i.isOnline).length;
   return { ok, warn, crit };
 }
 
 /* ── Instance Card ─────────────────────────────────────────────────────── */
 
 function InstanceCard({ inst, onClick }: { inst: MonitorInstance; onClick: () => void }) {
-  const sc = statusColor(inst.isOnline ? inst.status : 4);
+  const sc = statusColor(inst.isOnline ? inst.status : 1);
   const osType = inst.edition?.toLowerCase().includes('linux') ? 'Linux' : 'Windows';
   const dbType = inst.edition?.toLowerCase().includes('azure') ? 'Azure SQL' :
     inst.edition?.toLowerCase().includes('postgre') ? 'PostgreSQL' : 'SQL Server';

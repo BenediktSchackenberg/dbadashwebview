@@ -319,19 +319,20 @@ app.MapGet("/api/dashboard/stats", async () =>
         int healthy = 0, warning = 0, critical = 0;
         foreach (var row in activeSummary)
         {
+            // DBA Dash enum: Critical=1, Warning=2, NA=3, OK=4, Acknowledged=5
             var statusKeys = new[] { "FullBackupStatus", "DriveStatus", "JobStatus", "AGStatus",
                 "CorruptionStatus", "LastGoodCheckDBStatus", "LogBackupStatus" };
-            int worst = 1;
+            int worst = 4; // start at OK
             foreach (var k in statusKeys)
             {
                 if (row.TryGetValue(k, out var v) && v != null)
                 {
                     var val = Convert.ToInt32(v);
-                    if (val == 4) { worst = 4; break; }
-                    if (val == 2 && worst < 2) worst = 2;
+                    if (val == 3) continue; // skip N/A
+                    if (val < worst) worst = val; // lower = worse
                 }
             }
-            if (worst == 4) critical++;
+            if (worst == 1) critical++;
             else if (worst == 2) warning++;
             else healthy++;
         }
@@ -2331,7 +2332,8 @@ app.MapGet("/api/dashboard/monitor", async () =>
             var sum = summaryMap.GetValueOrDefault(id);
 
             // Compute worst status from Summary_Get
-            int worstStatus = 1;
+            // DBA Dash enum: Critical=1, Warning=2, NA=3, OK=4, Acknowledged=5
+            int worstStatus = 4; // start at OK
             if (sum != null)
             {
                 var statusKeys = new[] { "FullBackupStatus", "DriveStatus", "JobStatus", "AGStatus",
@@ -2341,27 +2343,27 @@ app.MapGet("/api/dashboard/monitor", async () =>
                     if (sum.TryGetValue(k, out var sv) && sv != null)
                     {
                         var val = Convert.ToInt32(sv);
-                        if (val == 4) { worstStatus = 4; break; }
-                        if (val == 2 && worstStatus < 2) worstStatus = 2;
+                        if (val == 3) continue; // skip N/A
+                        if (val < worstStatus) worstStatus = val; // lower = worse
                     }
                 }
             }
 
-            // Collect active alerts for this instance
+            // Collect active alerts for this instance (Critical=1 or Warning=2)
             var activeAlerts = new List<string>();
             if (sum != null)
             {
-                if (sum.TryGetValue("FullBackupStatus", out var fb) && fb != null && (Convert.ToInt32(fb) == 2 || Convert.ToInt32(fb) == 4))
+                if (sum.TryGetValue("FullBackupStatus", out var fb) && fb != null && (Convert.ToInt32(fb) == 1 || Convert.ToInt32(fb) == 2))
                     activeAlerts.Add("Backup");
-                if (sum.TryGetValue("DriveStatus", out var ds) && ds != null && (Convert.ToInt32(ds) == 2 || Convert.ToInt32(ds) == 4))
+                if (sum.TryGetValue("DriveStatus", out var ds) && ds != null && (Convert.ToInt32(ds) == 1 || Convert.ToInt32(ds) == 2))
                     activeAlerts.Add("Disk space");
-                if (sum.TryGetValue("JobStatus", out var js) && js != null && (Convert.ToInt32(js) == 2 || Convert.ToInt32(js) == 4))
+                if (sum.TryGetValue("JobStatus", out var js) && js != null && (Convert.ToInt32(js) == 1 || Convert.ToInt32(js) == 2))
                     activeAlerts.Add("Job failing");
-                if (sum.TryGetValue("AGStatus", out var ags) && ags != null && (Convert.ToInt32(ags) == 2 || Convert.ToInt32(ags) == 4))
+                if (sum.TryGetValue("AGStatus", out var ags) && ags != null && (Convert.ToInt32(ags) == 1 || Convert.ToInt32(ags) == 2))
                     activeAlerts.Add("AG");
-                if (sum.TryGetValue("CorruptionStatus", out var cs) && cs != null && (Convert.ToInt32(cs) == 2 || Convert.ToInt32(cs) == 4))
+                if (sum.TryGetValue("CorruptionStatus", out var cs) && cs != null && (Convert.ToInt32(cs) == 1 || Convert.ToInt32(cs) == 2))
                     activeAlerts.Add("Corruption");
-                if (sum.TryGetValue("LogBackupStatus", out var lb) && lb != null && (Convert.ToInt32(lb) == 2 || Convert.ToInt32(lb) == 4))
+                if (sum.TryGetValue("LogBackupStatus", out var lb) && lb != null && (Convert.ToInt32(lb) == 1 || Convert.ToInt32(lb) == 2))
                     activeAlerts.Add("Log backup");
             }
 

@@ -7,13 +7,15 @@ import StatusBadge from '../components/StatusBadge';
 import LoadingSpinner from '../components/LoadingSpinner';
 
 function getOverallStatus(row: any): number {
+  // DBA Dash enum: Critical=1, Warning=2, NA=3, OK=4, Acknowledged=5
+  // Worst = lowest non-NA value
   const keys = ['FullBackupStatus', 'DriveStatus', 'JobStatus', 'AGStatus',
     'CorruptionStatus', 'LastGoodCheckDBStatus', 'LogBackupStatus'];
-  let worst = 1;
+  let worst = 4; // start at OK
   for (const k of keys) {
-    const v = row[k];
-    if (v === 4) return 4;
-    if (v === 2 && worst < 2) worst = 2;
+    const v = row[k] != null ? Number(row[k]) : 3;
+    if (v === 3) continue; // skip N/A
+    if (v < worst) worst = v; // lower = worse (1=Critical, 2=Warning)
   }
   return worst;
 }
