@@ -50,14 +50,14 @@ function computeAmpel(row: any): InstanceAmpel {
   else rpoMin = null; // no log backups (possibly all Simple Recovery)
 
   // Ampel rules:
-  // GREEN: newest full <= 24h AND (newest log <= 15min OR no Full/Bulk-Logged DBs needing logs)
-  // YELLOW: newest full <= 48h AND (newest log <= 30min OR no log-needing DBs)
+  // GREEN: newest full <= 24h AND (newest log <= 60min OR no Full/Bulk-Logged DBs needing logs)
+  // YELLOW: newest full <= 48h AND (newest log <= 120min OR no log-needing DBs)
   // RED: everything else
   const hasLogDbs = logDate !== null || (row.DbsWithOldLogBackup != null && row.DbsWithOldLogBackup > 0);
   let status: AmpelStatus = 'RED';
   if (fullAgeHours !== null) {
-    const logOk = !hasLogDbs || (logAgeMin !== null && logAgeMin <= 15);
-    const logWarn = !hasLogDbs || (logAgeMin !== null && logAgeMin <= 30);
+    const logOk = !hasLogDbs || (logAgeMin !== null && logAgeMin <= 60);
+    const logWarn = !hasLogDbs || (logAgeMin !== null && logAgeMin <= 120);
     if (fullAgeHours <= 24 && logOk) status = 'GREEN';
     else if (fullAgeHours <= 48 && logWarn) status = 'YELLOW';
   }
@@ -262,8 +262,8 @@ export default function BackupAmpelPage() {
       <div className="glass rounded-xl p-4 border border-white/5">
         <div className="flex items-center gap-6 text-xs text-gray-400 flex-wrap">
           <span className="text-gray-500">Ampel-Regeln:</span>
-          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-500" /> <strong className="text-green-400">Grün</strong> Full ≤24h & Log ≤15min</span>
-          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-yellow-500" /> <strong className="text-yellow-400">Gelb</strong> Full ≤48h & Log ≤30min</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-500" /> <strong className="text-green-400">Grün</strong> Full ≤24h & Log ≤1h</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-yellow-500" /> <strong className="text-yellow-400">Gelb</strong> Full ≤48h & Log ≤2h</span>
           <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500" /> <strong className="text-red-400">Rot</strong> Alles andere / keine Backups</span>
           <span className="text-gray-500 ml-auto">RPO = max(Ø Log-Intervall, Alter letztes Log-Backup)</span>
         </div>
@@ -413,7 +413,7 @@ export default function BackupAmpelPage() {
                   <td className={`px-3 py-2.5 text-sm ${r.fullAgeHours === null ? 'text-red-400' : r.fullAgeHours > 48 ? 'text-red-400' : r.fullAgeHours > 24 ? 'text-yellow-400' : 'text-green-400'}`}>
                     {formatAge(r.fullAgeHours)}
                   </td>
-                  <td className={`px-3 py-2.5 text-sm ${r.logAgeMin === null ? (r.DbsWithOldLogBackup > 0 ? 'text-red-400' : 'text-gray-500') : r.logAgeMin > 30 ? 'text-red-400' : r.logAgeMin > 15 ? 'text-yellow-400' : 'text-green-400'}`}>
+                  <td className={`px-3 py-2.5 text-sm ${r.logAgeMin === null ? (r.DbsWithOldLogBackup > 0 ? 'text-red-400' : 'text-gray-500') : r.logAgeMin > 120 ? 'text-red-400' : r.logAgeMin > 60 ? 'text-yellow-400' : 'text-green-400'}`}>
                     {r.logAgeMin !== null ? `${r.logAgeMin} min` : (r.DbsWithOldLogBackup > 0 ? 'nie' : 'N/A')}
                   </td>
                   <td className={`px-3 py-2.5 text-sm font-mono ${r.rpoMin == null ? 'text-gray-500' : r.rpoMin > 60 ? 'text-red-400' : r.rpoMin > 15 ? 'text-yellow-400' : 'text-green-400'}`}>
@@ -479,7 +479,7 @@ export default function BackupAmpelPage() {
                           <td className="px-2 py-1.5 text-gray-400">
                             {isSecondary ? '—' : db.LastDiffDate ? new Date(db.LastDiffDate).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'}
                           </td>
-                          <td className={`px-2 py-1.5 ${isSecondary ? 'text-gray-600' : logAge === null ? 'text-gray-600' : logAge > 30 ? 'text-red-400' : logAge > 15 ? 'text-yellow-400' : 'text-green-400'}`}>
+                          <td className={`px-2 py-1.5 ${isSecondary ? 'text-gray-600' : logAge === null ? 'text-gray-600' : logAge > 120 ? 'text-red-400' : logAge > 60 ? 'text-yellow-400' : 'text-green-400'}`}>
                             {isSecondary ? 'via Primary' : logDate ? logDate.toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'}
                           </td>
                           <td className="px-2 py-1.5 text-right text-gray-300">

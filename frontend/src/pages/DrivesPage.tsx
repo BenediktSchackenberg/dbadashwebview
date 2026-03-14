@@ -17,13 +17,15 @@ export default function DrivesPage() {
   useEffect(() => {
     (async () => {
       try {
-        const data = await api.drives().catch(() => []);
+        const data = id
+          ? await api.instanceDrives(Number(id)).catch(() => [])
+          : await api.drives().catch(() => []);
         setDrives(Array.isArray(data) ? data : []);
       } finally {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [id]);
 
   if (loading) return <LoadingSpinner />;
 
