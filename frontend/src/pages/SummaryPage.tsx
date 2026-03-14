@@ -254,8 +254,8 @@ export default function SummaryPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {filtered.map((row, _i) => (
-                <tr key={row.InstanceID || i} className="hover:bg-white/5 transition-colors">
+              {filtered.map((row) => (
+                <tr key={row.InstanceID ?? row.InstanceDisplayName} className="hover:bg-white/5 transition-colors">
                   {DETAIL_COLS.map(col => {
                     if (col.key === 'InstanceDisplayName') {
                       return (
