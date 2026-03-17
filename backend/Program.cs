@@ -510,16 +510,17 @@ app.MapGet("/api/instances/{id:int}", async (int id) =>
     }
 }).RequireAuthorization();
 
-app.MapGet("/api/instances/{id:int}/cpu", async (int id) =>
+app.MapGet("/api/instances/{id:int}/cpu", async (int id, int? hours) =>
 {
+    var h = Math.Min(hours ?? 24, 336);
     try
     {
         var data = await QueryAsync(@"
             SELECT TOP 1440 EventTime, SQLProcessCPU, SystemIdleCPU,
                    (100 - SQLProcessCPU - SystemIdleCPU) AS OtherCPU,
                    (100 - SystemIdleCPU) AS TotalCPU
-            FROM dbo.CPU WHERE InstanceID = @id AND EventTime > DATEADD(hour, -24, GETUTCDATE())
-            ORDER BY EventTime DESC", ("@id", id));
+            FROM dbo.CPU WHERE InstanceID = @id AND EventTime > DATEADD(hour, -@hours, GETUTCDATE())
+            ORDER BY EventTime DESC", ("@id", id), ("@hours", h));
         return Results.Ok(data);
     }
     catch (Exception ex)
@@ -528,8 +529,9 @@ app.MapGet("/api/instances/{id:int}/cpu", async (int id) =>
     }
 }).RequireAuthorization();
 
-app.MapGet("/api/instances/{id:int}/waits", async (int id) =>
+app.MapGet("/api/instances/{id:int}/waits", async (int id, int? hours) =>
 {
+    var h = Math.Min(hours ?? 24, 336);
     try
     {
         var data = await QueryAsync(@"
@@ -539,9 +541,9 @@ app.MapGet("/api/instances/{id:int}/waits", async (int id) =>
                    SUM(w.signal_wait_time_ms) as TotalSignalWaitMs
             FROM dbo.Waits w
             LEFT JOIN dbo.WaitType wt ON w.WaitTypeID = wt.WaitTypeID
-            WHERE w.InstanceID = @id AND w.SnapshotDate > DATEADD(hour, -1, GETUTCDATE())
+            WHERE w.InstanceID = @id AND w.SnapshotDate > DATEADD(hour, -@hours, GETUTCDATE())
             GROUP BY w.WaitTypeID, wt.WaitType
-            ORDER BY SUM(w.wait_time_ms) DESC", ("@id", id));
+            ORDER BY SUM(w.wait_time_ms) DESC", ("@id", id), ("@hours", h));
         return Results.Ok(data);
     }
     catch (Exception ex)
@@ -1088,8 +1090,9 @@ app.MapGet("/api/performance/slow-queries", async (int? instanceId, int? hours) 
 
 // ── Performance: Memory ──────────────────────────────────────────────────
 
-app.MapGet("/api/performance/memory", async (int? instanceId) =>
+app.MapGet("/api/performance/memory", async (int? instanceId, int? hours) =>
 {
+    var h = Math.Min(hours ?? 24, 336);
     var clerks = Array.Empty<object>() as object;
     var counters = Array.Empty<object>() as object;
     var clerkNote = "";
@@ -1105,9 +1108,9 @@ app.MapGet("/api/performance/memory", async (int? instanceId) =>
             FROM dbo.MemoryUsage mu
             JOIN dbo.Instances i ON mu.InstanceID = i.InstanceID
             JOIN dbo.MemoryClerkType mct ON mu.MemoryClerkTypeID = mct.MemoryClerkTypeID
-            WHERE mu.SnapshotDate > DATEADD(hour,-24,GETUTCDATE()) {filter}
+            WHERE mu.SnapshotDate > DATEADD(hour,-@hours,GETUTCDATE()) {filter}
             ORDER BY mu.pages_kb DESC";
-        clerks = await QueryAsync(sql, ("@instanceId", instanceId ?? (object)DBNull.Value));
+        clerks = await QueryAsync(sql, ("@instanceId", instanceId ?? (object)DBNull.Value), ("@hours", h));
     }
     catch (Exception ex)
     {
@@ -1124,9 +1127,9 @@ app.MapGet("/api/performance/memory", async (int? instanceId) =>
             JOIN dbo.Instances i ON pc.InstanceID = i.InstanceID
             JOIN dbo.Counters c ON pc.CounterID = c.CounterID
             WHERE c.object_name LIKE '%Memory%'
-              AND pc.SnapshotDate > DATEADD(hour,-24,GETUTCDATE()) {filter}
+              AND pc.SnapshotDate > DATEADD(hour,-@hours,GETUTCDATE()) {filter}
             ORDER BY pc.SnapshotDate DESC";
-        counters = await QueryAsync(sql, ("@instanceId", instanceId ?? (object)DBNull.Value));
+        counters = await QueryAsync(sql, ("@instanceId", instanceId ?? (object)DBNull.Value), ("@hours", h));
     }
     catch (Exception ex)
     {
@@ -1138,8 +1141,9 @@ app.MapGet("/api/performance/memory", async (int? instanceId) =>
 
 // ── Performance: IO ──────────────────────────────────────────────────────
 
-app.MapGet("/api/performance/io", async (int? instanceId) =>
+app.MapGet("/api/performance/io", async (int? instanceId, int? hours) =>
 {
+    var h = Math.Min(hours ?? 24, 336);
     var fileStats = Array.Empty<object>() as object;
     var drivePerf = Array.Empty<object>() as object;
     var fileNote = "";
@@ -1157,9 +1161,9 @@ app.MapGet("/api/performance/io", async (int? instanceId) =>
             JOIN dbo.Instances i ON ios.InstanceID = i.InstanceID
             JOIN dbo.DBFiles df ON ios.FileID = df.FileID
             JOIN dbo.Databases d ON df.DatabaseID = d.DatabaseID
-            WHERE ios.SnapshotDate > DATEADD(hour,-24,GETUTCDATE()) {filter}
+            WHERE ios.SnapshotDate > DATEADD(hour,-@hours,GETUTCDATE()) {filter}
             ORDER BY (ios.io_stall_read_ms + ios.io_stall_write_ms) DESC";
-        fileStats = await QueryAsync(sql, ("@instanceId", instanceId ?? (object)DBNull.Value));
+        fileStats = await QueryAsync(sql, ("@instanceId", instanceId ?? (object)DBNull.Value), ("@hours", h));
     }
     catch (Exception ex1)
     {
@@ -1174,9 +1178,9 @@ app.MapGet("/api/performance/io", async (int? instanceId) =>
             SELECT TOP 200 dp.*, i.InstanceDisplayName
             FROM dbo.DriveSnapshot dp
             JOIN dbo.Instances i ON dp.InstanceID = i.InstanceID
-            WHERE dp.SnapshotDate > DATEADD(hour,-24,GETUTCDATE()) {filter}
+            WHERE dp.SnapshotDate > DATEADD(hour,-@hours,GETUTCDATE()) {filter}
             ORDER BY dp.SnapshotDate DESC";
-        drivePerf = await QueryAsync(sql, ("@instanceId", instanceId ?? (object)DBNull.Value));
+        drivePerf = await QueryAsync(sql, ("@instanceId", instanceId ?? (object)DBNull.Value), ("@hours", h));
     }
     catch (Exception ex)
     {
@@ -1773,8 +1777,9 @@ app.MapGet("/api/reports/underutilized", async () =>
     }
 }).RequireAuthorization();
 
-app.MapGet("/api/reports/fleet-stats", async () =>
+app.MapGet("/api/reports/fleet-stats", async (int? hours) =>
 {
+    var h = Math.Min(hours ?? 24, 336);
     try
     {
         var cpuData = await QueryAsync(@"
@@ -1785,10 +1790,10 @@ app.MapGet("/api/reports/fleet-stats", async () =>
                    AVG(CAST(c.SQLProcessCPU as float)) as AvgCPU24h,
                    MAX(c.SQLProcessCPU) as MaxCPU24h
             FROM dbo.InstanceInfo i
-            LEFT JOIN dbo.CPU c ON i.InstanceID = c.InstanceID AND c.EventTime >= DATEADD(hour, -24, GETUTCDATE())
+            LEFT JOIN dbo.CPU c ON i.InstanceID = c.InstanceID AND c.EventTime >= DATEADD(hour, -@hours, GETUTCDATE())
             WHERE i.IsActive = 1
             GROUP BY i.InstanceID, i.InstanceDisplayName, i.Instance, i.Edition, i.ProductVersion, i.cpu_count, i.physical_memory_kb
-            ORDER BY AVG(CAST(c.SQLProcessCPU as float)) DESC");
+            ORDER BY AVG(CAST(c.SQLProcessCPU as float)) DESC", ("@hours", h));
 
         // Get storage data
         var storageData = new Dictionary<int, (long capacity, long free, long used)>();
@@ -1836,10 +1841,10 @@ app.MapGet("/api/reports/fleet-stats", async () =>
                        AVG(CAST(c.SQLProcessCPU as float)) as AvgCPU24h,
                        MAX(c.SQLProcessCPU) as MaxCPU24h
                 FROM dbo.Instances i
-                LEFT JOIN dbo.CPU c ON i.InstanceID = c.InstanceID AND c.EventTime >= DATEADD(hour, -24, GETUTCDATE())
+                LEFT JOIN dbo.CPU c ON i.InstanceID = c.InstanceID AND c.EventTime >= DATEADD(hour, -@hours, GETUTCDATE())
                 WHERE i.IsActive = 1
                 GROUP BY i.InstanceID, i.InstanceDisplayName, i.Instance, i.Edition, i.ProductVersion, i.cpu_count, i.physical_memory_kb
-                ORDER BY AVG(CAST(c.SQLProcessCPU as float)) DESC");
+                ORDER BY AVG(CAST(c.SQLProcessCPU as float)) DESC", ("@hours", h));
 
             var storageData = new Dictionary<int, (long capacity, long free, long used)>();
             try

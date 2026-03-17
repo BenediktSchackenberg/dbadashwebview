@@ -4,6 +4,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import { motion } from 'framer-motion';
 import { HardDrive } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area, CartesianGrid } from 'recharts';
+import TimeRangeSelector, { hoursLabel } from '../components/TimeRangeSelector';
 
 export default function MemoryPage() {
   const [clerks, setClerks] = useState<any[]>([]);
@@ -13,6 +14,7 @@ export default function MemoryPage() {
   const [loading, setLoading] = useState(true);
   const [instances, setInstances] = useState<any[]>([]);
   const [selectedInstance, setSelectedInstance] = useState<number | undefined>();
+  const [hours, setHours] = useState(24);
 
   useEffect(() => {
     api.instances().then(i => setInstances(Array.isArray(i) ? i : [])).catch(() => {});
@@ -20,7 +22,7 @@ export default function MemoryPage() {
 
   useEffect(() => {
     setLoading(true);
-    api.performanceMemory(selectedInstance)
+    api.performanceMemory(selectedInstance, hours)
       .then(r => {
         setClerks(Array.isArray(r.clerks) ? r.clerks : []);
         setCounters(Array.isArray(r.counters) ? r.counters : []);
@@ -29,7 +31,7 @@ export default function MemoryPage() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [selectedInstance]);
+  }, [selectedInstance, hours]);
 
   if (loading) return <LoadingSpinner />;
 
@@ -68,13 +70,16 @@ export default function MemoryPage() {
           <HardDrive className="w-6 h-6 text-purple-400" />
           <h1 className="text-2xl font-bold text-white">Memory</h1>
         </div>
-        <select value={selectedInstance ?? ''} onChange={e => setSelectedInstance(e.target.value ? Number(e.target.value) : undefined)}
-          className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none">
-          <option value="">All Instances</option>
-          {instances.map((inst: any) => (
-            <option key={inst.InstanceID} value={inst.InstanceID}>{inst.InstanceDisplayName}</option>
-          ))}
-        </select>
+        <div className="flex items-center gap-3">
+          <select value={selectedInstance ?? ''} onChange={e => setSelectedInstance(e.target.value ? Number(e.target.value) : undefined)}
+            className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none">
+            <option value="">All Instances</option>
+            {instances.map((inst: any) => (
+              <option key={inst.InstanceID} value={inst.InstanceID}>{inst.InstanceDisplayName}</option>
+            ))}
+          </select>
+          <TimeRangeSelector value={hours} onChange={setHours} />
+        </div>
       </div>
 
       {notes.length > 0 && (

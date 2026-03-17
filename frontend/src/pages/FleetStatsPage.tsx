@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Activity, Cpu, MemoryStick, HardDrive, Server, Database, ChevronDown, ChevronRight, Filter, Search, X } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { api } from '../api/api';
+import TimeRangeSelector, { hoursLabel } from '../components/TimeRangeSelector';
 
 const tooltipStyle = { backgroundColor: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff' };
 
@@ -44,11 +45,13 @@ export default function FleetStatsPage() {
   const [versionFilter, setVersionFilter] = useState<string | null>(null);
   const [editionFilter, setEditionFilter] = useState<string | null>(null);
   const [expandedVersion, setExpandedVersion] = useState<string | null>(null);
+  const [hours, setHours] = useState(24);
   const navigate = useNavigate();
 
   useEffect(() => {
-    api.reportsFleetStats().then(d => { setData(Array.isArray(d) ? d : []); setLoading(false); }).catch(() => setLoading(false));
-  }, []);
+    setLoading(true);
+    api.reportsFleetStats(hours).then(d => { setData(Array.isArray(d) ? d : []); setLoading(false); }).catch(() => setLoading(false));
+  }, [hours]);
 
   // Enrich data with parsed version
   const enriched = useMemo(() => data.map(r => ({
@@ -251,6 +254,7 @@ export default function FleetStatsPage() {
               </button>
             ))}
           </div>
+          <TimeRangeSelector value={hours} onChange={setHours} />
         </div>
       </div>
 
@@ -259,7 +263,7 @@ export default function FleetStatsPage() {
         {[
           { icon: Server, label: 'Instances', value: filtered.length.toString(), sub: versionFilter ? `of ${enriched.length}` : undefined, color: 'text-blue-400' },
           { icon: Cpu, label: 'CPU Cores', value: totalCores.toLocaleString(), color: 'text-cyan-400' },
-          { icon: Activity, label: 'Avg CPU (24h)', value: avgFleetCpu.toFixed(1) + '%', color: avgFleetCpu > 50 ? 'text-red-400' : avgFleetCpu > 25 ? 'text-yellow-400' : 'text-green-400' },
+          { icon: Activity, label: `Avg CPU (${hoursLabel(hours)})`, value: avgFleetCpu.toFixed(1) + '%', color: avgFleetCpu > 50 ? 'text-red-400' : avgFleetCpu > 25 ? 'text-yellow-400' : 'text-green-400' },
           { icon: MemoryStick, label: 'Total RAM', value: totalRam >= 1024 ? (totalRam / 1024).toFixed(1) + ' TB' : totalRam + ' GB', color: 'text-purple-400' },
           { icon: HardDrive, label: 'Storage Used', value: formatBytes(totalStorUsed), sub: `of ${formatBytes(totalStorCap)}`, color: 'text-yellow-400' },
           { icon: Database, label: 'Versions', value: versions.length.toString(), sub: 'SQL Server', color: 'text-emerald-400' },

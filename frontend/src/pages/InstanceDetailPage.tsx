@@ -12,6 +12,7 @@ import {
   Server, Cpu, HardDrive, Database, Activity, Clock, Shield,
   ChevronRight, Zap, BarChart3, Timer, AlertTriangle
 } from 'lucide-react';
+import TimeRangeSelector, { hoursLabel } from '../components/TimeRangeSelector';
 import { clsx } from 'clsx';
 import { format, formatDistanceToNow } from 'date-fns';
 
@@ -65,14 +66,15 @@ export default function InstanceDetailPage() {
   const [jobs, setJobs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [jobFilter, setJobFilter] = useState<'all' | 'failed' | 'success'>('all');
+  const [hours, setHours] = useState(24);
 
   useEffect(() => {
     (async () => {
       try {
         const [d, c, w, dr, db, b, j] = await Promise.all([
           api.instance(instanceId).catch(() => null),
-          api.instanceCpu(instanceId).catch(() => []),
-          api.instanceWaits(instanceId).catch(() => []),
+          api.instanceCpu(instanceId, hours).catch(() => []),
+          api.instanceWaits(instanceId, hours).catch(() => []),
           api.instanceDrives(instanceId).catch(() => []),
           api.instanceDatabases(instanceId).catch(() => []),
           api.instanceBackups(instanceId).catch(() => []),
@@ -89,7 +91,7 @@ export default function InstanceDetailPage() {
         setLoading(false);
       }
     })();
-  }, [instanceId]);
+  }, [instanceId, hours]);
 
   // ── Derived data ───────────────────────────────────────────────────────
 
@@ -264,8 +266,9 @@ export default function InstanceDetailPage() {
               <div className="glass rounded-2xl p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-                    <Cpu className="w-4 h-4 text-blue-400" /> CPU Usage (24h)
+                    <Cpu className="w-4 h-4 text-blue-400" /> CPU Usage ({hoursLabel(hours)})
                   </h3>
+                  <TimeRangeSelector value={hours} onChange={setHours} />
                 </div>
                 {cpu.length > 0 ? (
                   <ResponsiveContainer width="100%" height={320}>

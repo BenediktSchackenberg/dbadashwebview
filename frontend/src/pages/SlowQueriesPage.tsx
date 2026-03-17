@@ -67,6 +67,8 @@ export default function SlowQueriesPage() {
             <option value={6}>Last 6h</option>
             <option value={24}>Last 24h</option>
             <option value={72}>Last 3d</option>
+            <option value={168}>Last 7d</option>
+            <option value={336}>Last 14d</option>
           </select>
           <select value={selectedInstance ?? ''} onChange={e => setSelectedInstance(e.target.value ? Number(e.target.value) : undefined)}
             className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none">

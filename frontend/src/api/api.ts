@@ -58,8 +58,8 @@ export const api = {
   dashboardStats: () => request<DashboardStats>('/api/dashboard/stats'),
   instances: () => request<any[]>('/api/instances'),
   instance: (id: number) => request<{ instance: any; summary: any }>(`/api/instances/${id}`),
-  instanceCpu: (id: number) => request<any[]>(`/api/instances/${id}/cpu`),
-  instanceWaits: (id: number) => request<any[]>(`/api/instances/${id}/waits`),
+  instanceCpu: (id: number, hours = 24) => request<any[]>(`/api/instances/${id}/cpu?hours=${hours}`),
+  instanceWaits: (id: number, hours = 24) => request<any[]>(`/api/instances/${id}/waits?hours=${hours}`),
   instanceDrives: (id: number) => request<any[]>(`/api/instances/${id}/drives`),
   instanceDatabases: (id: number) => request<any[]>(`/api/instances/${id}/databases`),
   instanceBackups: (id: number) => request<any[]>(`/api/instances/${id}/backups`),
@@ -81,10 +81,10 @@ export const api = {
     request<{ data: any[]; note: string }>(`/api/performance/blocking${instanceId ? `?instanceId=${instanceId}` : ''}`),
   performanceSlowQueries: (instanceId?: number, hours = 24) =>
     request<{ data: any[]; note: string }>(`/api/performance/slow-queries?hours=${hours}${instanceId ? `&instanceId=${instanceId}` : ''}`),
-  performanceMemory: (instanceId?: number) =>
-    request<{ clerks: any[]; counters: any[]; clerkNote: string; counterNote: string }>(`/api/performance/memory${instanceId ? `?instanceId=${instanceId}` : ''}`),
-  performanceIO: (instanceId?: number) =>
-    request<{ fileStats: any[]; drivePerf: any[]; fileNote: string; driveNote: string }>(`/api/performance/io${instanceId ? `?instanceId=${instanceId}` : ''}`),
+  performanceMemory: (instanceId?: number, hours = 24) =>
+    request<{ clerks: any[]; counters: any[]; clerkNote: string; counterNote: string }>(`/api/performance/memory?hours=${hours}${instanceId ? `&instanceId=${instanceId}` : ''}`),
+  performanceIO: (instanceId?: number, hours = 24) =>
+    request<{ fileStats: any[]; drivePerf: any[]; fileNote: string; driveNote: string }>(`/api/performance/io?hours=${hours}${instanceId ? `&instanceId=${instanceId}` : ''}`),
   performanceExecStats: (instanceId?: number, hours = 24) =>
     request<{ data: any[]; note: string }>(`/api/performance/exec-stats?hours=${hours}${instanceId ? `&instanceId=${instanceId}` : ''}`),
   performanceWaitsTimeline: (instanceId: number, hours = 24) =>
@@ -114,7 +114,7 @@ export const api = {
   tree: () => request<any[]>('/api/tree'),
   reportsLicenses: () => request<any[]>('/api/reports/licenses'),
   reportsUnderutilized: () => request<any[]>('/api/reports/underutilized'),
-  reportsFleetStats: () => request<any[]>('/api/reports/fleet-stats'),
+  reportsFleetStats: (hours = 24) => request<any[]>(`/api/reports/fleet-stats?hours=${hours}`),
   reportsBackupAmpel: () => request<{ instances: any[]; databases: any[] }>('/api/reports/backup-ampel'),
   dashboardMonitor: () => request<{ instances: any[]; alertCounts: Record<string, number>; recentErrors: any[] }>('/api/dashboard/monitor'),
   getThresholds: () =>
