@@ -4,7 +4,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import { motion } from 'framer-motion';
 import { HardDrive } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area, CartesianGrid } from 'recharts';
-import TimeRangeSelector, { hoursLabel } from '../components/TimeRangeSelector';
+import TimeRangeSelector from '../components/TimeRangeSelector';
 
 export default function MemoryPage() {
   const [clerks, setClerks] = useState<any[]>([]);

@@ -4,7 +4,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import { motion } from 'framer-motion';
 import { HardDrive } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
-import TimeRangeSelector, { hoursLabel } from '../components/TimeRangeSelector';
+import TimeRangeSelector from '../components/TimeRangeSelector';
 
 export default function IOPerformancePage() {
   const [fileStats, setFileStats] = useState<any[]>([]);
