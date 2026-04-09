@@ -152,47 +152,6 @@ string GenerateToken(string username, string? displayName = null, string role = 
     return new JwtSecurityTokenHandler().WriteToken(token);
 }
 
-/// <summary>All Summary_Get status columns used for worst-status / alerting (matches DBA Dash GUI checks).</summary>
-static readonly string[] SummaryStatusColumnKeys =
-{
-    "FullBackupStatus", "DiffBackupStatus", "LogBackupStatus", "LogShippingStatus",
-    "DriveStatus", "FileFreeSpaceStatus", "LogFreeSpaceStatus", "JobStatus", "AGStatus",
-    "CorruptionStatus", "LastGoodCheckDBStatus", "MemoryDumpStatus", "SnapshotAgeStatus",
-    "UptimeStatus", "IsAgentRunningStatus", "DBMailStatus", "QueryStoreStatus",
-    "AlertStatus", "PctMaxSizeStatus", "CollectionErrorStatus", "DatabaseStateStatus",
-    "IdentityStatus", "CustomCheckStatus", "MirroringStatus", "ElasticPoolStorageStatus"
-};
-
-/// <summary>Maps Summary column to a short alert label for SQL Monitor / badges.</summary>
-static readonly (string Key, string Label)[] SummaryCheckAlertLabels =
-{
-    ("FullBackupStatus", "Backup"),
-    ("DiffBackupStatus", "Diff backup"),
-    ("LogBackupStatus", "Log backup"),
-    ("LogShippingStatus", "Log shipping"),
-    ("DriveStatus", "Disk space"),
-    ("FileFreeSpaceStatus", "File space"),
-    ("LogFreeSpaceStatus", "Log space"),
-    ("JobStatus", "Job failing"),
-    ("AGStatus", "AG"),
-    ("CorruptionStatus", "Corruption"),
-    ("LastGoodCheckDBStatus", "DBCC"),
-    ("MemoryDumpStatus", "Memory dump"),
-    ("SnapshotAgeStatus", "Snapshot age"),
-    ("UptimeStatus", "Uptime"),
-    ("IsAgentRunningStatus", "SQL Agent"),
-    ("DBMailStatus", "DB Mail"),
-    ("QueryStoreStatus", "Query Store"),
-    ("AlertStatus", "Agent alerts"),
-    ("PctMaxSizeStatus", "% Max size"),
-    ("CollectionErrorStatus", "Collection errors"),
-    ("DatabaseStateStatus", "Database state"),
-    ("IdentityStatus", "Identity columns"),
-    ("CustomCheckStatus", "Custom check"),
-    ("MirroringStatus", "Mirroring"),
-    ("ElasticPoolStorageStatus", "Elastic pool"),
-};
-
 static int WorstSummaryStatus(Dictionary<string, object?>? row, string[] keys)
 {
     var worst = 4; // OK in DBADashStatusEnum
@@ -210,7 +169,7 @@ static int WorstSummaryStatus(Dictionary<string, object?>? row, string[] keys)
 static void AppendActiveSummaryAlerts(Dictionary<string, object?>? sum, List<string> target)
 {
     if (sum == null) return;
-    foreach (var (key, label) in SummaryCheckAlertLabels)
+    foreach (var (key, label) in SummaryStatusKeys.CheckAlertLabels)
     {
         if (!sum.TryGetValue(key, out var v) || v == null) continue;
         var val = Convert.ToInt32(v);
@@ -392,7 +351,7 @@ app.MapGet("/api/dashboard/stats", async () =>
         foreach (var row in activeSummary)
         {
             // DBA Dash enum: Critical=1, Warning=2, NA=3, OK=4, Acknowledged=5
-            var worst = WorstSummaryStatus(row, SummaryStatusColumnKeys);
+            var worst = WorstSummaryStatus(row, SummaryStatusKeys.ColumnKeys);
             if (worst == 1) critical++;
             else if (worst == 2) warning++;
             else healthy++;
@@ -556,7 +515,7 @@ app.MapGet("/api/instances/{id:int}", async (int id) =>
                 SELECT MAX(SnapshotDate) AS LastCollected
                 FROM dbo.CollectionDates c WHERE c.InstanceID = i.InstanceID
             ) cd
-            WHERE i.InstanceID = @id", ("@id", id));
+            WHERE i.InstanceID = @id", 30, ("@id", id));
         if (inst.Count == 0) return Results.NotFound();
 
         List<Dictionary<string, object?>>? summary = null;
@@ -624,7 +583,7 @@ app.MapGet("/api/instances/{id:int}/drives", async (int id) =>
         var data = await QueryAsync(@"
             SELECT DriveID, Name, Label, Capacity, FreeSpace,
                    (Capacity - FreeSpace) AS UsedSpace
-            FROM dbo.Drives WHERE InstanceID = @id", ("@id", id));
+            FROM dbo.Drives WHERE InstanceID = @id", 30, ("@id", id));
         return Results.Ok(data);
     }
     catch (Exception ex)
@@ -645,7 +604,7 @@ app.MapGet("/api/instances/{id:int}/databases", async (int id) =>
             LEFT JOIN dbo.DatabasesHADR h ON d.DatabaseID = h.DatabaseID AND h.is_local = 1
             LEFT JOIN dbo.AvailabilityGroups ag ON h.group_id = ag.group_id AND ag.InstanceID = d.InstanceID
             WHERE d.InstanceID = @id AND d.IsActive = 1
-            ORDER BY d.name", ("@id", id));
+            ORDER BY d.name", 30, ("@id", id));
         return Results.Ok(data);
     }
     catch (Exception ex)
@@ -665,7 +624,7 @@ app.MapGet("/api/instances/{id:int}/backups", async (int id) =>
             FROM dbo.Databases d
             LEFT JOIN dbo.Backups b ON d.DatabaseID = b.DatabaseID
             WHERE d.InstanceID = @id AND d.IsActive = 1
-            ORDER BY d.name, b.backup_start_date DESC", ("@id", id));
+            ORDER BY d.name, b.backup_start_date DESC", 30, ("@id", id));
         return Results.Ok(data);
     }
     catch (Exception ex)
@@ -812,7 +771,7 @@ app.MapGet("/api/instances/{id:int}/hadr", async (int id) =>
                    ag.automated_backup_preference_desc, ag.basic_features, ag.dtc_support,
                    ag.db_failover, ag.is_distributed, ag.cluster_type, ag.is_contained
             FROM dbo.AvailabilityGroups ag
-            WHERE ag.InstanceID = @id", ("@id", id));
+            WHERE ag.InstanceID = @id", 30, ("@id", id));
 
         var replicas = await QueryAsync(@"
             SELECT ar.replica_id, ar.group_id, ar.replica_server_name, ar.endpoint_url,
@@ -823,7 +782,7 @@ app.MapGet("/api/instances/{id:int}/hadr", async (int id) =>
             FROM dbo.AvailabilityReplicas ar
             WHERE ar.group_id IN (
                 SELECT ag.group_id FROM dbo.AvailabilityGroups ag WHERE ag.InstanceID = @id
-            )", ("@id", id));
+            )", 30, ("@id", id));
 
         var databases = await QueryAsync(@"
             SELECT dh.DatabaseID, dh.group_id, dh.replica_id, dh.is_primary_replica,
@@ -838,7 +797,7 @@ app.MapGet("/api/instances/{id:int}/hadr", async (int id) =>
             JOIN dbo.Databases d ON dh.DatabaseID = d.DatabaseID
             WHERE dh.group_id IN (
                 SELECT ag.group_id FROM dbo.AvailabilityGroups ag WHERE ag.InstanceID = @id
-            )", ("@id", id));
+            )", 30, ("@id", id));
 
         return Results.Ok(new { ags, replicas, databases });
     }
@@ -1313,7 +1272,7 @@ app.MapGet("/api/performance/waits-timeline", async (int? instanceId, int? hours
             JOIN dbo.WaitType wt ON w.WaitTypeID=wt.WaitTypeID
             WHERE w.InstanceID=@instanceId AND w.SnapshotDate > DATEADD(hour,-@hours,GETUTCDATE())
             ORDER BY w.SnapshotDate";
-        data = await QueryAsync(sql, ("@instanceId", instanceId.Value), ("@hours", h));
+        data = await QueryAsync(sql, 120, ("@instanceId", instanceId.Value), ("@hours", h));
     }
     catch (Exception ex)
     {
@@ -1341,7 +1300,7 @@ app.MapGet("/api/performance/counters", async (int? instanceId, int? hours) =>
             JOIN dbo.Counters c ON pc.CounterID=c.CounterID
             WHERE pc.InstanceID=@instanceId AND pc.SnapshotDate > DATEADD(hour,-@hours,GETUTCDATE())
             ORDER BY pc.SnapshotDate";
-        data = await QueryAsync(sql, ("@instanceId", instanceId.Value), ("@hours", h));
+        data = await QueryAsync(sql, 120, ("@instanceId", instanceId.Value), ("@hours", h));
     }
     catch (Exception ex)
     {
@@ -1370,7 +1329,7 @@ app.MapGet("/api/monitoring/job-timeline", async (int? instanceId, int? hours) =
             JOIN dbo.Jobs j ON jh.job_id=j.job_id AND jh.InstanceID=j.InstanceID
             WHERE jh.InstanceID=@instanceId AND jh.RunDateTime > DATEADD(hour,-@hours,GETUTCDATE()) AND jh.step_id=0
             ORDER BY jh.RunDateTime";
-        data = await QueryAsync(sql, ("@instanceId", instanceId.Value), ("@hours", h));
+        data = await QueryAsync(sql, 120, ("@instanceId", instanceId.Value), ("@hours", h));
     }
     catch (Exception ex)
     {
@@ -1398,7 +1357,7 @@ app.MapGet("/api/monitoring/configuration", async (int? instanceId) =>
             WHERE sc.InstanceID=@instanceId
               AND sc.ValidFrom = (SELECT MAX(ValidFrom) FROM dbo.SysConfig sc2 WHERE sc2.InstanceID=sc.InstanceID AND sc2.configuration_id=sc.configuration_id)
             ORDER BY sco.name";
-        data = await QueryAsync(sql, ("@instanceId", instanceId.Value));
+        data = await QueryAsync(sql, 120, ("@instanceId", instanceId.Value));
     }
     catch (Exception ex)
     {
@@ -1429,7 +1388,7 @@ app.MapGet("/api/monitoring/configuration/changes", async (int? instanceId, int?
             FROM Ranked
             WHERE prev_value IS NOT NULL AND prev_value <> value
             ORDER BY ValidFrom DESC";
-        data = await QueryAsync(sql, ("@instanceId", instanceId.Value), ("@days", d));
+        data = await QueryAsync(sql, 120, ("@instanceId", instanceId.Value), ("@days", d));
     }
     catch (Exception ex)
     {
@@ -1780,7 +1739,7 @@ app.MapGet("/api/reports/licenses", async () =>
             ORDER BY i.ProductMajorVersion DESC, COALESCE(i.InstanceDisplayName, i.Instance)");
         return Results.Ok(data);
     }
-    catch (Exception ex)
+    catch (Exception)
     {
         // Fallback to Instances table if InstanceInfo view doesn't exist
         try
@@ -1870,7 +1829,7 @@ app.MapGet("/api/reports/fleet-stats", async (int? hours) =>
             LEFT JOIN dbo.CPU c ON i.InstanceID = c.InstanceID AND c.EventTime >= DATEADD(hour, -@hours, GETUTCDATE())
             WHERE i.IsActive = 1
             GROUP BY i.InstanceID, i.InstanceDisplayName, i.Instance, i.Edition, i.ProductVersion, i.cpu_count, i.physical_memory_kb
-            ORDER BY AVG(CAST(c.SQLProcessCPU as float)) DESC", ("@hours", h));
+            ORDER BY AVG(CAST(c.SQLProcessCPU as float)) DESC", 120, ("@hours", h));
 
         // Get storage data
         var storageData = new Dictionary<int, (long capacity, long free, long used)>();
@@ -1921,7 +1880,7 @@ app.MapGet("/api/reports/fleet-stats", async (int? hours) =>
                 LEFT JOIN dbo.CPU c ON i.InstanceID = c.InstanceID AND c.EventTime >= DATEADD(hour, -@hours, GETUTCDATE())
                 WHERE i.IsActive = 1
                 GROUP BY i.InstanceID, i.InstanceDisplayName, i.Instance, i.Edition, i.ProductVersion, i.cpu_count, i.physical_memory_kb
-                ORDER BY AVG(CAST(c.SQLProcessCPU as float)) DESC", ("@hours", h));
+                ORDER BY AVG(CAST(c.SQLProcessCPU as float)) DESC", 120, ("@hours", h));
 
             var storageData = new Dictionary<int, (long capacity, long free, long used)>();
             try
@@ -2414,7 +2373,7 @@ app.MapGet("/api/dashboard/monitor", async () =>
             var sum = summaryMap.GetValueOrDefault(id);
 
             // DBA Dash enum: Critical=1, Warning=2, NA=3, OK=4, Acknowledged=5 — all Summary_Get checks
-            var worstStatus = WorstSummaryStatus(sum, SummaryStatusColumnKeys);
+            var worstStatus = WorstSummaryStatus(sum, SummaryStatusKeys.ColumnKeys);
             var activeAlerts = new List<string>();
             AppendActiveSummaryAlerts(sum, activeAlerts);
 
@@ -2443,7 +2402,7 @@ app.MapGet("/api/dashboard/monitor", async () =>
         {
             ["Monitoring stopped"] = result.Count(r => !(bool)r.isOnline),
         };
-        foreach (var (_, label) in SummaryCheckAlertLabels)
+        foreach (var (_, label) in SummaryStatusKeys.CheckAlertLabels)
             alertCounts[label] = result.Count(r => r.activeAlerts.Contains(label));
 
         return Results.Ok(new { instances = result, alertCounts, recentErrors = alerts.Take(20) });
@@ -2462,7 +2421,7 @@ app.MapGet("/api/debug/summary/{id:int}", async (int id) =>
         var raw = await QueryAsync(@"
             SELECT *
             FROM dbo.Summary
-            WHERE InstanceID = @id", ("@id", id));
+            WHERE InstanceID = @id", 30, ("@id", id));
         return Results.Ok(raw.Count > 0 ? raw[0] : new Dictionary<string, object?>{ ["error"] = "No summary row for this instance" });
     }
     catch (Exception ex)
@@ -2475,6 +2434,52 @@ app.MapGet("/api/debug/summary/{id:int}", async (int id) =>
 app.MapFallbackToFile("index.html");
 
 app.Run();
+
+// ── Summary_Get metadata (type must follow top-level statements) ─────────
+
+static class SummaryStatusKeys
+{
+    /// <summary>All Summary_Get status columns used for worst-status / alerting (matches DBA Dash GUI checks).</summary>
+    public static readonly string[] ColumnKeys =
+    {
+        "FullBackupStatus", "DiffBackupStatus", "LogBackupStatus", "LogShippingStatus",
+        "DriveStatus", "FileFreeSpaceStatus", "LogFreeSpaceStatus", "JobStatus", "AGStatus",
+        "CorruptionStatus", "LastGoodCheckDBStatus", "MemoryDumpStatus", "SnapshotAgeStatus",
+        "UptimeStatus", "IsAgentRunningStatus", "DBMailStatus", "QueryStoreStatus",
+        "AlertStatus", "PctMaxSizeStatus", "CollectionErrorStatus", "DatabaseStateStatus",
+        "IdentityStatus", "CustomCheckStatus", "MirroringStatus", "ElasticPoolStorageStatus"
+    };
+
+    /// <summary>Maps Summary column to a short alert label for SQL Monitor / badges.</summary>
+    public static readonly (string Key, string Label)[] CheckAlertLabels =
+    {
+        ("FullBackupStatus", "Backup"),
+        ("DiffBackupStatus", "Diff backup"),
+        ("LogBackupStatus", "Log backup"),
+        ("LogShippingStatus", "Log shipping"),
+        ("DriveStatus", "Disk space"),
+        ("FileFreeSpaceStatus", "File space"),
+        ("LogFreeSpaceStatus", "Log space"),
+        ("JobStatus", "Job failing"),
+        ("AGStatus", "AG"),
+        ("CorruptionStatus", "Corruption"),
+        ("LastGoodCheckDBStatus", "DBCC"),
+        ("MemoryDumpStatus", "Memory dump"),
+        ("SnapshotAgeStatus", "Snapshot age"),
+        ("UptimeStatus", "Uptime"),
+        ("IsAgentRunningStatus", "SQL Agent"),
+        ("DBMailStatus", "DB Mail"),
+        ("QueryStoreStatus", "Query Store"),
+        ("AlertStatus", "Agent alerts"),
+        ("PctMaxSizeStatus", "% Max size"),
+        ("CollectionErrorStatus", "Collection errors"),
+        ("DatabaseStateStatus", "Database state"),
+        ("IdentityStatus", "Identity columns"),
+        ("CustomCheckStatus", "Custom check"),
+        ("MirroringStatus", "Mirroring"),
+        ("ElasticPoolStorageStatus", "Elastic pool"),
+    };
+}
 
 // ── Records ──────────────────────────────────────────────────────────────
 
