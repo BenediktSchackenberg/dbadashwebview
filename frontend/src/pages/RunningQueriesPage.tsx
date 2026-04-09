@@ -1,7 +1,9 @@
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { api } from '../api/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import PaginationBar from '../components/PaginationBar';
+import TabNav from '../components/TabNav';
+import DataTable from '../components/DataTable';
 import { motion } from 'framer-motion';
 import { Activity, ChevronDown, ChevronRight } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -9,6 +11,7 @@ import { usePresentationOptional } from '../context/PresentationContext';
 
 export default function RunningQueriesPage() {
   const { dataGridTableClass, dataGridShellClass, isDesktopData } = usePresentationOptional();
+  const [viewTab, setViewTab] = useState<'live' | 'snapshot'>('live');
   const [data, setData] = useState<any[]>([]);
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(true);
@@ -18,18 +21,72 @@ export default function RunningQueriesPage() {
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   const [limit, setLimit] = useState(2000);
   const [offset, setOffset] = useState(0);
+  const [summaryRows, setSummaryRows] = useState<any[]>([]);
+  const [summaryNote, setSummaryNote] = useState('');
+  const [snapRows, setSnapRows] = useState<Record<string, unknown>[]>([]);
+  const [snapOutputs, setSnapOutputs] = useState<Record<string, unknown> | null>(null);
+  const [snapNote, setSnapNote] = useState('');
+  const [snapErr, setSnapErr] = useState('');
+  const [snapLoading, setSnapLoading] = useState(false);
+  const [snapTop, setSnapTop] = useState(2000);
 
   useEffect(() => {
     api.instances(includeAllInstances).then(i => setInstances(Array.isArray(i) ? i : [])).catch(() => {});
   }, [includeAllInstances]);
 
   useEffect(() => {
+    if (viewTab !== 'live') return;
     setLoading(true);
     api.performanceRunningQueries(selectedInstance, limit, offset)
       .then(r => { setData(r.data || []); setNote(r.note || ''); })
       .catch(() => setData([]))
       .finally(() => setLoading(false));
-  }, [selectedInstance, limit, offset]);
+  }, [selectedInstance, limit, offset, viewTab]);
+
+  useEffect(() => {
+    if (viewTab !== 'snapshot' || selectedInstance == null) {
+      setSnapRows([]);
+      setSnapOutputs(null);
+      setSnapNote('');
+      setSnapErr('');
+      return;
+    }
+    setSnapLoading(true);
+    setSnapErr('');
+    api
+      .performanceRunningQueriesSnapshot(selectedInstance, snapTop)
+      .then(r => {
+        setSnapRows((r.data || []) as Record<string, unknown>[]);
+        setSnapOutputs((r.outputs as Record<string, unknown>) || null);
+        setSnapNote(r.note || '');
+        if (r.error) setSnapErr(r.error);
+      })
+      .catch(e => setSnapErr(e?.message || 'Failed'))
+      .finally(() => setSnapLoading(false));
+  }, [viewTab, selectedInstance, snapTop]);
+
+  const snapColumns = useMemo(() => {
+    if (!snapRows.length) return [];
+    return Object.keys(snapRows[0]).map(k => ({ key: k, label: k, sortable: true as const }));
+  }, [snapRows]);
+
+  useEffect(() => {
+    if (!selectedInstance || viewTab !== 'live') {
+      setSummaryRows([]);
+      setSummaryNote('');
+      return;
+    }
+    api
+      .performanceRunningQueriesSummary(selectedInstance, 24, 5000)
+      .then(r => {
+        setSummaryRows(Array.isArray(r.data) ? r.data : []);
+        setSummaryNote(r.note || '');
+      })
+      .catch(() => {
+        setSummaryRows([]);
+        setSummaryNote('Summary unavailable.');
+      });
+  }, [selectedInstance, viewTab]);
 
   const toggleRow = (i: number) => {
     setExpandedRows(prev => {
@@ -49,11 +106,11 @@ export default function RunningQueriesPage() {
     return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
   };
 
-  if (loading) return <LoadingSpinner />;
+  if (viewTab === 'live' && loading) return <LoadingSpinner />;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <Activity className="w-6 h-6 text-blue-400" />
           <h1 className="text-2xl font-bold text-white">Running Queries</h1>
@@ -86,7 +143,101 @@ export default function RunningQueriesPage() {
         </div>
       </div>
 
+      <TabNav
+        tabs={[
+          { key: 'live', label: 'Current activity' },
+          { key: 'snapshot', label: 'Snapshot (RunningQueries_Get)' },
+        ]}
+        active={viewTab}
+        onChange={k => setViewTab(k as 'live' | 'snapshot')}
+      />
+
+      {viewTab === 'snapshot' && (
+        <div className="space-y-3 rounded-lg border border-white/10 p-4 bg-white/[0.02]">
+          <p className="text-sm text-gray-400">
+            Same stored procedure as the Windows snapshot grid. Pick a single instance. Binary columns are base64. OUTPUT:{' '}
+            <span className="font-mono text-gray-500">hasCursors</span>, snapshot date range.
+          </p>
+          {selectedInstance == null && (
+            <p className="text-amber-400/90 text-sm">Select an instance (not “All Instances”) to load a snapshot.</p>
+          )}
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="text-xs text-gray-500">
+              Row cap
+              <input
+                type="number"
+                min={100}
+                max={10000}
+                value={snapTop}
+                onChange={e => setSnapTop(Math.min(10000, Math.max(100, Number(e.target.value) || 2000)))}
+                className="ml-2 w-24 rounded bg-white/5 border border-white/10 px-2 py-1 text-sm text-white"
+              />
+            </label>
+          </div>
+          {snapErr && <div className="text-sm text-red-400">{snapErr}</div>}
+          {snapNote && <p className="text-xs text-gray-500 font-mono">{snapNote}</p>}
+          {snapOutputs && Object.keys(snapOutputs).length > 0 && (
+            <pre className="text-xs text-gray-400 font-mono bg-black/20 rounded p-2 overflow-x-auto">
+              {JSON.stringify(snapOutputs, null, 2)}
+            </pre>
+          )}
+          {snapLoading ? (
+            <LoadingSpinner />
+          ) : selectedInstance != null && snapRows.length > 0 ? (
+            <div className={clsx('overflow-x-auto', dataGridShellClass)}>
+              <DataTable
+                columns={snapColumns}
+                data={snapRows}
+                searchable
+                exportCsvFileName="running-queries-snapshot"
+              />
+            </div>
+          ) : selectedInstance != null ? (
+            <p className="text-gray-500 text-sm">No snapshot rows.</p>
+          ) : null}
+        </div>
+      )}
+
+      {viewTab === 'live' && (
+        <>
       <PaginationBar offset={offset} limit={limit} rowCount={data.length} onOffsetChange={setOffset} onLimitChange={setLimit} />
+
+      {selectedInstance != null && (
+        <div className="space-y-2">
+          <h2 className="text-sm font-semibold text-gray-400">
+            Instance summary (same stored procedure as DBA Dash Windows: <span className="font-mono text-gray-500">RunningQueriesSummary_Get</span>, last 24h)
+          </h2>
+          {summaryNote && (
+            <div className="text-xs text-amber-400/80 bg-amber-400/5 border border-amber-400/20 rounded-lg px-3 py-2">{summaryNote}</div>
+          )}
+          {summaryRows.length > 0 && (
+            <div className={clsx('overflow-x-auto', isDesktopData ? dataGridShellClass : 'rounded-xl glass overflow-x-auto')}>
+              <table className={clsx(isDesktopData ? dataGridTableClass : 'w-full text-xs')}>
+                <thead>
+                  <tr className={clsx(!isDesktopData && 'border-b border-white/10 text-gray-400')}>
+                    {Object.keys(summaryRows[0]).map(k => (
+                      <th key={k} className={clsx('text-left font-medium', !isDesktopData && 'pb-2 pr-3')}>
+                        {k}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {summaryRows.map((row, ri) => (
+                    <tr key={ri} className={clsx(!isDesktopData && 'border-b border-white/5')}>
+                      {Object.keys(summaryRows[0]).map(k => (
+                        <td key={k} className={clsx('pr-3', !isDesktopData && 'py-1.5 text-gray-300')}>
+                          {row[k] != null && typeof row[k] === 'object' ? JSON.stringify(row[k]) : String(row[k] ?? '')}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {note && <div className="text-sm text-yellow-400/80 bg-yellow-400/5 border border-yellow-400/20 rounded-lg px-4 py-2">{note}</div>}
 
@@ -225,6 +376,8 @@ export default function RunningQueriesPage() {
             </table>
           </div>
         </motion.div>
+      )}
+        </>
       )}
     </div>
   );

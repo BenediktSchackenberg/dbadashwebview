@@ -15,7 +15,7 @@ export default function QueryStorePage() {
   useEffect(() => {
     if (!instanceId) return;
     setLoading(true);
-    api.performanceQueryStore(instanceId).then(r => { setData(r.data || []); setNote(r.note || ''); }).finally(() => setLoading(false));
+    api.performanceQueryStore(instanceId, 20000).then(r => { setData(r.data || []); setNote(r.note || ''); }).finally(() => setLoading(false));
   }, [instanceId]);
 
   const sorted = [...data].sort((a, b) => (b[sortBy] || 0) - (a[sortBy] || 0));

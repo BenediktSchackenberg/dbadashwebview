@@ -15,7 +15,7 @@ export default function SchemaChangesPage() {
   useEffect(() => {
     if (!instanceId) { setData([]); setLoading(false); return; }
     setLoading(true);
-    api.monitoringSchemaChanges(instanceId, days).then(r => { setData(r.data || []); setNote(r.note || ''); }).finally(() => setLoading(false));
+    api.monitoringSchemaChanges(instanceId, days, 20000).then(r => { setData(r.data || []); setNote(r.note || ''); }).finally(() => setLoading(false));
   }, [instanceId, days]);
 
   const inputCls = "bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500/50";

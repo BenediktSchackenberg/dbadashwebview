@@ -72,7 +72,8 @@ export default function PaginationBar({
           disabled={!canPrev}
           onClick={() => onOffsetChange(Math.max(0, offset - limit))}
           className={clsx(
-            'p-1.5 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed',
+            'p-1.5 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-transform duration-200',
+            !isDesktopData && 'active:scale-95',
             isDesktopData ? 'border border-[#adadad] hover:bg-gray-100' : 'border border-white/10 hover:bg-white/5',
           )}
           aria-label="Previous page"
@@ -84,7 +85,8 @@ export default function PaginationBar({
           disabled={!canNext}
           onClick={() => onOffsetChange(offset + limit)}
           className={clsx(
-            'p-1.5 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed',
+            'p-1.5 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-transform duration-200',
+            !isDesktopData && 'active:scale-95',
             isDesktopData ? 'border border-[#adadad] hover:bg-gray-100' : 'border border-white/10 hover:bg-white/5',
           )}
           aria-label="Next page"

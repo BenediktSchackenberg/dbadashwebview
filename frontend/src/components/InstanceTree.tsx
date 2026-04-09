@@ -1,10 +1,12 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { motion, useReducedMotion } from 'framer-motion';
 import { clsx } from 'clsx';
 import {
-  Database, ChevronRight, ChevronDown, LayoutDashboard, Bell, HardDrive, Network,
+  Database, ChevronRight, LayoutDashboard, Bell, HardDrive, Network,
   Settings, ClipboardCheck, Shield, Play, BarChart3, Search, LogOut, User, Folder, Server,
-  FileSpreadsheet, TrendingDown, Activity, Monitor
+  FileSpreadsheet, TrendingDown, Activity, Monitor, Layers, Cpu, Ship, Copy, CalendarClock,
+  ShieldAlert, LineChart, Clock, Wrench, LayoutList,
 } from 'lucide-react';
 import { api } from '../api/api';
 import { usePresentationOptional } from '../context/PresentationContext';
@@ -31,11 +33,47 @@ const versionMap: Record<number, string> = {
 
 const globalViews = [
   { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
+  { path: '/windows-screens', icon: LayoutList, label: 'WinForms map' },
+  { path: '/windows-parity', icon: Layers, label: 'Windows parity' },
   { path: '/monitor', icon: Monitor, label: 'SQL Monitor' },
   { path: '/alerts', icon: Bell, label: 'Alerts' },
   { path: '/estate/backups', icon: Database, label: 'Backups' },
   { path: '/drives', icon: HardDrive, label: 'Drives' },
   { path: '/availability-groups', icon: Network, label: 'AlwaysOn Overview' },
+];
+
+const performanceViews = [
+  { path: '/performance/cpu', icon: Cpu, label: 'CPU' },
+  { path: '/performance/running-queries', icon: Activity, label: 'Running queries' },
+  { path: '/performance/blocking', icon: ShieldAlert, label: 'Blocking' },
+  { path: '/performance/slow-queries', icon: Clock, label: 'Slow queries' },
+  { path: '/performance/memory', icon: Activity, label: 'Memory' },
+  { path: '/performance/io', icon: HardDrive, label: 'I/O' },
+  { path: '/performance/exec-stats', icon: BarChart3, label: 'Exec stats' },
+  { path: '/performance/waits-timeline', icon: Activity, label: 'Waits' },
+  { path: '/performance/counters', icon: Activity, label: 'Counters' },
+  { path: '/performance/query-store', icon: Database, label: 'Query Store' },
+];
+
+const monitoringViews = [
+  { path: '/monitoring/job-timeline', icon: Play, label: 'Job timeline' },
+  { path: '/monitoring/configuration', icon: Settings, label: 'Configuration' },
+  { path: '/monitoring/patching', icon: Server, label: 'Patching' },
+  { path: '/monitoring/schema-changes', icon: ClipboardCheck, label: 'Schema changes' },
+  { path: '/monitoring/identity-columns', icon: Database, label: 'Identity columns' },
+  { path: '/monitoring/tempdb', icon: Database, label: 'TempDB' },
+  { path: '/monitoring/db-space', icon: HardDrive, label: 'DB space' },
+  { path: '/monitoring/log-shipping', icon: Ship, label: 'Log shipping' },
+  { path: '/monitoring/database-mirroring', icon: Copy, label: 'DB mirroring' },
+  { path: '/monitoring/collection-health', icon: CalendarClock, label: 'Collection health' },
+  { path: '/monitoring/corruption-checkdb', icon: ShieldAlert, label: 'Corruption / CHECKDB' },
+  { path: '/monitoring/drive-history', icon: LineChart, label: 'Drive history' },
+];
+
+const estateExtraViews = [
+  { path: '/estate/disks', icon: HardDrive, label: 'Estate disks' },
+  { path: '/estate/log-shipping', icon: Ship, label: 'Estate log shipping' },
+  { path: '/estate/database-mirroring', icon: Copy, label: 'Estate mirroring' },
 ];
 
 const instanceCategories = [
@@ -68,6 +106,8 @@ export default function InstanceTree({ onLogout }: { onLogout: () => void }) {
   const [search, setSearch] = useState('');
   const location = useLocation();
   const { isDesktopData } = usePresentationOptional();
+  const reduceMotion = useReducedMotion();
+  const navMicro = !isDesktopData && !reduceMotion;
 
   const sectionTitleClass = clsx(
     'text-xs font-semibold uppercase tracking-wider px-0 py-2',
@@ -76,14 +116,15 @@ export default function InstanceTree({ onLogout }: { onLogout: () => void }) {
 
   const navItemClass = (active: boolean) =>
     clsx(
-      'flex items-center gap-2.5 py-1.5 px-2 rounded text-sm transition-all border-l-2',
+      'flex items-center gap-2.5 py-1.5 px-2 rounded text-sm transition-all duration-200 ease-out border-l-2',
+      navMicro && 'hover:translate-x-1 active:scale-[0.99]',
       isDesktopData
         ? active
           ? 'bg-[#d0e8ff] text-[#0c3762] border-[#0078d4]'
           : 'text-gray-800 border-transparent hover:bg-black/[0.06]'
         : active
-          ? 'bg-blue-500/15 text-blue-400 border-blue-400'
-          : 'text-gray-400 border-transparent hover:text-white hover:bg-white/5',
+          ? 'border-blue-400 bg-gradient-to-r from-blue-500/20 to-cyan-500/10 text-blue-300 shadow-[0_0_20px_-8px_rgba(56,189,248,0.45)]'
+          : 'border-transparent text-gray-400 hover:bg-white/[0.06] hover:text-white',
     );
 
   const navIconClass = (active: boolean) =>
@@ -158,29 +199,39 @@ export default function InstanceTree({ onLogout }: { onLogout: () => void }) {
   };
 
   return (
-    <div
+    <motion.div
       className={clsx(
-        'w-72 flex flex-col h-full shrink-0',
+        'flex h-full w-72 shrink-0 flex-col relative z-10',
         isDesktopData
           ? 'dba-sidebar-desktop border-r border-[#ababab] bg-[#ececec] text-[#1e1e1e]'
-          : 'bg-slate-900/95 border-r border-white/10',
+          : 'border-r border-white/[0.08] bg-slate-950/80 text-slate-100 shadow-[6px_0_40px_-18px_rgba(0,0,0,0.65)] backdrop-blur-2xl',
       )}
+      initial={isDesktopData || reduceMotion ? false : { x: -36, opacity: 0 }}
+      animate={{ x: 0, opacity: 1 }}
+      transition={
+        isDesktopData || reduceMotion
+          ? { duration: 0 }
+          : { type: 'spring', stiffness: 260, damping: 32, mass: 0.9 }
+      }
     >
       {/* Header */}
       <div
         className={clsx(
-          'p-4 flex items-center gap-3 border-b',
-          isDesktopData ? 'border-[#ababab] bg-[#f5f5f5]' : 'border-white/10',
+          'flex items-center gap-3 border-b p-4',
+          isDesktopData ? 'border-[#ababab] bg-[#f5f5f5]' : 'border-white/[0.06] bg-white/[0.03]',
         )}
       >
-        <div
+        <motion.div
           className={clsx(
-            'w-8 h-8 rounded flex items-center justify-center shrink-0',
-            isDesktopData ? 'bg-[#0078d4]' : 'rounded-lg bg-gradient-to-br from-blue-500 to-purple-600',
+            'flex h-8 w-8 shrink-0 items-center justify-center rounded',
+            isDesktopData ? 'bg-[#0078d4]' : 'rounded-lg bg-gradient-to-br from-sky-500 via-blue-600 to-violet-600 shadow-lg shadow-blue-500/25',
           )}
+          whileHover={navMicro ? { scale: 1.08, rotate: 4 } : undefined}
+          whileTap={navMicro ? { scale: 0.94 } : undefined}
+          transition={{ type: 'spring', stiffness: 400, damping: 22 }}
         >
           <Database className={clsx('w-4 h-4', isDesktopData ? 'text-white' : 'text-white')} />
-        </div>
+        </motion.div>
         <span className={clsx('font-bold text-sm whitespace-nowrap', isDesktopData ? 'text-black' : 'text-white')}>
           DBA Dash WebView
         </span>
@@ -202,6 +253,52 @@ export default function InstanceTree({ onLogout }: { onLogout: () => void }) {
               <span>{item.label}</span>
             </Link>
           ))}
+        </div>
+
+        {/* Performance */}
+        <div className="px-3 py-2">
+          <div className={sectionTitleClass}>Performance</div>
+          {performanceViews.map(item => (
+            <Link key={item.path} to={item.path} className={navItemClass(isActive(item.path))}>
+              <item.icon className={navIconClass(isActive(item.path))} />
+              <span>{item.label}</span>
+            </Link>
+          ))}
+        </div>
+
+        {/* Monitoring */}
+        <div className="px-3 py-2">
+          <div className={sectionTitleClass}>Monitoring</div>
+          {monitoringViews.map(item => (
+            <Link key={item.path} to={item.path} className={navItemClass(isActive(item.path))}>
+              <item.icon className={navIconClass(isActive(item.path))} />
+              <span>{item.label}</span>
+            </Link>
+          ))}
+        </div>
+
+        {/* Estate */}
+        <div className="px-3 py-2">
+          <div className={sectionTitleClass}>Estate</div>
+          {estateExtraViews.map(item => (
+            <Link key={item.path} to={item.path} className={navItemClass(isActive(item.path))}>
+              <item.icon className={navIconClass(isActive(item.path))} />
+              <span>{item.label}</span>
+            </Link>
+          ))}
+        </div>
+
+        {/* Tools (Windows Community Tools + UserReport catalog) */}
+        <div className="px-3 py-2">
+          <div className={sectionTitleClass}>Tools &amp; reports</div>
+          <Link to="/tools/community" className={navItemClass(isActive('/tools/community'))}>
+            <Wrench className={navIconClass(isActive('/tools/community'))} />
+            <span>Community tools</span>
+          </Link>
+          <Link to="/tools/custom-reports" className={navItemClass(isActive('/tools/custom-reports'))}>
+            <FileSpreadsheet className={navIconClass(isActive('/tools/custom-reports'))} />
+            <span>Custom reports</span>
+          </Link>
         </div>
 
         {/* Reporting */}
@@ -249,14 +346,30 @@ export default function InstanceTree({ onLogout }: { onLogout: () => void }) {
             return (
               <div key={versionLabel} className="mb-1">
                 {/* Version group header */}
-                <button onClick={() => toggle(setExpandedVersions, versionLabel)}
-                  className="flex items-center gap-1.5 w-full py-1.5 px-2 rounded text-left hover:bg-white/5 transition-colors">
-                  {vExpanded
-                    ? <ChevronDown className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                    : <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />}
-                  <Server className="w-4 h-4 text-blue-400 shrink-0" />
-                  <span className="font-medium text-gray-300 text-sm">{versionLabel}</span>
-                  <span className="ml-auto text-[10px] text-gray-600 bg-slate-800 px-1.5 py-0.5 rounded">{insts.length}</span>
+                <button
+                  onClick={() => toggle(setExpandedVersions, versionLabel)}
+                  className={clsx(
+                    'flex items-center gap-1.5 w-full py-1.5 px-2 rounded text-left transition-colors',
+                    isDesktopData ? 'hover:bg-black/[0.06]' : 'hover:bg-white/5',
+                  )}
+                >
+                  <ChevronRight
+                    className={clsx(
+                      'w-3.5 h-3.5 shrink-0 transition-transform duration-200 ease-out',
+                      vExpanded && 'rotate-90',
+                      isDesktopData ? 'text-gray-600' : 'text-gray-400',
+                    )}
+                  />
+                  <Server className={clsx('w-4 h-4 shrink-0', isDesktopData ? 'text-[#0078d4]' : 'text-blue-400')} />
+                  <span className={clsx('font-medium text-sm', isDesktopData ? 'text-gray-900' : 'text-gray-300')}>{versionLabel}</span>
+                  <span
+                    className={clsx(
+                      'ml-auto text-[10px] px-1.5 py-0.5 rounded',
+                      isDesktopData ? 'text-gray-700 bg-white border border-[#c0c0c0]' : 'text-gray-600 bg-slate-800',
+                    )}
+                  >
+                    {insts.length}
+                  </span>
                 </button>
 
                 {vExpanded && insts.map(inst => {
@@ -269,12 +382,23 @@ export default function InstanceTree({ onLogout }: { onLogout: () => void }) {
                   return (
                     <div key={inst.instanceId} className="ml-3">
                       {/* Instance row */}
-                      <button onClick={() => toggle(setExpandedInstances, inst.instanceId)}
-                        className="flex items-center gap-1.5 w-full py-1 px-2 rounded text-left hover:bg-white/5 transition-colors">
-                        {iExpanded
-                          ? <ChevronDown className="w-3 h-3 text-gray-500 shrink-0" />
-                          : <ChevronRight className="w-3 h-3 text-gray-500 shrink-0" />}
-                        <span className="text-gray-200 text-sm truncate">{inst.instanceName}</span>
+                      <button
+                        onClick={() => toggle(setExpandedInstances, inst.instanceId)}
+                        className={clsx(
+                          'flex items-center gap-1.5 w-full py-1 px-2 rounded text-left transition-colors',
+                          isDesktopData ? 'hover:bg-black/[0.06]' : 'hover:bg-white/5',
+                        )}
+                      >
+                        <ChevronRight
+                          className={clsx(
+                            'w-3 h-3 shrink-0 transition-transform duration-200 ease-out',
+                            iExpanded && 'rotate-90',
+                            isDesktopData ? 'text-gray-600' : 'text-gray-500',
+                          )}
+                        />
+                        <span className={clsx('text-sm truncate', isDesktopData ? 'text-gray-900' : 'text-gray-200')}>
+                          {inst.instanceName}
+                        </span>
                       </button>
 
                       {/* Categories under instance */}
@@ -284,31 +408,66 @@ export default function InstanceTree({ onLogout }: { onLogout: () => void }) {
                             if (cat.key === 'databases') {
                               return (
                                 <div key="databases">
-                                  <button onClick={() => toggle(setExpandedDbs, inst.instanceId)}
-                                    className="flex items-center gap-2 w-full py-1 pl-4 pr-2 rounded text-left text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-all">
-                                    {dbsExpanded
-                                      ? <ChevronDown className="w-3 h-3 text-gray-500 shrink-0" />
-                                      : <ChevronRight className="w-3 h-3 text-gray-500 shrink-0" />}
-                                    <cat.icon className="w-3.5 h-3.5 text-gray-500" />
+                                  <button
+                                    onClick={() => toggle(setExpandedDbs, inst.instanceId)}
+                                    className={clsx(
+                                      'flex items-center gap-2 w-full py-1 pl-4 pr-2 rounded text-left text-sm transition-all',
+                                      isDesktopData
+                                        ? 'text-gray-800 hover:bg-black/[0.06]'
+                                        : 'text-gray-400 hover:text-white hover:bg-white/5',
+                                    )}
+                                  >
+                                    <ChevronRight
+                                      className={clsx(
+                                        'w-3 h-3 shrink-0 transition-transform duration-200 ease-out',
+                                        dbsExpanded && 'rotate-90',
+                                        isDesktopData ? 'text-gray-600' : 'text-gray-500',
+                                      )}
+                                    />
+                                    <cat.icon className={clsx('w-3.5 h-3.5', isDesktopData ? 'text-gray-600' : 'text-gray-500')} />
                                     <span>Databases</span>
-                                    <span className="ml-auto text-[10px] text-gray-600">{inst.databases?.length || 0}</span>
+                                    <span className={clsx('ml-auto text-[10px]', isDesktopData ? 'text-gray-600' : 'text-gray-600')}>
+                                      {inst.databases?.length || 0}
+                                    </span>
                                   </button>
                                   {dbsExpanded && (
                                     <div className="ml-4">
                                       {systemDbs.length > 0 && (
                                         <div>
-                                          <button onClick={() => toggle(setExpandedSysDb, inst.instanceId)}
-                                            className="flex items-center gap-2 w-full py-0.5 pl-4 pr-2 rounded text-left text-xs text-gray-500 hover:text-gray-300 hover:bg-white/5">
-                                            {sysExpanded ? <ChevronDown className="w-3 h-3 shrink-0" /> : <ChevronRight className="w-3 h-3 shrink-0" />}
+                                          <button
+                                            onClick={() => toggle(setExpandedSysDb, inst.instanceId)}
+                                            className={clsx(
+                                              'flex items-center gap-2 w-full py-0.5 pl-4 pr-2 rounded text-left text-xs',
+                                              isDesktopData
+                                                ? 'text-gray-700 hover:bg-black/[0.06]'
+                                                : 'text-gray-500 hover:text-gray-300 hover:bg-white/5',
+                                            )}
+                                          >
+                                            <ChevronRight
+                                              className={clsx(
+                                                'w-3 h-3 shrink-0 transition-transform duration-200 ease-out',
+                                                sysExpanded && 'rotate-90',
+                                                isDesktopData ? 'text-gray-600' : 'text-gray-500',
+                                              )}
+                                            />
                                             <Folder className="w-3 h-3" />
                                             <span>System Databases</span>
                                           </button>
                                           {sysExpanded && systemDbs.map(db => (
-                                            <Link key={db.databaseId} to={`/instances/${inst.instanceId}/databases/${db.databaseId}`}
-                                              className={`flex items-center gap-2 py-0.5 pl-10 pr-2 rounded text-xs transition-all ${
+                                            <Link
+                                              key={db.databaseId}
+                                              to={`/instances/${inst.instanceId}/databases/${db.databaseId}`}
+                                              className={clsx(
+                                                'flex items-center gap-2 py-0.5 pl-10 pr-2 rounded text-xs transition-all',
                                                 isActive(`/instances/${inst.instanceId}/databases/${db.databaseId}`)
-                                                  ? 'bg-blue-500/15 text-blue-400' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
-                                              }`}>
+                                                  ? isDesktopData
+                                                    ? 'bg-[#d0e8ff] text-[#0c3762]'
+                                                    : 'bg-blue-500/15 text-blue-400'
+                                                  : isDesktopData
+                                                    ? 'text-gray-700 hover:bg-black/[0.06]'
+                                                    : 'text-gray-500 hover:text-gray-300 hover:bg-white/5',
+                                              )}
+                                            >
                                               <Database className="w-3 h-3" />
                                               <span className="truncate">{db.name}</span>
                                             </Link>
@@ -316,11 +475,20 @@ export default function InstanceTree({ onLogout }: { onLogout: () => void }) {
                                         </div>
                                       )}
                                       {userDbs.map(db => (
-                                        <Link key={db.databaseId} to={`/instances/${inst.instanceId}/databases/${db.databaseId}`}
-                                          className={`flex items-center gap-2 py-0.5 pl-4 pr-2 rounded text-xs transition-all ${
+                                        <Link
+                                          key={db.databaseId}
+                                          to={`/instances/${inst.instanceId}/databases/${db.databaseId}`}
+                                          className={clsx(
+                                            'flex items-center gap-2 py-0.5 pl-4 pr-2 rounded text-xs transition-all',
                                             isActive(`/instances/${inst.instanceId}/databases/${db.databaseId}`)
-                                              ? 'bg-blue-500/15 text-blue-400' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
-                                          }`}>
+                                              ? isDesktopData
+                                                ? 'bg-[#d0e8ff] text-[#0c3762]'
+                                                : 'bg-blue-500/15 text-blue-400'
+                                              : isDesktopData
+                                                ? 'text-gray-700 hover:bg-black/[0.06]'
+                                                : 'text-gray-500 hover:text-gray-300 hover:bg-white/5',
+                                          )}
+                                        >
                                           <Database className="w-3 h-3" />
                                           <span className="truncate">{db.name}</span>
                                         </Link>
@@ -333,13 +501,8 @@ export default function InstanceTree({ onLogout }: { onLogout: () => void }) {
 
                             const path = cat.path(inst.instanceId);
                             return (
-                              <Link key={cat.key} to={path}
-                                className={`flex items-center gap-2 py-1 pl-4 pr-2 rounded text-sm transition-all ${
-                                  isActive(path)
-                                    ? 'bg-blue-500/15 text-blue-400 border-l-2 border-blue-400'
-                                    : 'text-gray-400 hover:text-white hover:bg-white/5 border-l-2 border-transparent'
-                                }`}>
-                                <cat.icon className={`w-3.5 h-3.5 ${isActive(path) ? 'text-blue-400' : 'text-gray-500'}`} />
+                              <Link key={cat.key} to={path} className={clsx(navItemClass(isActive(path)), 'py-1 pl-4')}>
+                                <cat.icon className={clsx('w-3.5 h-3.5', navIconClass(isActive(path)))} />
                                 <span>{cat.label}</span>
                               </Link>
                             );
@@ -354,25 +517,44 @@ export default function InstanceTree({ onLogout }: { onLogout: () => void }) {
           })}
 
           {filtered.length === 0 && (
-            <p className="text-xs text-gray-500 text-center py-4">No instances found</p>
+            <p className={clsx('text-xs text-center py-4', isDesktopData ? 'text-gray-600' : 'text-gray-500')}>
+              No instances found
+            </p>
           )}
         </div>
       </div>
 
       {/* Footer */}
-      <div className="p-3 border-t border-white/10 space-y-1">
+      <div
+        className={clsx(
+          'p-3 border-t space-y-1',
+          isDesktopData ? 'border-[#ababab] bg-[#e8e8e8]' : 'border-white/10',
+        )}
+      >
         <div className="flex items-center gap-3 px-2 py-1.5">
-          <div className="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center">
-            <User className="w-3.5 h-3.5 text-blue-400" />
+          <div
+            className={clsx(
+              'w-6 h-6 rounded-full flex items-center justify-center',
+              isDesktopData ? 'bg-[#0078d4]/15' : 'bg-blue-500/20',
+            )}
+          >
+            <User className={clsx('w-3.5 h-3.5', isDesktopData ? 'text-[#0078d4]' : 'text-blue-400')} />
           </div>
-          <span className="text-xs text-gray-300">admin</span>
+          <span className={clsx('text-xs', isDesktopData ? 'text-gray-800' : 'text-gray-300')}>admin</span>
         </div>
-        <button onClick={onLogout}
-          className="flex items-center gap-2.5 px-2 py-1.5 rounded text-xs text-gray-400 hover:text-red-400 hover:bg-red-400/5 transition-all w-full">
+        <button
+          onClick={onLogout}
+          className={clsx(
+            'flex items-center gap-2.5 px-2 py-1.5 rounded text-xs transition-all w-full',
+            isDesktopData
+              ? 'text-gray-700 hover:text-red-700 hover:bg-red-100'
+              : 'text-gray-400 hover:text-red-400 hover:bg-red-400/5',
+          )}
+        >
           <LogOut className="w-4 h-4 shrink-0" />
           <span>Sign Out</span>
         </button>
       </div>
-    </div>
+    </motion.div>
   );
 }

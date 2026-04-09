@@ -28,25 +28,31 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0a0f1e] relative overflow-hidden">
-      {/* Background effects */}
-      <div className="absolute inset-0">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl" />
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#060a12]">
+      <div className="pointer-events-none absolute inset-0" aria-hidden>
+        <div className="ambient-orb ambient-orb-1 absolute -left-[25%] -top-[35%] h-[75vmin] w-[75vmin] rounded-full bg-cyan-500/20 blur-[100px]" />
+        <div className="ambient-orb ambient-orb-2 absolute -right-[30%] top-[5%] h-[70vmin] w-[70vmin] rounded-full bg-fuchsia-600/18 blur-[110px]" />
+        <div className="ambient-orb ambient-orb-3 absolute bottom-[-25%] left-[15%] h-[60vmin] w-[60vmin] rounded-full bg-violet-600/18 blur-[95px]" />
       </div>
 
       <motion.div
-        initial={{ opacity: 0, y: 30, scale: 0.95 }}
+        initial={{ opacity: 0, y: 36, scale: 0.94 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.5 }}
-        className="relative z-10 w-full max-w-md"
+        transition={{ type: 'spring', stiffness: 260, damping: 28, mass: 0.9 }}
+        className="relative z-10 w-full max-w-md px-4"
       >
-        <div className="glass-strong rounded-2xl p-8 shadow-2xl">
+        <div className="glass-strong rounded-2xl border border-white/10 p-8 shadow-2xl shadow-black/40">
           {/* Logo */}
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 mb-4 shadow-lg shadow-blue-500/20">
-              <Database className="w-8 h-8 text-white" />
-            </div>
+          <div className="mb-8 text-center">
+            <motion.div
+              className="mx-auto mb-4 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500 via-blue-600 to-violet-600 shadow-lg shadow-blue-500/30"
+              initial={{ rotate: -8, scale: 0.8 }}
+              animate={{ rotate: 0, scale: 1 }}
+              transition={{ type: 'spring', stiffness: 200, damping: 16, delay: 0.12 }}
+              whileHover={{ scale: 1.06, rotate: 2 }}
+            >
+              <Database className="h-8 w-8 text-white" />
+            </motion.div>
             <h1 className="text-2xl font-bold text-white">DBA Dash</h1>
             <p className="text-gray-400 text-sm mt-1">SQL Server Monitoring Dashboard</p>
           </div>
@@ -99,13 +105,15 @@ export default function LoginPage() {
               </motion.div>
             )}
 
-            <button
+            <motion.button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-medium rounded-lg transition-all shadow-lg shadow-blue-500/25 disabled:opacity-50"
+              whileHover={{ scale: loading ? 1 : 1.02 }}
+              whileTap={{ scale: loading ? 1 : 0.98 }}
+              className="w-full rounded-lg bg-gradient-to-r from-blue-600 via-blue-500 to-cyan-500 py-2.5 font-medium text-white shadow-lg shadow-blue-500/30 transition-shadow hover:shadow-blue-500/45 disabled:opacity-50"
             >
               {loading ? 'Signing in...' : 'Sign In'}
-            </button>
+            </motion.button>
           </form>
         </div>
       </motion.div>

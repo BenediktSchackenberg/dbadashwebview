@@ -8,6 +8,51 @@
   --color-navy-500: #334155;
 }
 
+/* ── Ambient mesh (web presentation) ── */
+@media (prefers-reduced-motion: no-preference) {
+  .ambient-orb {
+    will-change: transform;
+    animation-timing-function: ease-in-out;
+    animation-iteration-count: infinite;
+  }
+
+  .ambient-orb-1 {
+    animation: ambient-drift-1 22s ease-in-out infinite;
+  }
+
+  .ambient-orb-2 {
+    animation: ambient-drift-2 28s ease-in-out infinite;
+  }
+
+  .ambient-orb-3 {
+    animation: ambient-drift-3 26s ease-in-out infinite;
+  }
+}
+
+@keyframes ambient-drift-1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  40% { transform: translate(4%, 6%) scale(1.08); }
+  70% { transform: translate(-3%, 2%) scale(0.96); }
+}
+
+@keyframes ambient-drift-2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-5%, 4%) scale(1.06); }
+  80% { transform: translate(3%, -4%) scale(0.94); }
+}
+
+@keyframes ambient-drift-3 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  45% { transform: translate(5%, -5%) scale(1.05); }
+  75% { transform: translate(-4%, 3%) scale(0.97); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient-orb {
+    animation: none !important;
+  }
+}
+
 * {
   scrollbar-width: thin;
   scrollbar-color: #334155 transparent;
@@ -17,6 +62,23 @@ body {
   font-family: 'Inter', system-ui, sans-serif;
   background: #0a0f1e;
   min-height: 100vh;
+}
+
+/* Main scroll region: reduce scroll chaining / rubber-band jank while navigating */
+.layout-main {
+  overscroll-behavior-y: contain;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* Route transition layer: opacity + transform animations stay on the compositor */
+.gpu-promote-layer {
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 .glass {
@@ -29,6 +91,101 @@ body {
   background: rgba(17, 24, 39, 0.85);
   backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Web presentation: richer glass + interactive lift */
+html[data-presentation='web'] .glass {
+  background: rgba(15, 23, 42, 0.72);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 0 0 1px rgba(56, 189, 248, 0.06),
+    0 4px 24px -4px rgba(0, 0, 0, 0.45);
+  transition:
+    border-color 0.35s ease,
+    box-shadow 0.35s ease,
+    transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html[data-presentation='web'] .glass:hover {
+    border-color: rgba(56, 189, 248, 0.22);
+    box-shadow:
+      0 0 0 1px rgba(56, 189, 248, 0.12),
+      0 12px 40px -12px rgba(56, 189, 248, 0.15);
+  }
+}
+
+html[data-presentation='web'] .glass-strong {
+  background: rgba(10, 15, 28, 0.78);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 0 0 1px rgba(139, 92, 246, 0.08),
+    0 8px 32px -8px rgba(0, 0, 0, 0.5);
+  transition: border-color 0.4s ease, box-shadow 0.4s ease;
+}
+
+html[data-presentation='web']:not(.light-mode) .layout-main {
+  background: transparent;
+}
+
+html[data-presentation='web'].light-mode .layout-main {
+  background: transparent;
+}
+
+html.light-mode[data-presentation='web'] nav .text-gray-200 {
+  color: #0f172a;
+}
+
+/* Card shells used across pages */
+html[data-presentation='web'] .glass-card,
+html[data-presentation='web'] .glass-ultra {
+  transition:
+    transform 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.35s ease,
+    box-shadow 0.4s ease;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html[data-presentation='web'] .glass-card:hover,
+  html[data-presentation='web'] .glass-ultra:hover {
+    transform: translateY(-2px);
+    box-shadow:
+      0 0 0 1px rgba(56, 189, 248, 0.15),
+      0 20px 50px -20px rgba(0, 0, 0, 0.55);
+  }
+}
+
+/* Data table rows: light staggered entrance (web presentation only) */
+@keyframes dba-dt-row-enter {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html[data-presentation='web'] tbody tr.dba-dt-row-web {
+    animation: dba-dt-row-enter 0.4s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+    animation-delay: calc(min(var(--dt-i, 0), 28) * 20ms);
+  }
+}
+
+/* Softer interactions in main content (web) */
+@media (prefers-reduced-motion: no-preference) {
+  html[data-presentation='web'] .layout-main a[href],
+  html[data-presentation='web'] .layout-main button:not(:disabled) {
+    transition-property: color, background-color, border-color, opacity, transform, box-shadow;
+    transition-duration: 0.2s;
+    transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  html[data-presentation='web'] .layout-main button:not(:disabled):active {
+    transform: scale(0.98);
+  }
 }
 
 .gradient-border {
@@ -251,4 +408,56 @@ html[data-presentation='desktop'] .dba-pagination select {
   background: #fff !important;
   border: 1px solid #7a7a7a !important;
   color: #000 !important;
+}
+
+/* ── Apply grid + panel styling to ALL main-content tables/cards (Windows mode) ── */
+html[data-presentation='desktop'] .layout-main table:not(.no-dba-desktop) {
+  border-collapse: collapse;
+  font-family: 'Segoe UI', 'Segoe UI Variable', Tahoma, system-ui, sans-serif;
+  font-size: 12px;
+  line-height: 1.35;
+  background: #fff;
+  color: #000;
+}
+
+html[data-presentation='desktop'] .layout-main table:not(.no-dba-desktop) thead th {
+  background: linear-gradient(180deg, #fafafa 0%, #ececec 100%);
+  border: 1px solid #ababab;
+  padding: 4px 8px;
+  font-weight: 600;
+  color: #000;
+  text-align: left;
+  white-space: nowrap;
+}
+
+html[data-presentation='desktop'] .layout-main table:not(.no-dba-desktop) tbody td {
+  border: 1px solid #d0d0d0;
+  padding: 3px 8px;
+  color: #000;
+  background: #fff;
+  vertical-align: middle;
+}
+
+html[data-presentation='desktop'] .layout-main table:not(.no-dba-desktop) tbody tr:nth-child(even) td {
+  background: #fafafa;
+}
+
+html[data-presentation='desktop'] .layout-main table:not(.no-dba-desktop) tbody tr:hover td {
+  background: #e5f3ff;
+}
+
+html[data-presentation='desktop'] .layout-main .glass-card:not(.no-dba-desktop-shell),
+html[data-presentation='desktop'] .layout-main .glass-ultra:not(.no-dba-desktop-shell),
+html[data-presentation='desktop'] .layout-main .glass:not(.no-dba-desktop-shell) {
+  background: #fff !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border: 1px solid #ababab !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06) !important;
+}
+
+html[data-presentation='desktop'] .layout-main .glass-card:not(.no-dba-desktop-shell) .text-gray-300,
+html[data-presentation='desktop'] .layout-main .glass-ultra:not(.no-dba-desktop-shell) .text-gray-300,
+html[data-presentation='desktop'] .layout-main .glass:not(.no-dba-desktop-shell) .text-gray-300 {
+  color: #333 !important;
 }

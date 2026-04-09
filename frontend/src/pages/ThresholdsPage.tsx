@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/api';
 import { Settings, Save } from 'lucide-react';
+import { useToast } from '../context/ToastContext';
 
 type Thresholds = Record<string, { warning: number; critical: number }>;
 
@@ -20,9 +21,9 @@ const metrics = [
 ];
 
 export default function ThresholdsPage() {
+  const showToast = useToast();
   const [thresholds, setThresholds] = useState<Thresholds>({});
   const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
 
   useEffect(() => {
     api.getThresholds().then(res => {
@@ -47,12 +48,11 @@ export default function ThresholdsPage() {
         if (v.warning > 0 || v.critical > 0) filtered[k] = v;
       }
       await api.saveThresholds(filtered);
-      setToast({ msg: 'Thresholds saved successfully', ok: true });
+      showToast('Thresholds saved successfully', 'success');
     } catch (e: any) {
-      setToast({ msg: `Error: ${e.message}`, ok: false });
+      showToast(`Error: ${e.message}`, 'error');
     } finally {
       setSaving(false);
-      setTimeout(() => setToast(null), 3000);
     }
   };
 
@@ -66,12 +66,6 @@ export default function ThresholdsPage() {
       <p className="text-sm text-gray-400">
         Define thresholds for dashboard color coding. Leave empty for no color. Values at or above the threshold trigger the color.
       </p>
-
-      {toast && (
-        <div className={`px-4 py-2 rounded-lg text-sm ${toast.ok ? 'bg-green-900/50 text-green-300' : 'bg-red-900/50 text-red-300'}`}>
-          {toast.msg}
-        </div>
-      )}
 
       <div className="glass rounded-xl p-6">
         <div className="grid gap-4">

@@ -1,5 +1,6 @@
 using System.Data;
 using System.DirectoryServices.Protocols;
+using DBADashWebView;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net;
 using System.Security.Claims;
@@ -222,6 +223,146 @@ async Task<List<Dictionary<string, object?>>> SpAsync(string sp, int commandTime
     return results;
 }
 
+DataTable IdsTableSingle(int instanceId)
+{
+    var t = new DataTable();
+    t.Columns.Add("ID", typeof(int));
+    t.Rows.Add(instanceId);
+    return t;
+}
+
+DataTable IdsTableEmpty()
+{
+    var t = new DataTable();
+    t.Columns.Add("ID", typeof(int));
+    return t;
+}
+
+async Task<List<Dictionary<string, object?>>> SpAsyncWithIdsTvp(
+    string sp,
+    int commandTimeoutSeconds,
+    string tvpParameterName,
+    DataTable idsTable,
+    params (string name, object? value)[] parameters)
+{
+    using var conn = new SqlConnection(connStr);
+    await conn.OpenAsync();
+    using var cmd = new SqlCommand(sp, conn) { CommandType = CommandType.StoredProcedure, CommandTimeout = commandTimeoutSeconds };
+    var tvp = cmd.Parameters.Add(tvpParameterName, SqlDbType.Structured);
+    tvp.TypeName = "dbo.IDs";
+    tvp.Value = idsTable;
+    foreach (var (name, value) in parameters)
+        cmd.Parameters.AddWithValue(name, value ?? DBNull.Value);
+    using var reader = await cmd.ExecuteReaderAsync();
+    var results = new List<Dictionary<string, object?>>();
+    while (await reader.ReadAsync())
+    {
+        var row = new Dictionary<string, object?>();
+        for (int i = 0; i < reader.FieldCount; i++)
+            row[reader.GetName(i)] = reader.IsDBNull(i) ? null : reader.GetValue(i);
+        results.Add(row);
+    }
+    return results;
+}
+
+async Task<List<Dictionary<string, object?>>> SpAsyncCpuGet(int instanceId, DateTime fromUtc, DateTime toUtc, int commandTimeoutSeconds = 120)
+{
+    using var conn = new SqlConnection(connStr);
+    await conn.OpenAsync();
+    using var cmd = new SqlCommand("dbo.CPU_Get", conn) { CommandType = CommandType.StoredProcedure, CommandTimeout = commandTimeoutSeconds };
+    cmd.Parameters.AddWithValue("@InstanceID", instanceId);
+    cmd.Parameters.AddWithValue("@FromDate", fromUtc);
+    cmd.Parameters.AddWithValue("@ToDate", toUtc);
+    var empty = DbaDashProcedureBridge.EmptyIdsTable();
+    var d1 = cmd.Parameters.Add("@DaysOfWeek", SqlDbType.Structured);
+    d1.TypeName = "dbo.IDs";
+    d1.Value = empty;
+    var h = cmd.Parameters.Add("@Hours", SqlDbType.Structured);
+    h.TypeName = "dbo.IDs";
+    h.Value = empty;
+    using var reader = await cmd.ExecuteReaderAsync();
+    var results = new List<Dictionary<string, object?>>();
+    while (await reader.ReadAsync())
+    {
+        var row = new Dictionary<string, object?>();
+        for (int i = 0; i < reader.FieldCount; i++)
+            row[reader.GetName(i)] = reader.IsDBNull(i) ? null : reader.GetValue(i);
+        results.Add(row);
+    }
+    return results;
+}
+
+async Task<(List<Dictionary<string, object?>> rows, Dictionary<string, object?> outputs, string? error)> RunningQueriesSnapshotAsync(
+    int instanceId,
+    int topN,
+    CancellationToken ct = default)
+{
+    try
+    {
+        await using var conn = new SqlConnection(connStr);
+        await conn.OpenAsync(ct);
+        await using var cmd = new SqlCommand("dbo.RunningQueries_Get", conn)
+        {
+            CommandType = CommandType.StoredProcedure,
+            CommandTimeout = 180,
+        };
+        cmd.Parameters.Add("@InstanceID", SqlDbType.Int).Value = instanceId;
+
+        var pSnap = cmd.Parameters.Add("@SnapshotDate", SqlDbType.DateTime2);
+        pSnap.Direction = ParameterDirection.InputOutput;
+        pSnap.Value = DBNull.Value;
+
+        var pFrom = cmd.Parameters.Add("@SnapshotDateFrom", SqlDbType.DateTime2);
+        pFrom.Direction = ParameterDirection.InputOutput;
+        pFrom.Value = DBNull.Value;
+
+        var pTo = cmd.Parameters.Add("@SnapshotDateTo", SqlDbType.DateTime2);
+        pTo.Direction = ParameterDirection.InputOutput;
+        pTo.Value = DBNull.Value;
+
+        cmd.Parameters.Add("@Skip", SqlDbType.Int).Value = 0;
+        cmd.Parameters.Add("@Top", SqlDbType.Int).Value = topN;
+
+        var pHasCursors = cmd.Parameters.Add("@HasCursors", SqlDbType.Bit);
+        pHasCursors.Direction = ParameterDirection.Output;
+
+        var rows = new List<Dictionary<string, object?>>();
+        await using (var reader = await cmd.ExecuteReaderAsync(ct))
+        {
+            while (await reader.ReadAsync(ct))
+            {
+                var row = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+                for (var i = 0; i < reader.FieldCount; i++)
+                {
+                    if (reader.IsDBNull(i))
+                    {
+                        row[reader.GetName(i)] = null;
+                        continue;
+                    }
+
+                    var val = reader.GetValue(i);
+                    row[reader.GetName(i)] = val is byte[] bytes ? Convert.ToBase64String(bytes) : val;
+                }
+
+                rows.Add(row);
+            }
+        }
+
+        var outputs = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["snapshotDate"] = pSnap.Value == DBNull.Value ? null : pSnap.Value,
+            ["snapshotDateFrom"] = pFrom.Value == DBNull.Value ? null : pFrom.Value,
+            ["snapshotDateTo"] = pTo.Value == DBNull.Value ? null : pTo.Value,
+            ["hasCursors"] = pHasCursors.Value == DBNull.Value ? null : pHasCursors.Value,
+        };
+        return (rows, outputs, null);
+    }
+    catch (Exception ex)
+    {
+        return ([], new Dictionary<string, object?>(), ex.Message);
+    }
+}
+
 // ── Public endpoints ─────────────────────────────────────────────────────
 
 app.MapGet("/api/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow }));
@@ -324,10 +465,12 @@ app.MapGet("/api/dashboard/summary", async () =>
     }
 }).RequireAuthorization();
 
-app.MapGet("/api/dashboard/stats", async () =>
+app.MapGet("/api/dashboard/stats", async (int? detailTop) =>
 {
     try
     {
+        var topN = detailTop is > 0 and <= 500 ? detailTop.Value : 100;
+
         // Get recently-active instance IDs (data received within 24h)
         var activeIds = new HashSet<int>();
         try
@@ -381,12 +524,12 @@ app.MapGet("/api/dashboard/stats", async () =>
         }
         catch { }
 
-        // Top 10 CPU
+        // Top CPU consumers (count configurable; default 100 for parity with rich dashboards)
         List<object> top10Cpu = new();
         try
         {
-            var cpuData = await QueryAsync(@"
-                SELECT TOP 10 c.InstanceID, i.InstanceDisplayName, AVG(CAST(c.SQLProcessCPU AS FLOAT)) AS AvgCpu
+            var cpuData = await QueryAsync($@"
+                SELECT TOP ({topN}) c.InstanceID, i.InstanceDisplayName, AVG(CAST(c.SQLProcessCPU AS FLOAT)) AS AvgCpu
                 FROM dbo.CPU c
                 JOIN dbo.Instances i ON c.InstanceID = i.InstanceID
                 WHERE c.EventTime > DATEADD(hour,-1,GETUTCDATE())
@@ -398,12 +541,12 @@ app.MapGet("/api/dashboard/stats", async () =>
         }
         catch { }
 
-        // Top 10 largest databases
+        // Largest databases (top N)
         List<object> top10LargestDbs = new();
         try
         {
-            var dbData = await QueryAsync(@"
-                SELECT TOP 10 d.name AS DatabaseName, i.InstanceDisplayName,
+            var dbData = await QueryAsync($@"
+                SELECT TOP ({topN}) d.name AS DatabaseName, i.InstanceDisplayName,
                        SUM(CAST(f.size AS BIGINT)) * 8 / 1024 AS SizeMB
                 FROM dbo.Databases d
                 JOIN dbo.Instances i ON d.InstanceID = i.InstanceID
@@ -418,8 +561,8 @@ app.MapGet("/api/dashboard/stats", async () =>
         {
             try
             {
-                var dbData = await QueryAsync(@"
-                    SELECT TOP 10 d.name AS DatabaseName, i.InstanceDisplayName,
+                var dbData = await QueryAsync($@"
+                    SELECT TOP ({topN}) d.name AS DatabaseName, i.InstanceDisplayName,
                            SUM(CAST(f.size AS BIGINT)) * 8 / 1024 AS SizeMB
                     FROM dbo.Databases d
                     JOIN dbo.Instances i ON d.InstanceID = i.InstanceID
@@ -437,8 +580,8 @@ app.MapGet("/api/dashboard/stats", async () =>
         List<Dictionary<string, object?>> recentAlerts = new();
         try
         {
-            recentAlerts = await QueryAsync(@"
-                SELECT TOP 10 InstanceID, ErrorDate, ErrorMessage, ErrorContext
+            recentAlerts = await QueryAsync($@"
+                SELECT TOP ({topN}) InstanceID, ErrorDate, ErrorMessage, ErrorContext
                 FROM dbo.CollectionErrorLog ORDER BY ErrorDate DESC");
         }
         catch { }
@@ -447,8 +590,8 @@ app.MapGet("/api/dashboard/stats", async () =>
         List<Dictionary<string, object?>> failedJobs = new();
         try
         {
-            failedJobs = await QueryAsync(@"
-                SELECT TOP 10 jh.job_id, jh.step_name, jh.RunDateTime, jh.message,
+            failedJobs = await QueryAsync($@"
+                SELECT TOP ({topN}) jh.job_id, jh.step_name, jh.RunDateTime, jh.message,
                        jh.InstanceID, i.InstanceDisplayName
                 FROM dbo.JobHistory jh
                 JOIN dbo.Instances i ON jh.InstanceID = i.InstanceID
@@ -610,6 +753,344 @@ app.MapGet("/api/instances/{id:int}/databases", async (int id) =>
     catch (Exception ex)
     {
         return Results.Ok(new { error = ex.Message, data = Array.Empty<object>() });
+    }
+}).RequireAuthorization();
+
+app.MapGet("/api/instances/{id:int}/log-shipping-summary", async (int id) =>
+{
+    try
+    {
+        var data = await SpAsyncWithIdsTvp("dbo.LogShippingSummary_Get", 120, "@InstanceIDs", IdsTableSingle(id), ("@ShowHidden", true));
+        return Results.Ok(new { data, note = "dbo.LogShippingSummary_Get" });
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new { error = ex.Message, data = Array.Empty<object>(), note = "" });
+    }
+}).RequireAuthorization();
+
+app.MapGet("/api/instances/{id:int}/log-shipping-detail", async (int id) =>
+{
+    try
+    {
+        var data = await SpAsync("dbo.LogShipping_Get", 120,
+            ("@InstanceIDs", id.ToString()),
+            ("@IncludeCritical", true), ("@IncludeWarning", true), ("@IncludeNA", true), ("@IncludeOK", true), ("@ShowHidden", true));
+        return Results.Ok(new { data, note = "dbo.LogShipping_Get" });
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new { error = ex.Message, data = Array.Empty<object>(), note = "" });
+    }
+}).RequireAuthorization();
+
+app.MapGet("/api/instances/{id:int}/database-mirroring-summary", async (int id) =>
+{
+    try
+    {
+        var data = await SpAsync("dbo.DatabaseMirroringSummary_Get", 120, ("@InstanceIDs", id.ToString()), ("@ShowHidden", true));
+        return Results.Ok(new { data, note = "dbo.DatabaseMirroringSummary_Get" });
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new { error = ex.Message, data = Array.Empty<object>(), note = "" });
+    }
+}).RequireAuthorization();
+
+app.MapGet("/api/instances/{id:int}/database-mirroring-detail", async (int id) =>
+{
+    try
+    {
+        var data = await SpAsync("dbo.DatabaseMirroring_Get", 120, ("@InstanceIDs", id.ToString()), ("@ShowHidden", true));
+        return Results.Ok(new { data, note = "dbo.DatabaseMirroring_Get" });
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new { error = ex.Message, data = Array.Empty<object>(), note = "" });
+    }
+}).RequireAuthorization();
+
+app.MapGet("/api/instances/{id:int}/collection-dates", async (int id) =>
+{
+    try
+    {
+        var data = await SpAsync("dbo.CollectionDates_Get", 120,
+            ("@InstanceIDs", id.ToString()),
+            ("@IncludeCritical", true), ("@IncludeWarning", true), ("@IncludeNA", true), ("@IncludeOK", true), ("@ShowHidden", true));
+        return Results.Ok(new { data, note = "dbo.CollectionDates_Get" });
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new { error = ex.Message, data = Array.Empty<object>(), note = "" });
+    }
+}).RequireAuthorization();
+
+app.MapGet("/api/instances/{id:int}/collection-errors", async (int id, int? days) =>
+{
+    var d = Math.Clamp(days ?? 7, 1, 365);
+    try
+    {
+        var data = await SpAsyncWithIdsTvp("dbo.CollectionErrorLog_Get", 120, "@InstanceIDs", IdsTableEmpty(),
+            ("@InstanceID", id), ("@Days", d));
+        return Results.Ok(new { data, note = "dbo.CollectionErrorLog_Get" });
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new { error = ex.Message, data = Array.Empty<object>(), note = "" });
+    }
+}).RequireAuthorization();
+
+app.MapGet("/api/instances/{id:int}/corruption", async (int id) =>
+{
+    try
+    {
+        var data = await SpAsyncWithIdsTvp("dbo.Corruption_Get", 120, "@InstanceIDs", IdsTableSingle(id));
+        return Results.Ok(new { data, note = "dbo.Corruption_Get" });
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new { error = ex.Message, data = Array.Empty<object>(), note = "" });
+    }
+}).RequireAuthorization();
+
+app.MapGet("/api/instances/{id:int}/last-checkdb", async (int id) =>
+{
+    try
+    {
+        var data = await SpAsync("dbo.LastGoodCheckDB_Get", 120,
+            ("@InstanceIDs", id.ToString()),
+            ("@IncludeCritical", true), ("@IncludeWarning", true), ("@IncludeNA", true), ("@IncludeOK", true), ("@ShowHidden", true));
+        return Results.Ok(new { data, note = "dbo.LastGoodCheckDB_Get" });
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new { error = ex.Message, data = Array.Empty<object>(), note = "" });
+    }
+}).RequireAuthorization();
+
+app.MapGet("/api/instances/{id:int}/drives/{driveId:int}/snapshots", async (int id, int driveId, int? hours) =>
+{
+    var h = Math.Clamp(hours ?? 168, 1, 8760);
+    try
+    {
+        var ok = await QueryAsync("SELECT 1 AS x FROM dbo.Drives WHERE DriveID = @d AND InstanceID = @i", 15, ("@d", driveId), ("@i", id));
+        if (ok.Count == 0)
+            return Results.Json(new { error = "Drive not found for this instance.", data = Array.Empty<object>(), note = "" }, statusCode: 404);
+
+        var to = DateTime.UtcNow;
+        var from = to.AddHours(-h);
+        var data = await SpAsync("dbo.DriveSnapshot_Get", 120,
+            ("@DriveID", driveId), ("@FromDate", from), ("@ToDate", to), ("@DateGroupingMins", 1440));
+        return Results.Ok(new { data, note = "dbo.DriveSnapshot_Get", fromDate = from, toDate = to });
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new { error = ex.Message, data = Array.Empty<object>(), note = "" });
+    }
+}).RequireAuthorization();
+
+app.MapGet("/api/instances/{id:int}/cpu-sp", async (int id, int? hours) =>
+{
+    var h = Math.Clamp(hours ?? 24, 1, 336);
+    try
+    {
+        var from = DateTime.UtcNow.AddHours(-h);
+        var to = DateTime.UtcNow;
+        var data = await SpAsyncCpuGet(id, from, to, 120);
+        return Results.Ok(new { data, note = "dbo.CPU_Get", fromDate = from, toDate = to });
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new { error = ex.Message, data = Array.Empty<object>(), note = "" });
+    }
+}).RequireAuthorization();
+
+app.MapGet("/api/instances/{id:int}/custom-tools", async (int id) =>
+{
+    try
+    {
+        var data = await SpAsync("dbo.CustomTools_Get", 120, ("@InstanceID", id));
+        return Results.Ok(new { data, note = "dbo.CustomTools_Get" });
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new { error = ex.Message, data = Array.Empty<object>(), note = "" });
+    }
+}).RequireAuthorization();
+
+// Community scripts on monitored instances: same Service Broker path as the Windows GUI (Messaging.SendMessageFromGUIToService).
+app.MapPost("/api/instances/{id:int}/messaging/community-proc", async (int id, HttpRequest req, CancellationToken ct) =>
+{
+    if (!app.Configuration.GetValue("Messaging:EnableCommunityProcedureExecution", false))
+    {
+        return Results.Json(new { error = "Messaging community execution is disabled. Set Messaging:EnableCommunityProcedureExecution to true." },
+            statusCode: 403);
+    }
+
+    var aqtn = app.Configuration["Messaging:ProcedureExecutionMessageAssemblyQualifiedName"]?.Trim();
+    if (string.IsNullOrEmpty(aqtn))
+    {
+        return Results.Json(new
+        {
+            error = "Set Messaging:ProcedureExecutionMessageAssemblyQualifiedName to the AssemblyQualifiedName of DBADash.Messaging.ProcedureExecutionMessage from the DBA Dash build that matches your collector service (e.g. reflect DBADash.dll in the service folder)."
+        }, statusCode: 503);
+    }
+
+    using var doc = await JsonDocument.ParseAsync(req.Body, cancellationToken: ct);
+    var root = doc.RootElement;
+    if (!root.TryGetProperty("procedureName", out var procEl) || procEl.ValueKind != JsonValueKind.String)
+        return Results.Json(new { error = "procedureName (string) is required." }, statusCode: 400);
+    var procName = procEl.GetString()?.Trim();
+    if (string.IsNullOrEmpty(procName) || !DbaDashMessaging.CommunityProcedureNames.Contains(procName))
+    {
+        return Results.Json(new { error = "procedureName must be one of the DBA Dash community allow-listed procedures." },
+            statusCode: 400);
+    }
+
+    var schema = "dbo";
+    if (root.TryGetProperty("schemaName", out var schemaEl) && schemaEl.ValueKind == JsonValueKind.String)
+        schema = schemaEl.GetString()?.Trim() ?? "dbo";
+    if (!string.Equals(schema, "dbo", StringComparison.OrdinalIgnoreCase))
+        return Results.Json(new { error = "Only schema dbo is supported for community procedures." }, statusCode: 400);
+
+    var lifetime = 300;
+    if (root.TryGetProperty("lifetimeSeconds", out var lifeEl) && lifeEl.TryGetInt32(out var l))
+        lifetime = Math.Clamp(l, 30, 3600);
+
+    var paramList = new List<DbaDashMessaging.CustomParamDto>();
+    if (root.TryGetProperty("parameters", out var pArr) && pArr.ValueKind == JsonValueKind.Array)
+    {
+        foreach (var p in pArr.EnumerateArray())
+        {
+            if (p.ValueKind != JsonValueKind.Object) continue;
+            if (!p.TryGetProperty("name", out var nameEl) || nameEl.ValueKind != JsonValueKind.String) continue;
+            var name = nameEl.GetString();
+            if (string.IsNullOrEmpty(name)) continue;
+            var dbType = p.TryGetProperty("dbType", out var dt) && dt.ValueKind == JsonValueKind.String
+                ? dt.GetString() ?? "String"
+                : "String";
+            var isNull = p.TryGetProperty("isNull", out var inEl) && inEl.ValueKind == JsonValueKind.True;
+            object? val = null;
+            if (!isNull && p.TryGetProperty("value", out var vel))
+                val = DbaDashProcedureBridge.JsonElementToClr(vel);
+            paramList.Add(new DbaDashMessaging.CustomParamDto
+            {
+                SerializedParam = DbaDashMessaging.BuildSerializedParam(name, dbType, val, isNull),
+                UseDefaultValue = false
+            });
+        }
+    }
+
+    try
+    {
+        var inst = await DbaDashMessaging.GetInstanceMessagingAsync(connStr, id, ct);
+        if (inst == null) return Results.NotFound();
+        if (!inst.MessagingEnabled)
+        {
+            return Results.Json(new { error = "Messaging is not enabled for this instance (import and collect agents must have messaging enabled)." },
+                statusCode: 400);
+        }
+
+        if (inst.ImportAgentId is not int importId || inst.CollectAgentId is not int collectId)
+            return Results.Json(new { error = "Instance is missing ImportAgentID or CollectAgentID." }, statusCode: 400);
+
+        var collectAgent = await DbaDashMessaging.GetAgentDtoAsync(connStr, collectId, ct);
+        var importAgent = await DbaDashMessaging.GetAgentDtoAsync(connStr, importId, ct);
+        if (collectAgent == null || importAgent == null)
+            return Results.Json(new { error = "Could not load dbo.DBADashAgent_Get for this instance." }, statusCode: 500);
+
+        var mr = await DbaDashMessaging.SendProcedureExecutionAndWaitAsync(
+            connStr, aqtn, importId, inst.ConnectionId, collectAgent, importAgent, schema, procName, paramList, lifetime, ct);
+
+        return Results.Ok(new
+        {
+            error = mr.Error,
+            usedS3DataPath = mr.UsedS3DataPath,
+            progress = mr.Progress,
+            resultSets = mr.ResultSets
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new { error = ex.Message, progress = Array.Empty<object>(), resultSets = Array.Empty<object>() });
+    }
+}).RequireAuthorization();
+
+// UserReport schema only; procedure names must appear in UserReport:AllowedProcedures (comma-separated, no wildcards).
+app.MapPost("/api/repository/user-report/execute", async (HttpRequest req, CancellationToken ct) =>
+{
+    if (!app.Configuration.GetValue("UserReport:EnableExecution", false))
+    {
+        return Results.Json(new { error = "UserReport execution is disabled. Set UserReport:EnableExecution to true and list procedures in UserReport:AllowedProcedures." },
+            statusCode: 403);
+    }
+
+    var allow = DbaDashUserReportBridge.ParseAllowList(app.Configuration["UserReport:AllowedProcedures"]);
+    if (allow.Count == 0)
+    {
+        return Results.Json(new { error = "UserReport:AllowedProcedures is empty. Add explicit procedure names (comma-separated)." },
+            statusCode: 403);
+    }
+
+    using var doc = await JsonDocument.ParseAsync(req.Body, cancellationToken: ct);
+    var root = doc.RootElement;
+    if (!root.TryGetProperty("procedureName", out var procEl) || procEl.ValueKind != JsonValueKind.String)
+        return Results.Json(new { error = "procedureName (string) is required." }, statusCode: 400);
+    var proc = procEl.GetString()?.Trim();
+    if (string.IsNullOrEmpty(proc))
+        return Results.Json(new { error = "procedureName is required." }, statusCode: 400);
+    if (!DbaDashUserReportBridge.IsSafeProcedureName(proc))
+        return Results.Json(new { error = "Invalid procedure name." }, statusCode: 400);
+
+    try
+    {
+        var (exists, exErr) = await DbaDashUserReportBridge.ProcedureExistsInUserReportAsync(connStr, proc, ct);
+        if (exErr != null)
+            return Results.Ok(new { error = exErr, data = Array.Empty<object>(), note = "" });
+        if (!exists)
+            return Results.Json(new { error = "Procedure not found in UserReport schema." }, statusCode: 404);
+
+        var timeout = 120;
+        if (root.TryGetProperty("timeoutSeconds", out var ts) && ts.TryGetInt32(out var tsec))
+            timeout = Math.Clamp(tsec, 5, 600);
+
+        root.TryGetProperty("parameters", out var po);
+        DbaDashProcedureBridge.TryParseParameters(po, out var scalars);
+
+        var (rows, err) = await DbaDashUserReportBridge.ExecuteReadAsync(connStr, proc, allow, timeout, scalars, ct);
+        return Results.Ok(new { data = rows, error = err, note = $"UserReport.{proc}" });
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new { error = ex.Message, data = Array.Empty<object>(), note = "" });
+    }
+}).RequireAuthorization();
+
+app.MapGet("/api/estate/log-shipping", async () =>
+{
+    try
+    {
+        var data = await SpAsync("dbo.LogShipping_Get", 180,
+            ("@InstanceIDs", (string?)null),
+            ("@IncludeCritical", true), ("@IncludeWarning", true), ("@IncludeNA", true), ("@IncludeOK", true), ("@ShowHidden", true));
+        return Results.Ok(new { data, note = "dbo.LogShipping_Get (all instances)" });
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new { error = ex.Message, data = Array.Empty<object>(), note = "" });
+    }
+}).RequireAuthorization();
+
+app.MapGet("/api/estate/database-mirroring", async () =>
+{
+    try
+    {
+        var data = await SpAsync("dbo.DatabaseMirroring_Get", 180, ("@InstanceIDs", (string?)null), ("@ShowHidden", true));
+        return Results.Ok(new { data, note = "dbo.DatabaseMirroring_Get (all instances)" });
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new { error = ex.Message, data = Array.Empty<object>(), note = "" });
     }
 }).RequireAuthorization();
 
@@ -933,26 +1414,27 @@ app.MapGet("/api/hadr/overview", async () =>
 
 app.MapGet("/api/instances/{id:int}/queries", async (int id, int? limit) =>
 {
-    try
+    // Same source as DBA Dash GUI: collected rows in DBADashDB (not DMVs on the repository SQL Server).
+    var take = ClampLimit(limit, 2000, 50_000);
+    var tables = new[] { "QueryStoreStats", "TopQueries" };
+    foreach (var tbl in tables)
     {
-        var take = ClampLimit(limit, 200, 10_000);
-        var data = await QueryAsync($@"
-            SELECT TOP ({take}) qs.query_hash, qs.total_worker_time AS TotalCPU,
-                   qs.total_logical_reads + qs.total_logical_writes AS TotalIO,
-                   qs.execution_count AS Executions,
-                   CASE WHEN qs.execution_count > 0
-                        THEN qs.total_elapsed_time / qs.execution_count / 1000
-                        ELSE 0 END AS AvgDurationMs,
-                   SUBSTRING(st.text, 1, 4000) AS QueryText
-            FROM sys.dm_exec_query_stats qs
-            CROSS APPLY sys.dm_exec_sql_text(qs.sql_handle) st
-            ORDER BY qs.total_worker_time DESC");
-        return Results.Ok(data);
+        try
+        {
+            var data = await QueryAsync(
+                $"SELECT TOP ({take}) * FROM dbo.{tbl} WHERE InstanceID = @id ORDER BY 1 DESC",
+                120,
+                ("@id", id));
+            if (data.Count > 0)
+                return Results.Ok(data);
+        }
+        catch
+        {
+            /* try next table name used in this repo version */
+        }
     }
-    catch
-    {
-        return Results.Ok(Array.Empty<object>());
-    }
+
+    return Results.Ok(Array.Empty<object>());
 }).RequireAuthorization();
 
 // ── Estate-wide Backups ──────────────────────────────────────────────────
@@ -1056,6 +1538,43 @@ app.MapGet("/api/performance/running-queries", async (int? instanceId, int? limi
         app.Logger.LogWarning("Running queries endpoint error: {Error}", ex.Message);
         return Results.Ok(new { data = Array.Empty<object>(), note = $"Table not found: {ex.Message}" });
     }
+}).RequireAuthorization();
+
+// ── Performance: Running Queries Summary (dbo.RunningQueriesSummary_Get — DBA Dash Windows GUI) ──
+app.MapGet("/api/performance/running-queries-summary", async (int instanceId, int? hours, int? limit) =>
+{
+    try
+    {
+        var h = Math.Min(Math.Max(hours ?? 24, 1), 336);
+        var maxRows = ClampLimit(limit, 2000, 50_000);
+        var to = DateTime.UtcNow;
+        var from = to.AddHours(-h);
+        var data = await SpAsync("dbo.RunningQueriesSummary_Get", 120,
+            ("@InstanceID", instanceId),
+            ("@FromDate", from),
+            ("@ToDate", to),
+            ("@MaxRows", maxRows));
+        return Results.Ok(new { data, note = "" });
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning("RunningQueriesSummary_Get: {Error}", ex.Message);
+        return Results.Ok(new { data = Array.Empty<object>(), note = ex.Message });
+    }
+}).RequireAuthorization();
+
+// Full snapshot grid (dbo.RunningQueries_Get — same as Windows “snapshot” view; includes OUTPUT metadata)
+app.MapGet("/api/performance/running-queries-snapshot", async (int instanceId, int? top) =>
+{
+    var topN = ClampLimit(top, 2000, 10_000);
+    var (rows, outputs, err) = await RunningQueriesSnapshotAsync(instanceId, topN);
+    if (err != null)
+    {
+        app.Logger.LogWarning("RunningQueries_Get: {Error}", err);
+        return Results.Ok(new { error = err, data = Array.Empty<object>(), outputs, note = "dbo.RunningQueries_Get" });
+    }
+
+    return Results.Ok(new { data = rows, outputs, rowCount = rows.Count, note = "dbo.RunningQueries_Get" });
 }).RequireAuthorization();
 
 // ── Performance: Blocking ────────────────────────────────────────────────
@@ -1414,16 +1933,17 @@ app.MapGet("/api/monitoring/patching", async (HttpContext ctx) =>
     catch (Exception ex) { return Results.Ok(new { data = Array.Empty<object>(), note = ex.Message }); }
 }).RequireAuthorization();
 
-app.MapGet("/api/monitoring/schema-changes", async (HttpContext ctx, int instanceId, int days = 30) =>
+app.MapGet("/api/monitoring/schema-changes", async (HttpContext ctx, int instanceId, int days = 30, int? limit = null) =>
 {
     var connStr = app.Configuration.GetConnectionString("DBADashDB");
+    var rowCap = ClampLimit(limit, 2000, 50_000);
     var tables = new[] { "DDLHistory" };
     foreach (var tbl in tables)
     {
         try
         {
             using var conn = new SqlConnection(connStr); await conn.OpenAsync();
-            var sql = $"SELECT TOP 200 d.DatabaseID, dbo_obj.ObjectName, dbo_obj.SchemaName, dbo_obj.ObjectType, d.ObjectDateCreated, d.ObjectDateModified, d.SnapshotValidFrom FROM dbo.DDLHistory d JOIN dbo.DBObjects dbo_obj ON d.ObjectID=dbo_obj.ObjectID WHERE dbo_obj.DatabaseID IN (SELECT DatabaseID FROM dbo.Databases WHERE InstanceID=@id) AND d.SnapshotValidFrom > DATEADD(day,-@days,GETUTCDATE()) ORDER BY d.SnapshotValidFrom DESC";
+            var sql = $"SELECT TOP ({rowCap}) d.DatabaseID, dbo_obj.ObjectName, dbo_obj.SchemaName, dbo_obj.ObjectType, d.ObjectDateCreated, d.ObjectDateModified, d.SnapshotValidFrom FROM dbo.DDLHistory d JOIN dbo.DBObjects dbo_obj ON d.ObjectID=dbo_obj.ObjectID WHERE dbo_obj.DatabaseID IN (SELECT DatabaseID FROM dbo.Databases WHERE InstanceID=@id) AND d.SnapshotValidFrom > DATEADD(day,-@days,GETUTCDATE()) ORDER BY d.SnapshotValidFrom DESC";
             using var cmd = new SqlCommand(sql, conn);
             cmd.Parameters.AddWithValue("@id", instanceId); cmd.Parameters.AddWithValue("@days", days);
             using var r = await cmd.ExecuteReaderAsync();
@@ -1441,16 +1961,18 @@ app.MapGet("/api/monitoring/schema-changes", async (HttpContext ctx, int instanc
     return Results.Ok(new { data = Array.Empty<object>(), note = "No schema change tables found" });
 }).RequireAuthorization();
 
-app.MapGet("/api/performance/query-store", async (HttpContext ctx, int instanceId) =>
+app.MapGet("/api/performance/query-store", async (HttpContext ctx, int instanceId, int? limit = null) =>
 {
     var connStr = app.Configuration.GetConnectionString("DBADashDB");
+    var take = ClampLimit(limit, 5000, 50_000);
     var tables = new[] { "QueryStoreStats", "TopQueries" };
     foreach (var tbl in tables)
     {
         try
         {
             using var conn = new SqlConnection(connStr); await conn.OpenAsync();
-            using var cmd = new SqlCommand($"SELECT TOP 100 * FROM dbo.{tbl} WHERE InstanceID=@id ORDER BY 1 DESC", conn);
+            using var cmd = new SqlCommand($"SELECT TOP ({take}) * FROM dbo.{tbl} WHERE InstanceID=@id ORDER BY 1 DESC", conn);
+            cmd.CommandTimeout = 120;
             cmd.Parameters.AddWithValue("@id", instanceId);
             using var r = await cmd.ExecuteReaderAsync();
             var list = new List<object>();
@@ -2405,11 +2927,186 @@ app.MapGet("/api/dashboard/monitor", async () =>
         foreach (var (_, label) in SummaryStatusKeys.CheckAlertLabels)
             alertCounts[label] = result.Count(r => r.activeAlerts.Contains(label));
 
-        return Results.Ok(new { instances = result, alertCounts, recentErrors = alerts.Take(20) });
+        return Results.Ok(new { instances = result, alertCounts, recentErrors = alerts });
     }
     catch (Exception ex)
     {
         return Results.Ok(new { error = ex.Message });
+    }
+}).RequireAuthorization();
+
+// Catalog of Windows GUI → same dbo.* procedures (for web parity hub).
+app.MapGet("/api/repository/parity-catalog", (IConfiguration cfg) =>
+{
+    var mutating = cfg.GetValue("Repository:AllowMutatingStoredProcedures", false);
+    return Results.Ok(new
+    {
+        mutatingEnabled = mutating,
+        entries = DbaDashParityCatalog.Entries.Select(e => new
+        {
+            category = e.Category,
+            label = e.Label,
+            procedure = e.Procedure,
+            addEmptyDayHourTvp = e.AddEmptyDayHourTvp,
+            suggestedTimeoutSeconds = e.SuggestedTimeoutSeconds,
+            instanceParameterName = e.InstanceParameterName,
+            databaseParameterName = e.DatabaseParameterName,
+            notes = e.Notes,
+        }),
+        mutatingEntries = DbaDashParityCatalog.MutatingEntries
+            .Where(_ => mutating)
+            .Select(e => new
+            {
+                category = e.Category,
+                label = e.Label,
+                procedure = e.Procedure,
+                suggestedTimeoutSeconds = e.SuggestedTimeoutSeconds,
+                notes = e.Notes,
+            })
+            .ToList(),
+    });
+}).RequireAuthorization();
+
+// UserReport.* procedures in repo (metadata + param XML) — same source as Windows custom report picker
+app.MapGet("/api/repository/custom-reports", async () =>
+{
+    try
+    {
+        var data = await SpAsync("dbo.CustomReport_Get", 120);
+        return Results.Ok(new { data, note = "dbo.CustomReport_Get" });
+    }
+    catch (Exception ex)
+    {
+        return Results.Ok(new { error = ex.Message, data = Array.Empty<object>(), note = "" });
+    }
+}).RequireAuthorization();
+
+// Invoke whitelisted dbo.* read procedures (same catalog as DBADashGUI). Body: { "procedure": "dbo.Waits_Get", "timeoutSeconds": 120, "parameters": { "@InstanceID": 1 }, "addEmptyDayHourTvp": true, "tvpIds": { "InstanceIDs": [1,2] } }
+app.MapPost("/api/repository/invoke-sp", async (HttpContext ctx) =>
+{
+    var connStr = app.Configuration.GetConnectionString("DBADashDB");
+    if (string.IsNullOrWhiteSpace(connStr))
+        return Results.Problem("DBADashDB connection string is not configured.");
+
+    string body;
+    using (var sr = new StreamReader(ctx.Request.Body))
+        body = await sr.ReadToEndAsync();
+
+    JsonDocument doc;
+    try
+    {
+        doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(body) ? "{}" : body);
+    }
+    catch
+    {
+        return Results.BadRequest(new { error = "Invalid JSON body." });
+    }
+
+    using (doc)
+    {
+        var root = doc.RootElement;
+        var proc = root.TryGetProperty("procedure", out var pEl) ? pEl.GetString()?.Trim() : null;
+        if (string.IsNullOrEmpty(proc))
+            return Results.BadRequest(new { error = "procedure is required." });
+
+        if (!DbaDashProcedureBridge.IsAllowed(proc))
+            return Results.Json(new { error = "Procedure is not on the allow-list.", procedure = proc }, statusCode: 403);
+
+        var timeout = 120;
+        if (root.TryGetProperty("timeoutSeconds", out var tEl) && tEl.ValueKind == JsonValueKind.Number)
+            timeout = Math.Clamp(tEl.GetInt32(), 5, 600);
+
+        var addTvp = true;
+        if (root.TryGetProperty("addEmptyDayHourTvp", out var aEl) &&
+            aEl.ValueKind is JsonValueKind.True or JsonValueKind.False)
+            addTvp = aEl.GetBoolean();
+
+        JsonElement paramsEl = default;
+        if (root.TryGetProperty("parameters", out var pe) && pe.ValueKind == JsonValueKind.Object)
+            paramsEl = pe;
+
+        DbaDashProcedureBridge.TryParseParameters(paramsEl, out var scalars);
+
+        IReadOnlyDictionary<string, IReadOnlyList<int>>? tvpDict = null;
+        if (root.TryGetProperty("tvpIds", out var tvEl) && tvEl.ValueKind == JsonValueKind.Object)
+        {
+            var d = new Dictionary<string, IReadOnlyList<int>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var prop in tvEl.EnumerateObject())
+            {
+                if (prop.Value.ValueKind != JsonValueKind.Array)
+                    continue;
+                var list = new List<int>();
+                foreach (var el in prop.Value.EnumerateArray())
+                {
+                    if (el.ValueKind == JsonValueKind.Number && el.TryGetInt32(out var ii))
+                        list.Add(ii);
+                }
+
+                if (list.Count > 0)
+                    d[prop.Name] = list;
+            }
+
+            if (d.Count > 0)
+                tvpDict = d;
+        }
+
+        var (rows, err) = await DbaDashProcedureBridge.ExecuteReadAsync(connStr, proc, timeout, scalars, addTvp, tvpDict);
+        if (err != null)
+            return Results.Json(new { error = err, procedure = proc }, statusCode: 400);
+
+        return Results.Ok(new { procedure = proc, rowCount = rows.Count, rows });
+    }
+}).RequireAuthorization();
+
+// Mutating dbo.* (acks, threshold updates). Disabled unless Repository:AllowMutatingStoredProcedures = true.
+app.MapPost("/api/repository/invoke-sp-mutate", async (HttpContext ctx) =>
+{
+    if (!app.Configuration.GetValue("Repository:AllowMutatingStoredProcedures", false))
+        return Results.Json(new { error = "Mutating stored procedures are disabled. Set Repository:AllowMutatingStoredProcedures to true." }, statusCode: 403);
+
+    var connStr = app.Configuration.GetConnectionString("DBADashDB");
+    if (string.IsNullOrWhiteSpace(connStr))
+        return Results.Problem("DBADashDB connection string is not configured.");
+
+    string body;
+    using (var sr = new StreamReader(ctx.Request.Body))
+        body = await sr.ReadToEndAsync();
+
+    JsonDocument doc;
+    try
+    {
+        doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(body) ? "{}" : body);
+    }
+    catch
+    {
+        return Results.BadRequest(new { error = "Invalid JSON body." });
+    }
+
+    using (doc)
+    {
+        var root = doc.RootElement;
+        var proc = root.TryGetProperty("procedure", out var pEl) ? pEl.GetString()?.Trim() : null;
+        if (string.IsNullOrEmpty(proc))
+            return Results.BadRequest(new { error = "procedure is required." });
+
+        if (!DbaDashProcedureBridge.IsMutatingAllowed(proc))
+            return Results.Json(new { error = "Procedure is not on the mutating allow-list.", procedure = proc }, statusCode: 403);
+
+        var timeout = 120;
+        if (root.TryGetProperty("timeoutSeconds", out var tEl) && tEl.ValueKind == JsonValueKind.Number)
+            timeout = Math.Clamp(tEl.GetInt32(), 5, 600);
+
+        JsonElement paramsEl = default;
+        if (root.TryGetProperty("parameters", out var pe) && pe.ValueKind == JsonValueKind.Object)
+            paramsEl = pe;
+
+        DbaDashProcedureBridge.TryParseParameters(paramsEl, out var scalars);
+
+        var (rowsAffected, err) = await DbaDashProcedureBridge.ExecuteNonQueryAsync(connStr, proc, timeout, scalars);
+        if (err != null)
+            return Results.Json(new { error = err, procedure = proc }, statusCode: 400);
+
+        return Results.Ok(new { procedure = proc, rowsAffected });
     }
 }).RequireAuthorization();
 
