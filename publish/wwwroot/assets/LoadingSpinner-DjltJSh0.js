@@ -1,0 +1,1 @@
+import{j as e}from"./index-Czm22s0U.js";import{L as t}from"./loader-circle-DLrTpYQm.js";function i({text:s="Loading..."}){return e.jsxs("div",{className:"flex flex-col items-center justify-center py-16 gap-3",children:[e.jsx(t,{className:"w-8 h-8 text-blue-400 animate-spin"}),e.jsx("p",{className:"text-sm text-gray-400",children:s})]})}export{i as L};
