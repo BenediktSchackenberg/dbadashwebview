@@ -143,13 +143,18 @@ function Layout({ children }: { children: React.ReactNode }) {
               onClick={() => setMode(mode === 'desktop' ? 'web' : 'desktop')}
               title={
                 mode === 'desktop'
-                  ? 'Switch to modern web styling'
-                  : 'Use Windows / DBA Dash-style data grids (borders, dense rows)'
+                  ? 'Switch to dark glass web theme'
+                  : 'Windows DBA Dash look: light shell, bordered grids (default)'
               }
-              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-gray-400 hover:text-white hover:bg-white/5 transition-all border border-transparent hover:border-white/10"
+              className={clsx(
+                'hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs transition-all border',
+                mode === 'desktop'
+                  ? 'border-[#adadad] bg-gradient-to-b from-white to-[#f0f0f0] text-black hover:from-[#fafafa] hover:to-[#ebebeb]'
+                  : 'text-gray-400 hover:text-white hover:bg-white/5 border-transparent hover:border-white/10',
+              )}
             >
               {mode === 'desktop' ? <Monitor className="w-3.5 h-3.5" /> : <LayoutGrid className="w-3.5 h-3.5" />}
-              {mode === 'desktop' ? 'Web UI' : 'Desktop grids'}
+              {mode === 'desktop' ? 'Web UI' : 'Windows style'}
             </button>
             <button
               onClick={toggleTheme}

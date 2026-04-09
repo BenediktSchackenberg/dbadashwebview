@@ -1,11 +1,13 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { clsx } from 'clsx';
 import {
   Database, ChevronRight, ChevronDown, LayoutDashboard, Bell, HardDrive, Network,
   Settings, ClipboardCheck, Shield, Play, BarChart3, Search, LogOut, User, Folder, Server,
   FileSpreadsheet, TrendingDown, Activity, Monitor
 } from 'lucide-react';
 import { api } from '../api/api';
+import { usePresentationOptional } from '../context/PresentationContext';
 
 interface TreeDatabase {
   databaseId: number;
@@ -65,6 +67,30 @@ export default function InstanceTree({ onLogout }: { onLogout: () => void }) {
   const [expandedSysDb, setExpandedSysDb] = useState<Set<number>>(new Set());
   const [search, setSearch] = useState('');
   const location = useLocation();
+  const { isDesktopData } = usePresentationOptional();
+
+  const sectionTitleClass = clsx(
+    'text-xs font-semibold uppercase tracking-wider px-0 py-2',
+    isDesktopData ? 'text-gray-600' : 'text-gray-500',
+  );
+
+  const navItemClass = (active: boolean) =>
+    clsx(
+      'flex items-center gap-2.5 py-1.5 px-2 rounded text-sm transition-all border-l-2',
+      isDesktopData
+        ? active
+          ? 'bg-[#d0e8ff] text-[#0c3762] border-[#0078d4]'
+          : 'text-gray-800 border-transparent hover:bg-black/[0.06]'
+        : active
+          ? 'bg-blue-500/15 text-blue-400 border-blue-400'
+          : 'text-gray-400 border-transparent hover:text-white hover:bg-white/5',
+    );
+
+  const navIconClass = (active: boolean) =>
+    clsx(
+      'w-4 h-4',
+      isDesktopData ? (active ? 'text-[#0078d4]' : 'text-gray-600') : active ? 'text-blue-400' : 'text-gray-500',
+    );
 
   useEffect(() => {
     api.tree().then((data: any) => {
@@ -132,27 +158,47 @@ export default function InstanceTree({ onLogout }: { onLogout: () => void }) {
   };
 
   return (
-    <div className="w-72 bg-slate-900/95 border-r border-white/10 flex flex-col h-full shrink-0">
+    <div
+      className={clsx(
+        'w-72 flex flex-col h-full shrink-0',
+        isDesktopData
+          ? 'dba-sidebar-desktop border-r border-[#ababab] bg-[#ececec] text-[#1e1e1e]'
+          : 'bg-slate-900/95 border-r border-white/10',
+      )}
+    >
       {/* Header */}
-      <div className="p-4 flex items-center gap-3 border-b border-white/10">
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shrink-0">
-          <Database className="w-4 h-4 text-white" />
+      <div
+        className={clsx(
+          'p-4 flex items-center gap-3 border-b',
+          isDesktopData ? 'border-[#ababab] bg-[#f5f5f5]' : 'border-white/10',
+        )}
+      >
+        <div
+          className={clsx(
+            'w-8 h-8 rounded flex items-center justify-center shrink-0',
+            isDesktopData ? 'bg-[#0078d4]' : 'rounded-lg bg-gradient-to-br from-blue-500 to-purple-600',
+          )}
+        >
+          <Database className={clsx('w-4 h-4', isDesktopData ? 'text-white' : 'text-white')} />
         </div>
-        <span className="font-bold text-white text-sm whitespace-nowrap">DBA Dash WebView</span>
+        <span className={clsx('font-bold text-sm whitespace-nowrap', isDesktopData ? 'text-black' : 'text-white')}>
+          DBA Dash WebView
+        </span>
       </div>
 
-      <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'thin', scrollbarColor: '#475569 transparent' }}>
+      <div
+        className="flex-1 overflow-y-auto"
+        style={{
+          scrollbarWidth: 'thin',
+          scrollbarColor: isDesktopData ? '#b0b0b0 #ececec' : '#475569 transparent',
+        }}
+      >
         {/* Global Views */}
         <div className="px-3 py-2">
-          <div className="text-xs font-semibold uppercase tracking-wider text-gray-500 px-0 py-2">Global Views</div>
+          <div className={sectionTitleClass}>Global Views</div>
           {globalViews.map(item => (
-            <Link key={item.path} to={item.path}
-              className={`flex items-center gap-2.5 py-1.5 px-2 rounded text-sm transition-all ${
-                isActive(item.path)
-                  ? 'bg-blue-500/15 text-blue-400 border-l-2 border-blue-400'
-                  : 'text-gray-400 hover:text-white hover:bg-white/5 border-l-2 border-transparent'
-              }`}>
-              <item.icon className={`w-4 h-4 ${isActive(item.path) ? 'text-blue-400' : 'text-gray-500'}`} />
+            <Link key={item.path} to={item.path} className={navItemClass(isActive(item.path))}>
+              <item.icon className={navIconClass(isActive(item.path))} />
               <span>{item.label}</span>
             </Link>
           ))}
@@ -160,20 +206,15 @@ export default function InstanceTree({ onLogout }: { onLogout: () => void }) {
 
         {/* Reporting */}
         <div className="px-3 py-2">
-          <div className="text-xs font-semibold uppercase tracking-wider text-gray-500 px-0 py-2">Reporting</div>
+          <div className={sectionTitleClass}>Reporting</div>
           {[
             { path: '/reports/licenses', icon: FileSpreadsheet, label: 'License Overview' },
             { path: '/reports/underutilized', icon: TrendingDown, label: 'Underutilized Servers' },
             { path: '/reports/fleet-stats', icon: Activity, label: 'Fleet Statistics' },
             { path: '/reports/backup-ampel', icon: Shield, label: 'Backup Ampel Report' },
           ].map(item => (
-            <Link key={item.path} to={item.path}
-              className={`flex items-center gap-2.5 py-1.5 px-2 rounded text-sm transition-all ${
-                isActive(item.path)
-                  ? 'bg-blue-500/15 text-blue-400 border-l-2 border-blue-400'
-                  : 'text-gray-400 hover:text-white hover:bg-white/5 border-l-2 border-transparent'
-              }`}>
-              <item.icon className={`w-4 h-4 ${isActive(item.path) ? 'text-blue-400' : 'text-gray-500'}`} />
+            <Link key={item.path} to={item.path} className={navItemClass(isActive(item.path))}>
+              <item.icon className={navIconClass(isActive(item.path))} />
               <span>{item.label}</span>
             </Link>
           ))}
@@ -181,14 +222,26 @@ export default function InstanceTree({ onLogout }: { onLogout: () => void }) {
 
         {/* SQL Servers grouped by version */}
         <div className="px-3 py-2">
-          <div className="text-xs font-semibold uppercase tracking-wider text-gray-500 py-2">
-            SQL Servers ({filtered.length})
-          </div>
+          <div className={clsx(sectionTitleClass, 'py-2')}>SQL Servers ({filtered.length})</div>
           <div className="mb-2 relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
-            <input type="text" placeholder="Filter instances..." value={search}
+            <Search
+              className={clsx(
+                'absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5',
+                isDesktopData ? 'text-gray-500' : 'text-gray-500',
+              )}
+            />
+            <input
+              type="text"
+              placeholder="Filter instances..."
+              value={search}
               onChange={e => setSearch(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg text-sm px-3 py-1.5 pl-8 text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500/50" />
+              className={clsx(
+                'w-full rounded text-sm px-3 py-1.5 pl-8 focus:outline-none',
+                isDesktopData
+                  ? 'bg-white border border-[#7a7a7a] text-black placeholder-gray-500 focus:border-[#0078d4]'
+                  : 'bg-slate-800 border border-slate-700 text-gray-200 placeholder-gray-500 focus:border-blue-500/50',
+              )}
+            />
           </div>
 
           {versionGroups.map(([versionLabel, insts]) => {

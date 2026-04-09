@@ -26,10 +26,12 @@ const PresentationContext = createContext<PresentationValue | null>(null);
 export function PresentationProvider({ children }: { children: ReactNode }) {
   const [mode, setModeState] = useState<PresentationMode>(() => {
     try {
-      const s = localStorage.getItem(STORAGE_KEY) as PresentationMode | null;
-      return s === 'desktop' ? 'desktop' : 'web';
+      const s = localStorage.getItem(STORAGE_KEY);
+      // Default matches DBA Dash Windows GUI (light shell + grid tables). Opt into "web" explicitly.
+      if (s === 'web') return 'web';
+      return 'desktop';
     } catch {
-      return 'web';
+      return 'desktop';
     }
   });
 
