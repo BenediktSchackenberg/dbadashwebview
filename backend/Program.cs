@@ -152,12 +152,84 @@ string GenerateToken(string username, string? displayName = null, string role = 
     return new JwtSecurityTokenHandler().WriteToken(token);
 }
 
-async Task<List<Dictionary<string, object?>>> QueryAsync(string sql, params (string name, object? value)[] parameters)
+/// <summary>All Summary_Get status columns used for worst-status / alerting (matches DBA Dash GUI checks).</summary>
+static readonly string[] SummaryStatusColumnKeys =
+{
+    "FullBackupStatus", "DiffBackupStatus", "LogBackupStatus", "LogShippingStatus",
+    "DriveStatus", "FileFreeSpaceStatus", "LogFreeSpaceStatus", "JobStatus", "AGStatus",
+    "CorruptionStatus", "LastGoodCheckDBStatus", "MemoryDumpStatus", "SnapshotAgeStatus",
+    "UptimeStatus", "IsAgentRunningStatus", "DBMailStatus", "QueryStoreStatus",
+    "AlertStatus", "PctMaxSizeStatus", "CollectionErrorStatus", "DatabaseStateStatus",
+    "IdentityStatus", "CustomCheckStatus", "MirroringStatus", "ElasticPoolStorageStatus"
+};
+
+/// <summary>Maps Summary column to a short alert label for SQL Monitor / badges.</summary>
+static readonly (string Key, string Label)[] SummaryCheckAlertLabels =
+{
+    ("FullBackupStatus", "Backup"),
+    ("DiffBackupStatus", "Diff backup"),
+    ("LogBackupStatus", "Log backup"),
+    ("LogShippingStatus", "Log shipping"),
+    ("DriveStatus", "Disk space"),
+    ("FileFreeSpaceStatus", "File space"),
+    ("LogFreeSpaceStatus", "Log space"),
+    ("JobStatus", "Job failing"),
+    ("AGStatus", "AG"),
+    ("CorruptionStatus", "Corruption"),
+    ("LastGoodCheckDBStatus", "DBCC"),
+    ("MemoryDumpStatus", "Memory dump"),
+    ("SnapshotAgeStatus", "Snapshot age"),
+    ("UptimeStatus", "Uptime"),
+    ("IsAgentRunningStatus", "SQL Agent"),
+    ("DBMailStatus", "DB Mail"),
+    ("QueryStoreStatus", "Query Store"),
+    ("AlertStatus", "Agent alerts"),
+    ("PctMaxSizeStatus", "% Max size"),
+    ("CollectionErrorStatus", "Collection errors"),
+    ("DatabaseStateStatus", "Database state"),
+    ("IdentityStatus", "Identity columns"),
+    ("CustomCheckStatus", "Custom check"),
+    ("MirroringStatus", "Mirroring"),
+    ("ElasticPoolStorageStatus", "Elastic pool"),
+};
+
+static int WorstSummaryStatus(Dictionary<string, object?>? row, string[] keys)
+{
+    var worst = 4; // OK in DBADashStatusEnum
+    if (row == null) return worst;
+    foreach (var k in keys)
+    {
+        if (!row.TryGetValue(k, out var v) || v == null) continue;
+        var val = Convert.ToInt32(v);
+        if (val == 3) continue; // N/A
+        if (val < worst) worst = val;
+    }
+    return worst;
+}
+
+static void AppendActiveSummaryAlerts(Dictionary<string, object?>? sum, List<string> target)
+{
+    if (sum == null) return;
+    foreach (var (key, label) in SummaryCheckAlertLabels)
+    {
+        if (!sum.TryGetValue(key, out var v) || v == null) continue;
+        var val = Convert.ToInt32(v);
+        if (val == 1 || val == 2) target.Add(label);
+    }
+}
+
+static int ClampLimit(int? requested, int defaultValue, int maxValue) =>
+    requested is > 0 ? Math.Min(requested.Value, maxValue) : defaultValue;
+
+static int ClampOffset(int? requested) =>
+    requested is >= 0 ? requested.Value : 0;
+
+async Task<List<Dictionary<string, object?>>> QueryAsync(string sql, int commandTimeoutSeconds = 30, params (string name, object? value)[] parameters)
 {
     using var conn = new SqlConnection(connStr);
     await conn.OpenAsync();
     using var cmd = new SqlCommand(sql, conn);
-    cmd.CommandTimeout = 30;
+    cmd.CommandTimeout = commandTimeoutSeconds;
     foreach (var (name, value) in parameters)
         cmd.Parameters.AddWithValue(name, value ?? DBNull.Value);
     using var reader = await cmd.ExecuteReaderAsync();
@@ -172,11 +244,11 @@ async Task<List<Dictionary<string, object?>>> QueryAsync(string sql, params (str
     return results;
 }
 
-async Task<List<Dictionary<string, object?>>> SpAsync(string sp, params (string name, object? value)[] parameters)
+async Task<List<Dictionary<string, object?>>> SpAsync(string sp, int commandTimeoutSeconds = 30, params (string name, object? value)[] parameters)
 {
     using var conn = new SqlConnection(connStr);
     await conn.OpenAsync();
-    using var cmd = new SqlCommand(sp, conn) { CommandType = CommandType.StoredProcedure, CommandTimeout = 30 };
+    using var cmd = new SqlCommand(sp, conn) { CommandType = CommandType.StoredProcedure, CommandTimeout = commandTimeoutSeconds };
     foreach (var (name, value) in parameters)
         cmd.Parameters.AddWithValue(name, value ?? DBNull.Value);
     using var reader = await cmd.ExecuteReaderAsync();
@@ -284,7 +356,7 @@ app.MapGet("/api/dashboard/summary", async () =>
 {
     try
     {
-        var data = await SpAsync("dbo.Summary_Get");
+        var data = await SpAsync("dbo.Summary_Get", 120);
         return Results.Ok(data);
     }
     catch (Exception ex)
@@ -311,7 +383,7 @@ app.MapGet("/api/dashboard/stats", async () =>
         catch { }
 
         // Status counts from Summary_Get, filtered to active instances
-        var summary = await SpAsync("dbo.Summary_Get");
+        var summary = await SpAsync("dbo.Summary_Get", 120);
         var activeSummary = activeIds.Count > 0
             ? summary.Where(r => r.TryGetValue("InstanceID", out var v) && v != null && activeIds.Contains(Convert.ToInt32(v))).ToList()
             : summary;
@@ -320,18 +392,7 @@ app.MapGet("/api/dashboard/stats", async () =>
         foreach (var row in activeSummary)
         {
             // DBA Dash enum: Critical=1, Warning=2, NA=3, OK=4, Acknowledged=5
-            var statusKeys = new[] { "FullBackupStatus", "DriveStatus", "JobStatus", "AGStatus",
-                "CorruptionStatus", "LastGoodCheckDBStatus", "LogBackupStatus" };
-            int worst = 4; // start at OK
-            foreach (var k in statusKeys)
-            {
-                if (row.TryGetValue(k, out var v) && v != null)
-                {
-                    var val = Convert.ToInt32(v);
-                    if (val == 3) continue; // skip N/A
-                    if (val < worst) worst = val; // lower = worse
-                }
-            }
+            var worst = WorstSummaryStatus(row, SummaryStatusColumnKeys);
             if (worst == 1) critical++;
             else if (worst == 2) warning++;
             else healthy++;
@@ -457,11 +518,12 @@ app.MapGet("/api/dashboard/stats", async () =>
     }
 }).RequireAuthorization();
 
-app.MapGet("/api/instances", async () =>
+app.MapGet("/api/instances", async (bool all = false) =>
 {
     try
     {
-        var instances = await QueryAsync(@"
+        var recencyFilter = all ? "" : "AND cd.LastCollected > DATEADD(hour, -24, GETUTCDATE())";
+        var instances = await QueryAsync($@"
             SELECT i.InstanceID, i.Instance, i.ConnectionID, i.IsActive, i.Edition, 
                    i.ProductVersion, i.ProductMajorVersion, i.cpu_count, i.physical_memory_kb, i.sqlserver_start_time,
                    i.InstanceDisplayName, i.ShowInSummary, cd.LastCollected
@@ -471,8 +533,8 @@ app.MapGet("/api/instances", async () =>
                 FROM dbo.CollectionDates c WHERE c.InstanceID = i.InstanceID
             ) cd
             WHERE i.IsActive = 1
-              AND cd.LastCollected > DATEADD(hour, -24, GETUTCDATE())
-            ORDER BY i.InstanceDisplayName");
+              {recencyFilter}
+            ORDER BY i.InstanceDisplayName", 60);
         return Results.Ok(instances);
     }
     catch (Exception ex)
@@ -498,7 +560,7 @@ app.MapGet("/api/instances/{id:int}", async (int id) =>
         if (inst.Count == 0) return Results.NotFound();
 
         List<Dictionary<string, object?>>? summary = null;
-        try { summary = await SpAsync("dbo.Summary_Get"); } catch { }
+        try { summary = await SpAsync("dbo.Summary_Get", 120); } catch { }
         var instanceSummary = summary?.FirstOrDefault(s =>
             s.ContainsKey("InstanceID") && Convert.ToInt32(s["InstanceID"]) == id);
 
@@ -515,12 +577,14 @@ app.MapGet("/api/instances/{id:int}/cpu", async (int id, int? hours) =>
     var h = Math.Min(hours ?? 24, 336);
     try
     {
-        var data = await QueryAsync(@"
-            SELECT TOP 1440 EventTime, SQLProcessCPU, SystemIdleCPU,
+        // ~1 sample/minute typical; cap rows for chart performance (full range still bounded by hours)
+        var maxPoints = Math.Min(h * 60 + 120, 100_000);
+        var data = await QueryAsync($@"
+            SELECT TOP ({maxPoints}) EventTime, SQLProcessCPU, SystemIdleCPU,
                    (100 - SQLProcessCPU - SystemIdleCPU) AS OtherCPU,
                    (100 - SystemIdleCPU) AS TotalCPU
             FROM dbo.CPU WHERE InstanceID = @id AND EventTime > DATEADD(hour, -@hours, GETUTCDATE())
-            ORDER BY EventTime DESC", ("@id", id), ("@hours", h));
+            ORDER BY EventTime DESC", 120, ("@id", id), ("@hours", h));
         return Results.Ok(data);
     }
     catch (Exception ex)
@@ -529,13 +593,14 @@ app.MapGet("/api/instances/{id:int}/cpu", async (int id, int? hours) =>
     }
 }).RequireAuthorization();
 
-app.MapGet("/api/instances/{id:int}/waits", async (int id, int? hours) =>
+app.MapGet("/api/instances/{id:int}/waits", async (int id, int? hours, int? top) =>
 {
     var h = Math.Min(hours ?? 24, 336);
+    var topN = ClampLimit(top, 200, 5000);
     try
     {
-        var data = await QueryAsync(@"
-            SELECT TOP 20 w.WaitTypeID, wt.WaitType, 
+        var data = await QueryAsync($@"
+            SELECT TOP ({topN}) w.WaitTypeID, wt.WaitType, 
                    SUM(w.wait_time_ms) as TotalWaitMs,
                    SUM(w.waiting_tasks_count) as TotalWaitCount,
                    SUM(w.signal_wait_time_ms) as TotalSignalWaitMs
@@ -543,7 +608,7 @@ app.MapGet("/api/instances/{id:int}/waits", async (int id, int? hours) =>
             LEFT JOIN dbo.WaitType wt ON w.WaitTypeID = wt.WaitTypeID
             WHERE w.InstanceID = @id AND w.SnapshotDate > DATEADD(hour, -@hours, GETUTCDATE())
             GROUP BY w.WaitTypeID, wt.WaitType
-            ORDER BY SUM(w.wait_time_ms) DESC", ("@id", id), ("@hours", h));
+            ORDER BY SUM(w.wait_time_ms) DESC", 120, ("@id", id), ("@hours", h));
         return Results.Ok(data);
     }
     catch (Exception ex)
@@ -609,15 +674,18 @@ app.MapGet("/api/instances/{id:int}/backups", async (int id) =>
     }
 }).RequireAuthorization();
 
-app.MapGet("/api/instances/{id:int}/jobs", async (int id) =>
+app.MapGet("/api/instances/{id:int}/jobs", async (int id, int? limit, int? offset) =>
 {
     try
     {
-        var data = await QueryAsync(@"
-            SELECT TOP 50 job_id, step_id, step_name, run_status,
+        var take = ClampLimit(limit, 5000, 100_000);
+        var skip = ClampOffset(offset);
+        var data = await QueryAsync($@"
+            SELECT job_id, step_id, step_name, run_status,
                    RunDateTime, RunDurationSec, message
             FROM dbo.JobHistory WHERE InstanceID = @id
-            ORDER BY RunDateTime DESC", ("@id", id));
+            ORDER BY RunDateTime DESC
+            OFFSET @skip ROWS FETCH NEXT @take ROWS ONLY", 120, ("@id", id), ("@skip", skip), ("@take", take));
         return Results.Ok(data);
     }
     catch (Exception ex)
@@ -626,18 +694,21 @@ app.MapGet("/api/instances/{id:int}/jobs", async (int id) =>
     }
 }).RequireAuthorization();
 
-app.MapGet("/api/jobs/recent", async () =>
+app.MapGet("/api/jobs/recent", async (int? limit, int? offset) =>
 {
     try
     {
-        var data = await QueryAsync(@"
-            SELECT TOP 100 jh.job_id, jh.step_id, jh.step_name, jh.run_status,
+        var take = ClampLimit(limit, 2000, 50_000);
+        var skip = ClampOffset(offset);
+        var data = await QueryAsync($@"
+            SELECT jh.job_id, jh.step_id, jh.step_name, jh.run_status,
                    jh.RunDateTime, jh.RunDurationSec, jh.message,
                    jh.InstanceID, i.InstanceDisplayName
             FROM dbo.JobHistory jh
             JOIN dbo.Instances i ON jh.InstanceID = i.InstanceID
             WHERE jh.step_id = 0
-            ORDER BY jh.RunDateTime DESC");
+            ORDER BY jh.RunDateTime DESC
+            OFFSET @skip ROWS FETCH NEXT @take ROWS ONLY", 120, ("@skip", skip), ("@take", take));
         return Results.Ok(data);
     }
     catch (Exception ex)
@@ -646,18 +717,21 @@ app.MapGet("/api/jobs/recent", async () =>
     }
 }).RequireAuthorization();
 
-app.MapGet("/api/jobs/failures", async () =>
+app.MapGet("/api/jobs/failures", async (int? limit, int? offset) =>
 {
     try
     {
-        var data = await QueryAsync(@"
-            SELECT TOP 100 jh.job_id, jh.step_id, jh.step_name, jh.run_status,
+        var take = ClampLimit(limit, 2000, 50_000);
+        var skip = ClampOffset(offset);
+        var data = await QueryAsync($@"
+            SELECT jh.job_id, jh.step_id, jh.step_name, jh.run_status,
                    jh.RunDateTime, jh.RunDurationSec, jh.message,
                    jh.InstanceID, i.InstanceDisplayName
             FROM dbo.JobHistory jh
             JOIN dbo.Instances i ON jh.InstanceID = i.InstanceID
             WHERE jh.run_status = 0 AND jh.RunDateTime > DATEADD(hour, -24, GETUTCDATE())
-            ORDER BY jh.RunDateTime DESC");
+            ORDER BY jh.RunDateTime DESC
+            OFFSET @skip ROWS FETCH NEXT @take ROWS ONLY", 120, ("@skip", skip), ("@take", take));
         return Results.Ok(data);
     }
     catch (Exception ex)
@@ -666,50 +740,43 @@ app.MapGet("/api/jobs/failures", async () =>
     }
 }).RequireAuthorization();
 
-app.MapGet("/api/alerts/recent", async () =>
+app.MapGet("/api/alerts/recent", async (int? limit, int? offset) =>
 {
     try
     {
-        // Collection errors (actual errors from DBA Dash collection)
-        var errors = await QueryAsync(@"
-            SELECT TOP 100 e.InstanceID, 
-                   COALESCE(i.InstanceDisplayName, i.Instance, CAST(e.InstanceID as VARCHAR)) as InstanceName,
-                   e.ErrorDate, e.ErrorMessage, e.ErrorContext,
-                   'error' as AlertType
-            FROM dbo.CollectionErrorLog e
-            LEFT JOIN dbo.Instances i ON e.InstanceID = i.InstanceID
-            ORDER BY e.ErrorDate DESC");
-
-        // Failed jobs (last 48h)
-        List<Dictionary<string, object?>> failedJobs = new();
-        try
-        {
-            failedJobs = await QueryAsync(@"
-                SELECT TOP 50 jh.InstanceID,
+        var take = ClampLimit(limit, 2000, 20_000);
+        var skip = ClampOffset(offset);
+        // Collection errors + failed job steps (48h), merged like DBA Dash alert feed
+        var combined = await QueryAsync($@"
+            ;WITH errors AS (
+                SELECT e.InstanceID, 
+                       COALESCE(i.InstanceDisplayName, i.Instance, CAST(e.InstanceID as VARCHAR)) as InstanceName,
+                       e.ErrorDate, e.ErrorMessage, e.ErrorContext,
+                       CAST('error' AS VARCHAR(32)) as AlertType
+                FROM dbo.CollectionErrorLog e
+                LEFT JOIN dbo.Instances i ON e.InstanceID = i.InstanceID
+            ),
+            jobFails AS (
+                SELECT jh.InstanceID,
                        COALESCE(i.InstanceDisplayName, i.Instance) as InstanceName,
                        jh.RunDateTime as ErrorDate,
-                       CONCAT('Job step failed: ', jh.step_name, ' — ', LEFT(jh.message, 500)) as ErrorMessage,
+                       CONCAT('Job step failed: ', jh.step_name, ' - ', LEFT(CAST(jh.message AS VARCHAR(500)), 500)) as ErrorMessage,
                        jh.step_name as ErrorContext,
-                       'job_failure' as AlertType
+                       CAST('job_failure' AS VARCHAR(32)) as AlertType
                 FROM dbo.JobHistory jh
                 JOIN dbo.Instances i ON jh.InstanceID = i.InstanceID
                 WHERE jh.run_status = 0 AND jh.RunDateTime > DATEADD(hour,-48,GETUTCDATE())
-                ORDER BY jh.RunDateTime DESC");
-        }
-        catch { }
-
-        // Combine and sort by date descending
-        var combined = new List<Dictionary<string, object?>>();
-        combined.AddRange(errors);
-        combined.AddRange(failedJobs);
-        combined.Sort((a, b) =>
-        {
-            var da = a.ContainsKey("ErrorDate") && a["ErrorDate"] != null ? a["ErrorDate"]!.ToString() : "";
-            var db = b.ContainsKey("ErrorDate") && b["ErrorDate"] != null ? b["ErrorDate"]!.ToString() : "";
-            return string.Compare(db, da, StringComparison.Ordinal);
-        });
-
-        return Results.Ok(combined.Take(200));
+            ),
+            merged AS (
+                SELECT * FROM errors
+                UNION ALL
+                SELECT * FROM jobFails
+            )
+            SELECT InstanceID, InstanceName, ErrorDate, ErrorMessage, ErrorContext, AlertType
+            FROM merged
+            ORDER BY ErrorDate DESC
+            OFFSET @skip ROWS FETCH NEXT @take ROWS ONLY", 120, ("@skip", skip), ("@take", take));
+        return Results.Ok(combined);
     }
     catch
     {
@@ -905,12 +972,13 @@ app.MapGet("/api/hadr/overview", async () =>
 
 // ── Queries ──────────────────────────────────────────────────────────────
 
-app.MapGet("/api/instances/{id:int}/queries", async (int id) =>
+app.MapGet("/api/instances/{id:int}/queries", async (int id, int? limit) =>
 {
     try
     {
-        var data = await QueryAsync(@"
-            SELECT TOP 50 qs.query_hash, qs.total_worker_time AS TotalCPU,
+        var take = ClampLimit(limit, 200, 10_000);
+        var data = await QueryAsync($@"
+            SELECT TOP ({take}) qs.query_hash, qs.total_worker_time AS TotalCPU,
                    qs.total_logical_reads + qs.total_logical_writes AS TotalIO,
                    qs.execution_count AS Executions,
                    CASE WHEN qs.execution_count > 0
@@ -1006,23 +1074,22 @@ app.MapGet("/api/drives", async () =>
 
 // ── Performance: Running Queries ─────────────────────────────────────────
 
-app.MapGet("/api/performance/running-queries", async (int? instanceId) =>
+app.MapGet("/api/performance/running-queries", async (int? instanceId, int? limit, int? offset) =>
 {
     try
     {
+        var take = ClampLimit(limit, 2000, 50_000);
+        var skip = ClampOffset(offset);
         var filter = instanceId.HasValue ? "AND rq.InstanceID = @instanceId" : "";
         var sql = $@"
-            SELECT TOP 200 rq.InstanceID, i.InstanceDisplayName, rq.session_id, rq.start_time_utc,
-                   rq.status, rq.command, rq.wait_type, rq.wait_resource,
-                   rq.blocking_session_id, rq.cpu_time, rq.reads, rq.writes,
-                   rq.logical_reads, rq.SnapshotDateUTC,
-                   rq.database_id, d.name AS database_name
+            SELECT rq.*, i.InstanceDisplayName, d.name AS database_name
             FROM dbo.RunningQueries rq
             JOIN dbo.Instances i ON rq.InstanceID = i.InstanceID
             LEFT JOIN dbo.Databases d ON rq.database_id = d.database_id AND rq.InstanceID = d.InstanceID
             WHERE rq.SnapshotDateUTC > DATEADD(hour,-1,GETUTCDATE()) {filter}
-            ORDER BY rq.SnapshotDateUTC DESC";
-        var data = await QueryAsync(sql, ("@instanceId", instanceId ?? (object)DBNull.Value));
+            ORDER BY rq.SnapshotDateUTC DESC
+            OFFSET @skip ROWS FETCH NEXT @take ROWS ONLY";
+        var data = await QueryAsync(sql, 120, ("@instanceId", instanceId ?? (object)DBNull.Value), ("@skip", skip), ("@take", take));
         return Results.Ok(new { data, note = "" });
     }
     catch (Exception ex)
@@ -1034,24 +1101,24 @@ app.MapGet("/api/performance/running-queries", async (int? instanceId) =>
 
 // ── Performance: Blocking ────────────────────────────────────────────────
 
-app.MapGet("/api/performance/blocking", async (int? instanceId) =>
+app.MapGet("/api/performance/blocking", async (int? instanceId, int? limit, int? offset) =>
 {
     try
     {
+        var take = ClampLimit(limit, 2000, 50_000);
+        var skip = ClampOffset(offset);
         var filter = instanceId.HasValue ? "AND rq.InstanceID = @instanceId" : "";
         var sql = $@"
-            SELECT rq.InstanceID, i.InstanceDisplayName, rq.session_id, rq.start_time_utc,
-                   rq.status, rq.command, rq.wait_type, rq.wait_resource,
-                   rq.blocking_session_id, rq.cpu_time, rq.reads, rq.writes,
-                   rq.SnapshotDateUTC
+            SELECT rq.*, i.InstanceDisplayName
             FROM dbo.RunningQueries rq
             JOIN dbo.Instances i ON rq.InstanceID = i.InstanceID
             WHERE rq.SnapshotDateUTC > DATEADD(hour,-1,GETUTCDATE())
               AND (rq.blocking_session_id > 0
                    OR rq.session_id IN (SELECT blocking_session_id FROM dbo.RunningQueries WHERE blocking_session_id > 0 AND SnapshotDateUTC > DATEADD(hour,-1,GETUTCDATE())))
               {filter}
-            ORDER BY rq.SnapshotDateUTC DESC";
-        var data = await QueryAsync(sql, ("@instanceId", instanceId ?? (object)DBNull.Value));
+            ORDER BY rq.SnapshotDateUTC DESC
+            OFFSET @skip ROWS FETCH NEXT @take ROWS ONLY";
+        var data = await QueryAsync(sql, 120, ("@instanceId", instanceId ?? (object)DBNull.Value), ("@skip", skip), ("@take", take));
         return Results.Ok(new { data, note = "" });
     }
     catch (Exception ex)
@@ -1063,22 +1130,23 @@ app.MapGet("/api/performance/blocking", async (int? instanceId) =>
 
 // ── Performance: Slow Queries ────────────────────────────────────────────
 
-app.MapGet("/api/performance/slow-queries", async (int? instanceId, int? hours) =>
+app.MapGet("/api/performance/slow-queries", async (int? instanceId, int? hours, int? limit, int? offset) =>
 {
     var h = hours ?? 24;
     try
     {
+        var take = ClampLimit(limit, 2000, 50_000);
+        var skip = ClampOffset(offset);
         var filter = instanceId.HasValue ? "AND sq.InstanceID = @instanceId" : "";
         var sql = $@"
-            SELECT TOP 200 sq.InstanceID, i.InstanceDisplayName, sq.object_name, sq.DatabaseID,
-                   sq.text, sq.duration, sq.cpu_time, sq.logical_reads,
-                   sq.physical_reads, sq.writes, sq.timestamp,
-                   sq.client_hostname, sq.client_app_name, sq.username
+            SELECT sq.*, i.InstanceDisplayName, d.name AS database_name
             FROM dbo.SlowQueries sq
             JOIN dbo.Instances i ON sq.InstanceID = i.InstanceID
+            LEFT JOIN dbo.Databases d ON sq.DatabaseID = d.DatabaseID AND sq.InstanceID = d.InstanceID
             WHERE sq.timestamp > DATEADD(hour,-@hours,GETUTCDATE()) {filter}
-            ORDER BY sq.duration DESC";
-        var data = await QueryAsync(sql, ("@instanceId", instanceId ?? (object)DBNull.Value), ("@hours", h));
+            ORDER BY sq.duration DESC
+            OFFSET @skip ROWS FETCH NEXT @take ROWS ONLY";
+        var data = await QueryAsync(sql, 120, ("@instanceId", instanceId ?? (object)DBNull.Value), ("@hours", h), ("@skip", skip), ("@take", take));
         return Results.Ok(new { data, note = "" });
     }
     catch (Exception ex)
@@ -1090,9 +1158,10 @@ app.MapGet("/api/performance/slow-queries", async (int? instanceId, int? hours) 
 
 // ── Performance: Memory ──────────────────────────────────────────────────
 
-app.MapGet("/api/performance/memory", async (int? instanceId, int? hours) =>
+app.MapGet("/api/performance/memory", async (int? instanceId, int? hours, int? limit) =>
 {
     var h = Math.Min(hours ?? 24, 336);
+    var take = ClampLimit(limit, 5000, 100_000);
     var clerks = Array.Empty<object>() as object;
     var counters = Array.Empty<object>() as object;
     var clerkNote = "";
@@ -1101,16 +1170,17 @@ app.MapGet("/api/performance/memory", async (int? instanceId, int? hours) =>
     // Memory clerk stats
     try
     {
-        var filter = instanceId.HasValue ? "AND mc.InstanceID = @instanceId" : "";
+        var filter = instanceId.HasValue ? "AND mu.InstanceID = @instanceId" : "";
         var sql = $@"
-            SELECT TOP 200 mu.InstanceID, i.InstanceDisplayName, mct.MemoryClerkType AS clerk_type,
+            SELECT mu.InstanceID, i.InstanceDisplayName, mct.MemoryClerkType AS clerk_type,
                    mct.MemoryClerkDescription AS clerk_name, mu.pages_kb, mu.SnapshotDate
             FROM dbo.MemoryUsage mu
             JOIN dbo.Instances i ON mu.InstanceID = i.InstanceID
             JOIN dbo.MemoryClerkType mct ON mu.MemoryClerkTypeID = mct.MemoryClerkTypeID
             WHERE mu.SnapshotDate > DATEADD(hour,-@hours,GETUTCDATE()) {filter}
-            ORDER BY mu.pages_kb DESC";
-        clerks = await QueryAsync(sql, ("@instanceId", instanceId ?? (object)DBNull.Value), ("@hours", h));
+            ORDER BY mu.pages_kb DESC
+            OFFSET 0 ROWS FETCH NEXT @take ROWS ONLY";
+        clerks = await QueryAsync(sql, 120, ("@instanceId", instanceId ?? (object)DBNull.Value), ("@hours", h), ("@take", take));
     }
     catch (Exception ex)
     {
@@ -1122,14 +1192,15 @@ app.MapGet("/api/performance/memory", async (int? instanceId, int? hours) =>
     {
         var filter = instanceId.HasValue ? "AND pc.InstanceID = @instanceId" : "";
         var sql = $@"
-            SELECT TOP 500 pc.InstanceID, i.InstanceDisplayName, c.counter_name, pc.Value AS cntr_value, pc.SnapshotDate
+            SELECT pc.InstanceID, i.InstanceDisplayName, c.counter_name, pc.Value AS cntr_value, pc.SnapshotDate
             FROM dbo.PerformanceCounters pc
             JOIN dbo.Instances i ON pc.InstanceID = i.InstanceID
             JOIN dbo.Counters c ON pc.CounterID = c.CounterID
             WHERE c.object_name LIKE '%Memory%'
               AND pc.SnapshotDate > DATEADD(hour,-@hours,GETUTCDATE()) {filter}
-            ORDER BY pc.SnapshotDate DESC";
-        counters = await QueryAsync(sql, ("@instanceId", instanceId ?? (object)DBNull.Value), ("@hours", h));
+            ORDER BY pc.SnapshotDate DESC
+            OFFSET 0 ROWS FETCH NEXT @take ROWS ONLY";
+        counters = await QueryAsync(sql, 120, ("@instanceId", instanceId ?? (object)DBNull.Value), ("@hours", h), ("@take", take));
     }
     catch (Exception ex)
     {
@@ -1141,9 +1212,10 @@ app.MapGet("/api/performance/memory", async (int? instanceId, int? hours) =>
 
 // ── Performance: IO ──────────────────────────────────────────────────────
 
-app.MapGet("/api/performance/io", async (int? instanceId, int? hours) =>
+app.MapGet("/api/performance/io", async (int? instanceId, int? hours, int? limit) =>
 {
     var h = Math.Min(hours ?? 24, 336);
+    var take = ClampLimit(limit, 5000, 100_000);
     var fileStats = Array.Empty<object>() as object;
     var drivePerf = Array.Empty<object>() as object;
     var fileNote = "";
@@ -1154,7 +1226,7 @@ app.MapGet("/api/performance/io", async (int? instanceId, int? hours) =>
     {
         var filter = instanceId.HasValue ? "AND ios.InstanceID = @instanceId" : "";
         var sql = $@"
-            SELECT TOP 200 ios.InstanceID, i.InstanceDisplayName, d.name AS database_name, df.name AS file_name,
+            SELECT ios.InstanceID, i.InstanceDisplayName, d.name AS database_name, df.name AS file_name,
                    ios.io_stall_read_ms, ios.io_stall_write_ms, ios.num_of_reads, ios.num_of_writes,
                    ios.num_of_bytes_read, ios.num_of_bytes_written, ios.SnapshotDate
             FROM dbo.DBIOStats ios
@@ -1162,8 +1234,9 @@ app.MapGet("/api/performance/io", async (int? instanceId, int? hours) =>
             JOIN dbo.DBFiles df ON ios.FileID = df.FileID
             JOIN dbo.Databases d ON df.DatabaseID = d.DatabaseID
             WHERE ios.SnapshotDate > DATEADD(hour,-@hours,GETUTCDATE()) {filter}
-            ORDER BY (ios.io_stall_read_ms + ios.io_stall_write_ms) DESC";
-        fileStats = await QueryAsync(sql, ("@instanceId", instanceId ?? (object)DBNull.Value), ("@hours", h));
+            ORDER BY (ios.io_stall_read_ms + ios.io_stall_write_ms) DESC
+            OFFSET 0 ROWS FETCH NEXT @take ROWS ONLY";
+        fileStats = await QueryAsync(sql, 120, ("@instanceId", instanceId ?? (object)DBNull.Value), ("@hours", h), ("@take", take));
     }
     catch (Exception ex1)
     {
@@ -1175,12 +1248,13 @@ app.MapGet("/api/performance/io", async (int? instanceId, int? hours) =>
     {
         var filter = instanceId.HasValue ? "AND dp.InstanceID = @instanceId" : "";
         var sql = $@"
-            SELECT TOP 200 dp.*, i.InstanceDisplayName
+            SELECT dp.*, i.InstanceDisplayName
             FROM dbo.DriveSnapshot dp
             JOIN dbo.Instances i ON dp.InstanceID = i.InstanceID
             WHERE dp.SnapshotDate > DATEADD(hour,-@hours,GETUTCDATE()) {filter}
-            ORDER BY dp.SnapshotDate DESC";
-        drivePerf = await QueryAsync(sql, ("@instanceId", instanceId ?? (object)DBNull.Value), ("@hours", h));
+            ORDER BY dp.SnapshotDate DESC
+            OFFSET 0 ROWS FETCH NEXT @take ROWS ONLY";
+        drivePerf = await QueryAsync(sql, 120, ("@instanceId", instanceId ?? (object)DBNull.Value), ("@hours", h), ("@take", take));
     }
     catch (Exception ex)
     {
@@ -1191,9 +1265,11 @@ app.MapGet("/api/performance/io", async (int? instanceId, int? hours) =>
 }).RequireAuthorization();
 
 // ── Exec Stats ───────────────────────────────────────────────────────────
-app.MapGet("/api/performance/exec-stats", async (int? instanceId, int? hours) =>
+app.MapGet("/api/performance/exec-stats", async (int? instanceId, int? hours, int? limit, int? offset) =>
 {
     var h = hours ?? 24;
+    var take = ClampLimit(limit, 5000, 100_000);
+    var skip = ClampOffset(offset);
     var data = Array.Empty<object>() as object;
     var note = "";
     var filter = instanceId.HasValue ? "AND os.InstanceID = @instanceId" : "";
@@ -1201,15 +1277,16 @@ app.MapGet("/api/performance/exec-stats", async (int? instanceId, int? hours) =>
     try
     {
         var sql = $@"
-            SELECT TOP 500 os.InstanceID, i.InstanceDisplayName, dbo_obj.ObjectName AS object_name, dbo_obj.SchemaName,
+            SELECT os.InstanceID, i.InstanceDisplayName, dbo_obj.ObjectName AS object_name, dbo_obj.SchemaName,
                    os.execution_count, os.total_worker_time, os.total_elapsed_time,
                    os.total_logical_reads, os.total_logical_writes, os.total_physical_reads, os.SnapshotDate
             FROM dbo.ObjectExecutionStats os
             JOIN dbo.Instances i ON os.InstanceID=i.InstanceID
             JOIN dbo.DBObjects dbo_obj ON os.ObjectID=dbo_obj.ObjectID
             WHERE os.SnapshotDate > DATEADD(hour,-@hours,GETUTCDATE()) {filter}
-            ORDER BY os.total_worker_time DESC";
-        data = await QueryAsync(sql, ("@hours", h), ("@instanceId", instanceId ?? (object)DBNull.Value));
+            ORDER BY os.total_worker_time DESC
+            OFFSET @skip ROWS FETCH NEXT @take ROWS ONLY";
+        data = await QueryAsync(sql, 120, ("@hours", h), ("@instanceId", instanceId ?? (object)DBNull.Value), ("@skip", skip), ("@take", take));
     }
     catch (Exception ex)
     {
@@ -2214,7 +2291,7 @@ app.MapGet("/api/dashboard/monitor", async () =>
     {
         // 1. Summary_Get gives us per-instance health statuses
         List<Dictionary<string, object?>> summary = new();
-        try { summary = await SpAsync("dbo.Summary_Get"); } catch { }
+        try { summary = await SpAsync("dbo.Summary_Get", 120); } catch { }
 
         // 2. Active instance list with versions
         var instances = await QueryAsync(@"
@@ -2336,41 +2413,10 @@ app.MapGet("/api/dashboard/monitor", async () =>
             var agRole = ag.Item2;
             var sum = summaryMap.GetValueOrDefault(id);
 
-            // Compute worst status from Summary_Get
-            // DBA Dash enum: Critical=1, Warning=2, NA=3, OK=4, Acknowledged=5
-            int worstStatus = 4; // start at OK
-            if (sum != null)
-            {
-                var statusKeys = new[] { "FullBackupStatus", "DriveStatus", "JobStatus", "AGStatus",
-                    "CorruptionStatus", "LastGoodCheckDBStatus", "LogBackupStatus" };
-                foreach (var k in statusKeys)
-                {
-                    if (sum.TryGetValue(k, out var sv) && sv != null)
-                    {
-                        var val = Convert.ToInt32(sv);
-                        if (val == 3) continue; // skip N/A
-                        if (val < worstStatus) worstStatus = val; // lower = worse
-                    }
-                }
-            }
-
-            // Collect active alerts for this instance (Critical=1 or Warning=2)
+            // DBA Dash enum: Critical=1, Warning=2, NA=3, OK=4, Acknowledged=5 — all Summary_Get checks
+            var worstStatus = WorstSummaryStatus(sum, SummaryStatusColumnKeys);
             var activeAlerts = new List<string>();
-            if (sum != null)
-            {
-                if (sum.TryGetValue("FullBackupStatus", out var fb) && fb != null && (Convert.ToInt32(fb) == 1 || Convert.ToInt32(fb) == 2))
-                    activeAlerts.Add("Backup");
-                if (sum.TryGetValue("DriveStatus", out var ds) && ds != null && (Convert.ToInt32(ds) == 1 || Convert.ToInt32(ds) == 2))
-                    activeAlerts.Add("Disk space");
-                if (sum.TryGetValue("JobStatus", out var js) && js != null && (Convert.ToInt32(js) == 1 || Convert.ToInt32(js) == 2))
-                    activeAlerts.Add("Job failing");
-                if (sum.TryGetValue("AGStatus", out var ags) && ags != null && (Convert.ToInt32(ags) == 1 || Convert.ToInt32(ags) == 2))
-                    activeAlerts.Add("AG");
-                if (sum.TryGetValue("CorruptionStatus", out var cs) && cs != null && (Convert.ToInt32(cs) == 1 || Convert.ToInt32(cs) == 2))
-                    activeAlerts.Add("Corruption");
-                if (sum.TryGetValue("LogBackupStatus", out var lb) && lb != null && (Convert.ToInt32(lb) == 1 || Convert.ToInt32(lb) == 2))
-                    activeAlerts.Add("Log backup");
-            }
+            AppendActiveSummaryAlerts(sum, activeAlerts);
 
             return new
             {
@@ -2393,17 +2439,12 @@ app.MapGet("/api/dashboard/monitor", async () =>
             };
         }).ToList();
 
-        // Alert type counts for sidebar
         var alertCounts = new Dictionary<string, int>
         {
             ["Monitoring stopped"] = result.Count(r => !(bool)r.isOnline),
-            ["Backup"] = result.Count(r => r.activeAlerts.Contains("Backup")),
-            ["Job failing"] = result.Count(r => r.activeAlerts.Contains("Job failing")),
-            ["Disk space"] = result.Count(r => r.activeAlerts.Contains("Disk space")),
-            ["AG"] = result.Count(r => r.activeAlerts.Contains("AG")),
-            ["Corruption"] = result.Count(r => r.activeAlerts.Contains("Corruption")),
-            ["Log backup"] = result.Count(r => r.activeAlerts.Contains("Log backup")),
         };
+        foreach (var (_, label) in SummaryCheckAlertLabels)
+            alertCounts[label] = result.Count(r => r.activeAlerts.Contains(label));
 
         return Results.Ok(new { instances = result, alertCounts, recentErrors = alerts.Take(20) });
     }

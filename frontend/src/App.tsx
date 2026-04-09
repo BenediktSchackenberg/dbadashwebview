@@ -2,7 +2,8 @@ import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-
 import { useState, useEffect, useCallback, createContext, useContext } from 'react';
 import { isAuthenticated, clearToken, api } from './api/api';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sun, Moon, RefreshCw } from 'lucide-react';
+import { Sun, Moon, RefreshCw, LayoutGrid, Monitor } from 'lucide-react';
+import { clsx } from 'clsx';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import InstancesPage from './pages/InstancesPage';
@@ -48,6 +49,7 @@ import FleetStatsPage from './pages/FleetStatsPage';
 import AboutPage from './pages/AboutPage';
 import ThresholdsPage from './pages/ThresholdsPage';
 import SearchDialog from './components/SearchDialog';
+import { usePresentation } from './context/PresentationContext';
 import Breadcrumbs from './components/Breadcrumbs';
 import TimeRangePicker from './components/TimeRangePicker';
 import InstanceTree from './components/InstanceTree';
@@ -85,6 +87,7 @@ function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const { lastRefresh, refresh } = useRefresh();
   const { dark, toggle: toggleTheme } = useTheme();
+  const { mode, setMode } = usePresentation();
   const [searchData, setSearchData] = useState<{ instances: any[]; databases: any[]; jobs: any[] }>({
     instances: [], databases: [], jobs: [],
   });
@@ -94,7 +97,7 @@ function Layout({ children }: { children: React.ReactNode }) {
       try {
         const [instances, jobs] = await Promise.all([
           api.instances().catch(() => []),
-          api.jobsRecent().catch(() => []),
+          api.jobsRecent(500, 0).catch(() => []),
         ]);
         setSearchData({
           instances: Array.isArray(instances) ? instances : [],
@@ -119,7 +122,12 @@ function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Main */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="h-14 glass-strong border-b border-white/10 flex items-center justify-between px-6 shrink-0 z-10">
+        <header
+          className={clsx(
+            'h-14 glass-strong border-b border-white/10 flex items-center justify-between px-6 shrink-0 z-10',
+            mode === 'desktop' && 'layout-header-desktop',
+          )}
+        >
           <Breadcrumbs />
           <div className="flex items-center gap-2">
             <button
@@ -130,6 +138,19 @@ function Layout({ children }: { children: React.ReactNode }) {
               <kbd className="text-[10px] px-1 py-0.5 rounded bg-white/10">⌘K</kbd>
             </button>
             <TimeRangePicker />
+            <button
+              type="button"
+              onClick={() => setMode(mode === 'desktop' ? 'web' : 'desktop')}
+              title={
+                mode === 'desktop'
+                  ? 'Switch to modern web styling'
+                  : 'Use Windows / DBA Dash-style data grids (borders, dense rows)'
+              }
+              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-gray-400 hover:text-white hover:bg-white/5 transition-all border border-transparent hover:border-white/10"
+            >
+              {mode === 'desktop' ? <Monitor className="w-3.5 h-3.5" /> : <LayoutGrid className="w-3.5 h-3.5" />}
+              {mode === 'desktop' ? 'Web UI' : 'Desktop grids'}
+            </button>
             <button
               onClick={toggleTheme}
               className="p-2 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-all"
@@ -148,7 +169,7 @@ function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto p-6 layout-main">
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}

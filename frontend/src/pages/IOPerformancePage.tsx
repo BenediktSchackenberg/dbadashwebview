@@ -22,7 +22,7 @@ export default function IOPerformancePage() {
 
   useEffect(() => {
     setLoading(true);
-    api.performanceIO(selectedInstance, hours)
+    api.performanceIO(selectedInstance, hours, 25_000)
       .then(r => {
         setFileStats(Array.isArray(r.fileStats) ? r.fileStats : []);
         setDrivePerf(Array.isArray(r.drivePerf) ? r.drivePerf : []);

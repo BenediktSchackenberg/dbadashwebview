@@ -32,8 +32,8 @@ export default function AnalysisPage() {
     setLoading(true);
     Promise.all([
       api.instanceCpu(selectedInstance).catch(() => []),
-      api.instanceWaits(selectedInstance).catch(() => []),
-      api.alertsRecent().catch(() => []),
+      api.instanceWaits(selectedInstance, 24, 2000).catch(() => []),
+      api.alertsRecent(500, 0).catch(() => []),
     ]).then(([cpu, waits, al]) => {
       setCpuData(Array.isArray(cpu) ? cpu : []);
       setWaitsData(Array.isArray(waits) ? waits : []);

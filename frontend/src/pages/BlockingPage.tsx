@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/api';
 import LoadingSpinner from '../components/LoadingSpinner';
+import PaginationBar from '../components/PaginationBar';
+import { usePresentationOptional } from '../context/PresentationContext';
 import { motion } from 'framer-motion';
 import { AlertTriangle } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -28,11 +30,14 @@ interface BlockNode {
 }
 
 export default function BlockingPage() {
+  const { dataGridShellClass, isDesktopData } = usePresentationOptional();
   const [data, setData] = useState<BlockingRow[]>([]);
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(true);
   const [instances, setInstances] = useState<any[]>([]);
   const [selectedInstance, setSelectedInstance] = useState<number | undefined>();
+  const [limit, setLimit] = useState(2000);
+  const [offset, setOffset] = useState(0);
 
   useEffect(() => {
     api.instances().then(i => setInstances(Array.isArray(i) ? i : [])).catch(() => {});
@@ -40,11 +45,11 @@ export default function BlockingPage() {
 
   useEffect(() => {
     setLoading(true);
-    api.performanceBlocking(selectedInstance)
-      .then(r => { setData(r.data || []); setNote(r.note || ''); })
+    api.performanceBlocking(selectedInstance, limit, offset)
+      .then(r => { setData((r.data || []) as BlockingRow[]); setNote(r.note || ''); })
       .catch(() => setData([]))
       .finally(() => setLoading(false));
-  }, [selectedInstance]);
+  }, [selectedInstance, limit, offset]);
 
   const buildTree = (): BlockNode[] => {
     if (data.length === 0) return [];
@@ -92,34 +97,60 @@ export default function BlockingPage() {
     <div key={`${node.sessionId}-${depth}`}>
       <div
         className={clsx(
-          'flex items-start gap-4 px-4 py-3 border-b border-white/5 transition-colors hover:bg-slate-800/50',
-          depth === 0 && 'bg-red-500/5'
+          'flex items-start gap-4 px-4 py-3 transition-colors',
+          isDesktopData
+            ? clsx('border-b border-[#d0d0d0] hover:bg-[#e5f3ff]', depth === 0 && 'bg-[#fff5f5]')
+            : clsx('border-b border-white/5 hover:bg-slate-800/50', depth === 0 && 'bg-red-500/5'),
         )}
         style={{ paddingLeft: `${1 + depth * 2}rem` }}
       >
         <div className="shrink-0 mt-1">
           {depth === 0 ? (
-            <AlertTriangle className="w-4 h-4 text-red-400" />
+            <AlertTriangle className={clsx('w-4 h-4', isDesktopData ? 'text-red-700' : 'text-red-400')} />
           ) : (
-            <div className="w-4 h-4 flex items-center justify-center text-gray-600">|</div>
+            <div className={clsx('w-4 h-4 flex items-center justify-center', isDesktopData ? 'text-gray-500' : 'text-gray-600')}>
+              |
+            </div>
           )}
         </div>
         <div className="flex-1 min-w-0 space-y-1">
           <div className="flex items-center gap-3 flex-wrap">
-            <span className={clsx('font-mono text-sm font-bold', depth === 0 ? 'text-red-400' : 'text-yellow-400')}>
+            <span
+              className={clsx(
+                'font-mono text-sm font-bold',
+                isDesktopData
+                  ? depth === 0
+                    ? 'text-red-800'
+                    : 'text-[#9c5700]'
+                  : depth === 0
+                    ? 'text-red-400'
+                    : 'text-yellow-400',
+              )}
+            >
               SID {node.sessionId}
             </span>
             {node.row && (
               <>
                 <span className="text-xs text-gray-500">{node.row.InstanceDisplayName}</span>
-                {node.row.wait_type && <span className="text-xs px-2 py-0.5 rounded bg-white/5 text-gray-400">{node.row.wait_type}</span>}
+                {node.row.wait_type && (
+                  <span
+                    className={clsx(
+                      'text-xs px-2 py-0.5 rounded',
+                      isDesktopData ? 'border border-[#ababab] bg-[#f5f5f5] text-black' : 'bg-white/5 text-gray-400',
+                    )}
+                  >
+                    {node.row.wait_type}
+                  </span>
+                )}
                 {node.row.wait_resource && <span className="text-xs text-gray-500 font-mono">{node.row.wait_resource}</span>}
                 <span className="text-xs text-gray-500">{formatDuration(node.row.start_time)}</span>
               </>
             )}
           </div>
           {node.row?.query_text && (
-            <pre className="text-xs text-gray-400 font-mono truncate max-w-3xl">{node.row.query_text}</pre>
+            <pre className={clsx('text-xs font-mono truncate max-w-3xl', isDesktopData ? 'text-gray-700' : 'text-gray-400')}>
+              {node.row.query_text}
+            </pre>
           )}
         </div>
       </div>
@@ -139,8 +170,16 @@ export default function BlockingPage() {
         </div>
         <select
           value={selectedInstance ?? ''}
-          onChange={e => setSelectedInstance(e.target.value ? Number(e.target.value) : undefined)}
-          className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+          onChange={e => {
+            setSelectedInstance(e.target.value ? Number(e.target.value) : undefined);
+            setOffset(0);
+          }}
+          className={clsx(
+            'rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2',
+            isDesktopData
+              ? 'border border-[#7a7a7a] bg-white text-black focus:ring-blue-400/40'
+              : 'bg-slate-800 border border-slate-600 text-gray-300 focus:ring-blue-500/50',
+          )}
         >
           <option value="">All Instances</option>
           {instances.map((inst: any) => (
@@ -149,15 +188,25 @@ export default function BlockingPage() {
         </select>
       </div>
 
+      <PaginationBar offset={offset} limit={limit} rowCount={data.length} onOffsetChange={setOffset} onLimitChange={setLimit} />
+
       {note && <div className="text-sm text-yellow-400/80 bg-yellow-400/5 border border-yellow-400/20 rounded-lg px-4 py-2">{note}</div>}
 
       {tree.length === 0 ? (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass-ultra rounded-2xl p-12 text-center">
-          <AlertTriangle className="w-12 h-12 text-gray-600 mx-auto mb-4" />
-          <p className="text-gray-400">No blocking detected</p>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className={clsx('p-12 text-center', isDesktopData ? dataGridShellClass : 'glass-ultra rounded-2xl')}
+        >
+          <AlertTriangle className={clsx('w-12 h-12 mx-auto mb-4', isDesktopData ? 'text-gray-500' : 'text-gray-600')} />
+          <p className={isDesktopData ? 'text-gray-600' : 'text-gray-400'}>No blocking detected</p>
         </motion.div>
       ) : (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="glass-ultra rounded-2xl overflow-hidden">
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={isDesktopData ? dataGridShellClass : 'glass-ultra rounded-2xl overflow-hidden'}
+        >
           {tree.map(node => renderNode(node, 0))}
         </motion.div>
       )}

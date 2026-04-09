@@ -1,9 +1,10 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Server, HardDrive, Activity, AlertTriangle, ShieldCheck, ShieldAlert,
-  Shield, ChevronDown, ChevronRight, Search, X, Monitor, Database, Clock
+  Shield, ChevronDown, ChevronRight, Search, X, Monitor, Database, Clock,
+  Info, AlertCircle,
 } from 'lucide-react';
 import { api } from '../api/api';
 
@@ -148,11 +149,30 @@ function AlertSidebarItem({ label, count, color }: { label: string; count: numbe
   const iconMap: Record<string, typeof AlertTriangle> = {
     'Monitoring stopped': Monitor,
     'Backup': HardDrive,
+    'Diff backup': HardDrive,
+    'Log backup': Clock,
+    'Log shipping': Clock,
     'Job failing': Activity,
     'Disk space': HardDrive,
+    'File space': HardDrive,
+    'Log space': HardDrive,
     'AG': Shield,
     'Corruption': ShieldAlert,
-    'Log backup': Clock,
+    'DBCC': ShieldCheck,
+    'Memory dump': ShieldAlert,
+    'Snapshot age': Clock,
+    'Uptime': Clock,
+    'SQL Agent': Activity,
+    'DB Mail': Info,
+    'Query Store': Database,
+    'Agent alerts': AlertTriangle,
+    '% Max size': HardDrive,
+    'Collection errors': AlertCircle,
+    'Database state': Database,
+    'Identity columns': Database,
+    'Custom check': AlertTriangle,
+    'Mirroring': Shield,
+    'Elastic pool': HardDrive,
   };
   const Icon = iconMap[label] || AlertTriangle;
   const hasActive = count > 0;
@@ -203,16 +223,17 @@ export default function SqlMonitorPage() {
   const totalAlerts = useMemo(() => Object.values(alertCounts).reduce((s, c) => s + c, 0), [alertCounts]);
   const { ok, warn, crit } = useMemo(() => healthBar(filtered), [filtered]);
 
-  // Alert categories for sidebar
-  const alertTypes = useMemo(() => [
-    { label: 'Monitoring stopped', color: 'text-red-400' },
-    { label: 'Backup', color: 'text-yellow-400' },
-    { label: 'Job failing', color: 'text-yellow-400' },
-    { label: 'Disk space', color: 'text-yellow-400' },
-    { label: 'AG', color: 'text-red-400' },
-    { label: 'Corruption', color: 'text-red-400' },
-    { label: 'Log backup', color: 'text-yellow-400' },
-  ], []);
+  const alertSidebarKeys = useMemo(() => {
+    const keys = Object.keys(alertCounts);
+    const rest = keys.filter(k => k !== 'Monitoring stopped').sort((a, b) => a.localeCompare(b));
+    return ['Monitoring stopped', ...rest];
+  }, [alertCounts]);
+
+  const alertColor = useCallback((label: string) => {
+    if (label === 'Monitoring stopped') return 'text-red-400';
+    if (['Corruption', 'Memory dump', 'Collection errors', 'AG'].includes(label)) return 'text-red-400';
+    return 'text-yellow-400';
+  }, []);
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400" /></div>;
 
@@ -295,13 +316,13 @@ export default function SqlMonitorPage() {
       <div className="w-64 flex-shrink-0 hidden lg:block">
         <div className="glass rounded-xl border border-white/5 p-4 sticky top-4">
           <h2 className="text-sm font-semibold text-white mb-3">Alerts</h2>
-          <div className="space-y-1">
-            {alertTypes.map(at => (
+          <div className="space-y-1 max-h-[70vh] overflow-y-auto pr-1">
+            {alertSidebarKeys.map(label => (
               <AlertSidebarItem
-                key={at.label}
-                label={at.label}
-                count={alertCounts[at.label] || 0}
-                color={at.color}
+                key={label}
+                label={label}
+                count={alertCounts[label] || 0}
+                color={alertColor(label)}
               />
             ))}
           </div>

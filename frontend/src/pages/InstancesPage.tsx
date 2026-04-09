@@ -5,17 +5,15 @@ import { api } from '../api/api';
 import DataTable from '../components/DataTable';
 import StatusBadge from '../components/StatusBadge';
 import LoadingSpinner from '../components/LoadingSpinner';
+import { SUMMARY_STATUS_KEYS } from '../constants/summaryStatusKeys';
 
 function getOverallStatus(row: any): number {
   // DBA Dash enum: Critical=1, Warning=2, NA=3, OK=4, Acknowledged=5
-  // Worst = lowest non-NA value
-  const keys = ['FullBackupStatus', 'DriveStatus', 'JobStatus', 'AGStatus',
-    'CorruptionStatus', 'LastGoodCheckDBStatus', 'LogBackupStatus'];
   let worst = 4; // start at OK
-  for (const k of keys) {
+  for (const { key: k } of SUMMARY_STATUS_KEYS) {
     const v = row[k] != null ? Number(row[k]) : 3;
-    if (v === 3) continue; // skip N/A
-    if (v < worst) worst = v; // lower = worse (1=Critical, 2=Warning)
+    if (v === 3) continue;
+    if (v < worst) worst = v;
   }
   return worst;
 }
@@ -24,13 +22,15 @@ export default function InstancesPage() {
   const [instances, setInstances] = useState<any[]>([]);
   const [summary, setSummary] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [includeAllActive, setIncludeAllActive] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
     (async () => {
+      setLoading(true);
       try {
         const [inst, sum] = await Promise.all([
-          api.instances().catch(() => []),
+          api.instances(includeAllActive).catch(() => []),
           api.dashboardSummary().catch(() => []),
         ]);
         setInstances(Array.isArray(inst) ? inst : []);
@@ -39,7 +39,7 @@ export default function InstancesPage() {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [includeAllActive]);
 
   if (loading) return <LoadingSpinner />;
 
@@ -79,11 +79,22 @@ export default function InstancesPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-white">Instances</h1>
-        <span className="text-xs text-gray-500 flex items-center gap-1">
-          <RefreshCw className="w-3 h-3" /> Auto-refresh 30s
-        </span>
+        <div className="flex items-center gap-4">
+          <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={includeAllActive}
+              onChange={e => setIncludeAllActive(e.target.checked)}
+              className="rounded border-slate-600"
+            />
+            Show all active instances (not only collected in last 24h)
+          </label>
+          <span className="text-xs text-gray-500 flex items-center gap-1">
+            <RefreshCw className="w-3 h-3" /> Auto-refresh 30s
+          </span>
+        </div>
       </div>
       <DataTable
         columns={columns}

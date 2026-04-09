@@ -104,3 +104,151 @@ body {
   background: rgba(255, 255, 255, 0.9);
   border-color: rgba(0, 0, 0, 0.1);
 }
+
+/* ── DBA Dash Windows-style data presentation (toggle: Desktop grids) ── */
+html[data-presentation='desktop'] {
+  background: #f0f0f0;
+}
+
+html[data-presentation='desktop'] body {
+  background: #f0f0f0;
+  color: #1e1e1e;
+}
+
+html[data-presentation='desktop'] .layout-main {
+  background: #f0f0f0;
+  color: #1e1e1e;
+}
+
+html[data-presentation='desktop'] .layout-main h1,
+html[data-presentation='desktop'] .layout-main h2 {
+  color: #1e1e1e !important;
+}
+
+html[data-presentation='desktop'] .layout-main .text-gray-400,
+html[data-presentation='desktop'] .layout-main .text-gray-500 {
+  color: #5c5c5c !important;
+}
+
+html[data-presentation='desktop'] .layout-header-desktop {
+  background: linear-gradient(180deg, #f5f5f5 0%, #ececec 100%);
+  border-bottom-color: #ababab !important;
+  color: #1e1e1e;
+}
+
+html[data-presentation='desktop'] .layout-header-desktop .text-gray-400,
+html[data-presentation='desktop'] .layout-header-desktop .text-gray-500 {
+  color: #505050 !important;
+}
+
+/* WinForms / DataGridView-like table */
+html[data-presentation='desktop'] table.dba-datagrid {
+  border-collapse: collapse;
+  font-family: 'Segoe UI', 'Segoe UI Variable', Tahoma, system-ui, sans-serif;
+  font-size: 12px;
+  line-height: 1.35;
+  background: #fff;
+  color: #000;
+}
+
+html[data-presentation='desktop'] table.dba-datagrid thead th {
+  background: linear-gradient(180deg, #fafafa 0%, #ececec 100%);
+  border: 1px solid #ababab;
+  padding: 4px 8px;
+  font-weight: 600;
+  color: #000;
+  text-align: left;
+  white-space: nowrap;
+}
+
+html[data-presentation='desktop'] table.dba-datagrid tbody td {
+  border: 1px solid #d0d0d0;
+  padding: 3px 8px;
+  color: #000;
+  background: #fff;
+  vertical-align: middle;
+}
+
+html[data-presentation='desktop'] table.dba-datagrid tbody tr:nth-child(even) td {
+  background: #fafafa;
+}
+
+html[data-presentation='desktop'] table.dba-datagrid tbody tr:hover td {
+  background: #e5f3ff;
+}
+
+html[data-presentation='desktop'] table.dba-datagrid .text-right,
+html[data-presentation='desktop'] table.dba-datagrid th.text-right {
+  text-align: right;
+}
+
+html[data-presentation='desktop'] table.dba-datagrid .text-center,
+html[data-presentation='desktop'] table.dba-datagrid th.text-center {
+  text-align: center;
+}
+
+/* Excel-style conditional fills inside desktop grids */
+html[data-presentation='desktop'] .dba-cell-ok {
+  background: #c6efce !important;
+  color: #006100 !important;
+  font-weight: 600;
+}
+
+html[data-presentation='desktop'] .dba-cell-warn {
+  background: #ffeb9c !important;
+  color: #9c5700 !important;
+  font-weight: 600;
+}
+
+html[data-presentation='desktop'] .dba-cell-crit {
+  background: #ffc7ce !important;
+  color: #9c0006 !important;
+  font-weight: 600;
+}
+
+html[data-presentation='desktop'] .dba-cell-na {
+  background: #f2f2f2 !important;
+  color: #666 !important;
+}
+
+html[data-presentation='desktop'] .dba-cell-ack {
+  background: #bdd7ee !important;
+  color: #002060 !important;
+  font-weight: 600;
+}
+
+html[data-presentation='desktop'] .dba-perf-warn {
+  background: #ffeb9c !important;
+  color: #9c5700 !important;
+}
+
+html[data-presentation='desktop'] .dba-perf-crit {
+  background: #ffc7ce !important;
+  color: #9c0006 !important;
+}
+
+html[data-presentation='desktop'] .dba-perf-ok {
+  background: #c6efce !important;
+  color: #006100 !important;
+}
+
+html[data-presentation='desktop'] .dba-pagination {
+  color: #333;
+  border-color: #c0c0c0;
+}
+
+html[data-presentation='desktop'] .dba-pagination button {
+  border-color: #adadad;
+  background: linear-gradient(180deg, #fff 0%, #f0f0f0 100%);
+  color: #000;
+}
+
+html[data-presentation='desktop'] .dba-pagination button:disabled {
+  opacity: 0.45;
+}
+
+html[data-presentation='desktop'] .dba-pagination select {
+  background: #fff !important;
+  border: 1px solid #7a7a7a !important;
+  color: #000 !important;
+}

@@ -33,7 +33,7 @@ export default function QueriesPage() {
   useEffect(() => {
     if (!selectedInstance) return;
     setLoading(true);
-    api.instanceQueries(selectedInstance).then(d => {
+    api.instanceQueries(selectedInstance, 5000).then(d => {
       const arr = Array.isArray(d) ? d : [];
       if (arr.length === 0) {
         setQueries(mockQueries);

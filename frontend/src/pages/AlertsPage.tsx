@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../api/api';
 import { useRefresh } from '../App';
 import LoadingSpinner from '../components/LoadingSpinner';
+import PaginationBar from '../components/PaginationBar';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   AlertTriangle, AlertCircle, Info, Search, X, Inbox, Server,
@@ -28,8 +29,9 @@ interface ParsedAlert {
 }
 
 function parseSeverity(a: any): Severity {
-  const msg = ((a.ErrorMessage || '') + ' ' + (a.ErrorContext || '')).toLowerCase();
-  if (a.AlertType === 'job_failure') return 'warning';
+  const msg = ((a.ErrorMessage || a.errorMessage || '') + ' ' + (a.ErrorContext || a.errorContext || '')).toLowerCase();
+  const at = a.AlertType ?? a.alertType;
+  if (at === 'job_failure') return 'warning';
   if (msg.includes('error') || msg.includes('fail') || msg.includes('timeout') || msg.includes('cannot')) return 'critical';
   if (msg.includes('warning') || msg.includes('retry')) return 'warning';
   return 'info';
@@ -37,14 +39,15 @@ function parseSeverity(a: any): Severity {
 
 function parseAlert(raw: any): ParsedAlert {
   const date = raw.ErrorDate ? new Date(raw.ErrorDate) : new Date(0);
+  const at = raw.AlertType ?? raw.alertType;
   return {
-    instanceId: raw.InstanceID || 0,
-    instanceName: raw.InstanceName || `Instance ${raw.InstanceID || '?'}`,
+    instanceId: raw.InstanceID ?? raw.instanceID ?? 0,
+    instanceName: raw.InstanceName ?? raw.instanceName ?? `Instance ${raw.InstanceID ?? '?'}`,
     date,
     dateStr: raw.ErrorDate || '',
-    message: raw.ErrorMessage || '—',
-    context: raw.ErrorContext || '',
-    alertType: raw.AlertType === 'job_failure' ? 'job_failure' : 'error',
+    message: raw.ErrorMessage ?? raw.errorMessage ?? '—',
+    context: raw.ErrorContext ?? raw.errorContext ?? '',
+    alertType: at === 'job_failure' ? 'job_failure' : 'error',
     severity: parseSeverity(raw),
   };
 }
@@ -66,14 +69,16 @@ export default function AlertsPage() {
   const [sevFilter, setSevFilter] = useState<Severity | 'all'>('all');
   const [typeFilter, setTypeFilter] = useState<AlertType | 'all'>('all');
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
+  const [limit, setLimit] = useState(500);
+  const [offset, setOffset] = useState(0);
 
   useEffect(() => {
     setLoading(true);
-    api.alertsRecent()
+    api.alertsRecent(limit, offset)
       .then(d => setRaw(Array.isArray(d) ? d : []))
       .catch(() => setRaw([]))
       .finally(() => setLoading(false));
-  }, [lastRefresh]);
+  }, [lastRefresh, limit, offset]);
 
   const alerts = useMemo(() => raw.map(parseAlert).sort((a, b) => b.date.getTime() - a.date.getTime()), [raw]);
 
@@ -181,6 +186,8 @@ export default function AlertsPage() {
           </button>
         )}
       </div>
+
+      <PaginationBar offset={offset} limit={limit} rowCount={raw.length} onOffsetChange={setOffset} onLimitChange={setLimit} />
 
       {/* Main Grid: Alert List + Detail */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">

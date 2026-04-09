@@ -1,41 +1,26 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { api } from '../api/api';
+import { SUMMARY_STATUS_KEYS } from '../constants/summaryStatusKeys';
+import { usePresentationOptional } from '../context/PresentationContext';
 import { RefreshCw, Clock, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { clsx } from 'clsx';
 
-/* ─── DBA Dash Status Enum (from DBADashGUI/DBAChecksStatus.cs) ───
-   Critical = 1, Warning = 2, NA = 3, OK = 4, Acknowledged = 5
-*/
+/* DBA Dash Status Enum: Critical=1, Warning=2, NA=3, OK=4, Acknowledged=5 */
 
-const STATUS_KEYS: { key: string; label: string }[] = [
-  { key: 'FullBackupStatus', label: 'Backup FULL' },
-  { key: 'DiffBackupStatus', label: 'Backup DIFF' },
-  { key: 'LogBackupStatus', label: 'Backup LOG' },
-  { key: 'LogShippingStatus', label: 'Log Shipping' },
-  { key: 'DriveStatus', label: 'Drive Space' },
-  { key: 'FileFreeSpaceStatus', label: 'File Space' },
-  { key: 'LogFreeSpaceStatus', label: 'Log Space' },
-  { key: 'JobStatus', label: 'Agent Jobs' },
-  { key: 'AGStatus', label: 'Availability Groups' },
-  { key: 'CorruptionStatus', label: 'Corruption' },
-  { key: 'LastGoodCheckDBStatus', label: 'Last Good Check DB' },
-  { key: 'MemoryDumpStatus', label: 'Memory Dump' },
-  { key: 'SnapshotAgeStatus', label: 'Snapshot Age' },
-  { key: 'UptimeStatus', label: 'Instance Uptime' },
-  { key: 'IsAgentRunningStatus', label: 'Is Agent Running' },
-  { key: 'DBMailStatus', label: 'DB Mail' },
-  { key: 'QueryStoreStatus', label: 'Query Store' },
-  { key: 'AlertStatus', label: 'SQL Agent Alerts' },
-  { key: 'PctMaxSizeStatus', label: '% Max Size' },
-  { key: 'CollectionErrorStatus', label: 'DBA Dash Errors (24hrs)' },
-  { key: 'DatabaseStateStatus', label: 'Database State' },
-  { key: 'IdentityStatus', label: 'Identity Columns' },
-  { key: 'CustomCheckStatus', label: 'Custom Check' },
-  { key: 'MirroringStatus', label: 'Mirroring' },
-  { key: 'ElasticPoolStorageStatus', label: 'Elastic Pool Storage' },
-];
-
-function cellBg(count: number, type: 'ok' | 'warning' | 'critical' | 'na' | 'ack'): string {
+function cellBg(
+  count: number,
+  type: 'ok' | 'warning' | 'critical' | 'na' | 'ack',
+  desktop: boolean,
+): string {
+  if (desktop) {
+    if (count === 0) return 'dba-cell-na';
+    if (type === 'ok') return 'dba-cell-ok';
+    if (type === 'warning') return 'dba-cell-warn';
+    if (type === 'critical') return 'dba-cell-crit';
+    if (type === 'ack') return 'dba-cell-ack';
+    return 'dba-cell-na';
+  }
   if (count === 0) return 'text-gray-600';
   if (type === 'ok') return 'bg-green-600/60 text-green-100 font-semibold';
   if (type === 'warning') return 'bg-yellow-500/60 text-yellow-100 font-semibold';
@@ -45,6 +30,7 @@ function cellBg(count: number, type: 'ok' | 'warning' | 'critical' | 'na' | 'ack
 }
 
 export default function SummaryPage() {
+  const { dataGridTableClass, dataGridShellClass, isDesktopData } = usePresentationOptional();
   const [summary, setSummary] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [countdown, setCountdown] = useState(30);
@@ -76,7 +62,7 @@ export default function SummaryPage() {
 
   // Build status matrix — DBA Dash enum: Critical=1, Warning=2, NA=3, OK=4, Acknowledged=5
   const matrix = useMemo(() => {
-    return STATUS_KEYS.map(sk => {
+    return SUMMARY_STATUS_KEYS.map(sk => {
       let ok = 0, warning = 0, critical = 0, na = 0, ack = 0;
       for (const row of summary) {
         const raw = row[sk.key];
@@ -117,39 +103,67 @@ export default function SummaryPage() {
         </div>
       </div>
 
-      <div className="glass rounded-xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
+      <div className={isDesktopData ? dataGridShellClass : 'glass rounded-xl overflow-hidden'}>
+        <div className={isDesktopData ? '' : 'overflow-x-auto'}>
+          <table className={clsx(isDesktopData ? dataGridTableClass : 'w-full text-xs')}>
             <thead>
-              <tr className="bg-slate-800/80">
-                <th className="px-3 py-2.5 text-left text-gray-400 font-semibold uppercase tracking-wider">Test</th>
-                <th className="px-3 py-2.5 text-center text-green-400 font-semibold">Instance Count OK</th>
-                <th className="px-3 py-2.5 text-center text-yellow-400 font-semibold">Instance Count Warning</th>
-                <th className="px-3 py-2.5 text-center text-red-400 font-semibold">Instance Count Critical</th>
-                <th className="px-3 py-2.5 text-center text-gray-400 font-semibold">Instance Count N/A</th>
-                <th className="px-3 py-2.5 text-center text-blue-400 font-semibold">Instance Count Acknowledged</th>
+              <tr className={isDesktopData ? '' : 'bg-slate-800/80'}>
+                <th className={clsx(!isDesktopData && 'px-3 py-2.5 text-left text-gray-400 font-semibold uppercase tracking-wider')}>
+                  Test
+                </th>
+                <th className={clsx('text-center', !isDesktopData && 'px-3 py-2.5 text-green-400 font-semibold')}>
+                  Instance Count OK
+                </th>
+                <th className={clsx('text-center', !isDesktopData && 'px-3 py-2.5 text-yellow-400 font-semibold')}>
+                  Instance Count Warning
+                </th>
+                <th className={clsx('text-center', !isDesktopData && 'px-3 py-2.5 text-red-400 font-semibold')}>
+                  Instance Count Critical
+                </th>
+                <th className={clsx('text-center', !isDesktopData && 'px-3 py-2.5 text-gray-400 font-semibold')}>
+                  Instance Count N/A
+                </th>
+                <th className={clsx('text-center', !isDesktopData && 'px-3 py-2.5 text-blue-400 font-semibold')}>
+                  Instance Count Acknowledged
+                </th>
               </tr>
             </thead>
             <tbody>
               {matrix.map((m) => (
-                <tr key={m.key} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                  <td className={`px-3 py-1.5 font-medium ${m.critical > 0 ? 'text-red-400' : m.warning > 0 ? 'text-yellow-400' : 'text-white'}`}>
+                <tr key={m.key} className={isDesktopData ? '' : 'border-b border-white/5 hover:bg-white/5 transition-colors'}>
+                  <td
+                    className={clsx(
+                      'font-medium',
+                      !isDesktopData && 'px-3 py-1.5',
+                      !isDesktopData && (m.critical > 0 ? 'text-red-400' : m.warning > 0 ? 'text-yellow-400' : 'text-white'),
+                    )}
+                  >
                     {m.label}
                   </td>
-                  <td className="px-3 py-1.5 text-center">
-                    <span className={`inline-block min-w-[2rem] px-2 py-0.5 rounded ${cellBg(m.ok, 'ok')}`}>{m.ok}</span>
+                  <td className={clsx('text-center', !isDesktopData && 'px-3 py-1.5')}>
+                    <span className={clsx('inline-block min-w-[2rem]', !isDesktopData && 'px-2 py-0.5 rounded', cellBg(m.ok, 'ok', isDesktopData))}>
+                      {m.ok}
+                    </span>
                   </td>
-                  <td className="px-3 py-1.5 text-center">
-                    <span className={`inline-block min-w-[2rem] px-2 py-0.5 rounded ${cellBg(m.warning, 'warning')}`}>{m.warning}</span>
+                  <td className={clsx('text-center', !isDesktopData && 'px-3 py-1.5')}>
+                    <span className={clsx('inline-block min-w-[2rem]', !isDesktopData && 'px-2 py-0.5 rounded', cellBg(m.warning, 'warning', isDesktopData))}>
+                      {m.warning}
+                    </span>
                   </td>
-                  <td className="px-3 py-1.5 text-center">
-                    <span className={`inline-block min-w-[2rem] px-2 py-0.5 rounded ${cellBg(m.critical, 'critical')}`}>{m.critical}</span>
+                  <td className={clsx('text-center', !isDesktopData && 'px-3 py-1.5')}>
+                    <span className={clsx('inline-block min-w-[2rem]', !isDesktopData && 'px-2 py-0.5 rounded', cellBg(m.critical, 'critical', isDesktopData))}>
+                      {m.critical}
+                    </span>
                   </td>
-                  <td className="px-3 py-1.5 text-center">
-                    <span className={`inline-block min-w-[2rem] px-2 py-0.5 rounded ${cellBg(m.na, 'na')}`}>{m.na}</span>
+                  <td className={clsx('text-center', !isDesktopData && 'px-3 py-1.5')}>
+                    <span className={clsx('inline-block min-w-[2rem]', !isDesktopData && 'px-2 py-0.5 rounded', cellBg(m.na, 'na', isDesktopData))}>
+                      {m.na}
+                    </span>
                   </td>
-                  <td className="px-3 py-1.5 text-center">
-                    <span className={`inline-block min-w-[2rem] px-2 py-0.5 rounded ${cellBg(m.ack, 'ack')}`}>{m.ack}</span>
+                  <td className={clsx('text-center', !isDesktopData && 'px-3 py-1.5')}>
+                    <span className={clsx('inline-block min-w-[2rem]', !isDesktopData && 'px-2 py-0.5 rounded', cellBg(m.ack, 'ack', isDesktopData))}>
+                      {m.ack}
+                    </span>
                   </td>
                 </tr>
               ))}

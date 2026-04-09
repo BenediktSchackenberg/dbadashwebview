@@ -1,7 +1,9 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/api';
+import { usePresentationOptional } from '../context/PresentationContext';
 import { RefreshCw, ArrowUpDown, ArrowUp, ArrowDown, Clock, Loader2 } from 'lucide-react';
+import { clsx } from 'clsx';
 
 type SortDir = 'asc' | 'desc';
 type Thresholds = Record<string, { warning: number; critical: number }>;
@@ -22,12 +24,12 @@ const columns = [
   { key: 'iOPs', label: 'IOPs', align: 'right' as const },
 ];
 
-function getCellClass(key: string, value: number, thresholds: Thresholds): string {
+function getCellClass(key: string, value: number, thresholds: Thresholds, desktop: boolean): string {
   const t = thresholds[key];
-  if (!t) return '';
-  if (value >= t.critical) return 'bg-red-900/50 text-red-300';
-  if (value >= t.warning) return 'bg-amber-900/50 text-amber-300';
-  return 'bg-green-900/50 text-green-300';
+  if (!t) return desktop ? 'bg-white' : '';
+  if (value >= t.critical) return desktop ? 'dba-perf-crit' : 'bg-red-900/50 text-red-300';
+  if (value >= t.warning) return desktop ? 'dba-perf-warn' : 'bg-amber-900/50 text-amber-300';
+  return desktop ? 'dba-perf-ok' : 'bg-green-900/50 text-green-300';
 }
 
 function formatNum(v: any): string {
@@ -38,6 +40,7 @@ function formatNum(v: any): string {
 }
 
 export default function DashboardPerfSummary() {
+  const { dataGridTableClass, dataGridShellClass, isDesktopData } = usePresentationOptional();
   const [data, setData] = useState<any[]>([]);
   const [thresholds, setThresholds] = useState<Thresholds>({});
   const [loading, setLoading] = useState(true);
@@ -136,16 +139,26 @@ export default function DashboardPerfSummary() {
         </div>
       )}
 
-      <div className={`glass rounded-xl overflow-hidden ${loading && data.length === 0 ? 'hidden' : ''}`}>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm font-[Inter]">
+      <div
+        className={clsx(
+          loading && data.length === 0 ? 'hidden' : '',
+          isDesktopData ? dataGridShellClass : 'glass rounded-xl overflow-hidden',
+        )}
+      >
+        <div className={isDesktopData ? '' : 'overflow-x-auto'}>
+          <table className={clsx(isDesktopData ? dataGridTableClass : 'w-full text-sm font-[Inter]')}>
             <thead>
-              <tr className="bg-slate-800/80 sticky top-0 z-10">
+              <tr className={isDesktopData ? 'sticky top-0 z-10' : 'bg-slate-800/80 sticky top-0 z-10'}>
                 {columns.map(col => (
                   <th
                     key={col.key}
                     onClick={() => handleSort(col.key)}
-                    className={`py-2 px-3 text-xs font-semibold uppercase tracking-wider cursor-pointer select-none whitespace-nowrap transition-colors hover:text-white ${col.align === 'right' ? 'text-right' : 'text-left'} text-gray-400`}
+                    className={clsx(
+                      'cursor-pointer select-none whitespace-nowrap',
+                      col.align === 'right' ? 'text-right' : 'text-left',
+                      !isDesktopData &&
+                        'py-2 px-3 text-xs font-semibold uppercase tracking-wider transition-colors hover:text-white text-gray-400',
+                    )}
                   >
                     <span className="inline-flex items-center gap-1">
                       {col.label}
@@ -155,23 +168,26 @@ export default function DashboardPerfSummary() {
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className={isDesktopData ? '' : 'divide-y divide-white/5'}>
               {sorted.map((row, i) => (
-                <tr key={row.instanceID || i} className="hover:bg-white/5 transition-colors">
+                <tr key={row.instanceID || i} className={isDesktopData ? '' : 'hover:bg-white/5 transition-colors'}>
                   {columns.map(col => {
                     if (col.key === 'instanceDisplayName') {
                       return (
-                        <td key={col.key} className="py-2 px-3 text-left whitespace-nowrap">
-                          <Link to={`/instances/${row.instanceID}`} className="text-blue-400 hover:text-blue-300 hover:underline">
+                        <td key={col.key} className={clsx('text-left whitespace-nowrap', !isDesktopData && 'py-2 px-3')}>
+                          <Link
+                            to={`/instances/${row.instanceID}`}
+                            className={isDesktopData ? 'text-[#0563c1] hover:underline' : 'text-blue-400 hover:text-blue-300 hover:underline'}
+                          >
                             {row.instanceDisplayName || 'Unknown'}
                           </Link>
                         </td>
                       );
                     }
                     const val = Number(row[col.key]) || 0;
-                    const cellClass = getCellClass(col.key, val, thresholds);
+                    const cellClass = getCellClass(col.key, val, thresholds, isDesktopData);
                     return (
-                      <td key={col.key} className={`py-2 px-3 text-right font-mono whitespace-nowrap ${cellClass}`}>
+                      <td key={col.key} className={clsx('text-right font-mono whitespace-nowrap', !isDesktopData && 'py-2 px-3', cellClass)}>
                         {formatNum(val)}
                       </td>
                     );

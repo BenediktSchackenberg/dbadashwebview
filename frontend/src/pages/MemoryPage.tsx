@@ -22,7 +22,7 @@ export default function MemoryPage() {
 
   useEffect(() => {
     setLoading(true);
-    api.performanceMemory(selectedInstance, hours)
+    api.performanceMemory(selectedInstance, hours, 25_000)
       .then(r => {
         setClerks(Array.isArray(r.clerks) ? r.clerks : []);
         setCounters(Array.isArray(r.counters) ? r.counters : []);

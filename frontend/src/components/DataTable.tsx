@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { clsx } from 'clsx';
 import { ChevronUp, ChevronDown, Search } from 'lucide-react';
+import { usePresentationOptional } from '../context/PresentationContext';
 
 interface Column<T> {
   key: string;
@@ -20,6 +21,7 @@ interface DataTableProps<T> {
 export default function DataTable<T extends Record<string, any>>({
   columns, data, onRowClick, searchable = true, searchKeys
 }: DataTableProps<T>) {
+  const { dataGridTableClass, dataGridShellClass, isDesktopData } = usePresentationOptional();
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [search, setSearch] = useState('');
@@ -57,20 +59,28 @@ export default function DataTable<T extends Record<string, any>>({
             placeholder="Search..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 bg-slate-800 border border-slate-600 rounded-lg text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50"
+            className={clsx(
+              'w-full pl-9 pr-4 py-2 rounded-lg text-sm focus:outline-none',
+              isDesktopData
+                ? 'bg-white border border-[#7a7a7a] text-black placeholder-gray-500 focus:border-[#0078d4]'
+                : 'bg-slate-800 border border-slate-600 text-white placeholder-gray-500 focus:border-blue-500/50',
+            )}
           />
         </div>
       )}
-      <div className="overflow-x-auto rounded-xl glass">
-        <table className="w-full text-sm">
+      <div className={dataGridShellClass}>
+        <table className={clsx(dataGridTableClass, !isDesktopData && 'text-sm')}>
           <thead>
-            <tr className="border-b border-white/10">
+            <tr className={isDesktopData ? '' : 'border-b border-white/10'}>
               {columns.map(col => (
                 <th
                   key={col.key}
                   onClick={() => col.sortable !== false && toggleSort(col.key)}
-                  className={clsx('px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider',
-                    col.sortable !== false && 'cursor-pointer hover:text-gray-200'
+                  className={clsx(
+                    isDesktopData
+                      ? 'cursor-pointer select-none'
+                      : 'px-4 py-3 text-left text-xs font-semibold text-gray-300 uppercase tracking-wider',
+                    !isDesktopData && col.sortable !== false && 'cursor-pointer hover:text-gray-200',
                   )}
                 >
                   <span className="inline-flex items-center gap-1">
@@ -81,18 +91,19 @@ export default function DataTable<T extends Record<string, any>>({
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-white/5">
+          <tbody className={isDesktopData ? '' : 'divide-y divide-white/5'}>
             {sorted.map((row, i) => (
               <tr
                 key={i}
                 onClick={() => onRowClick?.(row)}
                 className={clsx(
                   'transition-colors',
-                  onRowClick && 'cursor-pointer hover:bg-slate-800/50'
+                  !isDesktopData && onRowClick && 'cursor-pointer hover:bg-slate-800/50',
+                  isDesktopData && onRowClick && 'cursor-pointer',
                 )}
               >
                 {columns.map(col => (
-                  <td key={col.key} className="px-4 py-3 whitespace-nowrap">
+                  <td key={col.key} className={isDesktopData ? 'whitespace-nowrap' : 'px-4 py-3 whitespace-nowrap'}>
                     {col.render ? col.render(row) : String(row[col.key] ?? '—')}
                   </td>
                 ))}

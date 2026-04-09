@@ -13,6 +13,7 @@ import {
   ChevronRight, Zap, BarChart3, Timer, AlertTriangle
 } from 'lucide-react';
 import TimeRangeSelector, { hoursLabel } from '../components/TimeRangeSelector';
+import { SUMMARY_STATUS_KEYS } from '../constants/summaryStatusKeys';
 import { clsx } from 'clsx';
 import { format, formatDistanceToNow } from 'date-fns';
 
@@ -57,6 +58,7 @@ export default function InstanceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const instanceId = parseInt(id!);
   const [tab, setTab] = useState('performance');
+  const [showAllChecks, setShowAllChecks] = useState(false);
   const [detail, setDetail] = useState<any>(null);
   const [cpu, setCpu] = useState<any[]>([]);
   const [waits, setWaits] = useState<any[]>([]);
@@ -74,11 +76,11 @@ export default function InstanceDetailPage() {
         const [d, c, w, dr, db, b, j] = await Promise.all([
           api.instance(instanceId).catch(() => null),
           api.instanceCpu(instanceId, hours).catch(() => []),
-          api.instanceWaits(instanceId, hours).catch(() => []),
+          api.instanceWaits(instanceId, hours, 2000).catch(() => []),
           api.instanceDrives(instanceId).catch(() => []),
           api.instanceDatabases(instanceId).catch(() => []),
           api.instanceBackups(instanceId).catch(() => []),
-          api.instanceJobs(instanceId).catch(() => []),
+          api.instanceJobs(instanceId, 10_000, 0).catch(() => []),
         ]);
         setDetail(d);
         setCpu(Array.isArray(c) ? c.reverse() : []);
@@ -98,7 +100,7 @@ export default function InstanceDetailPage() {
   const inst = detail?.instance || {};
   const sum = detail?.summary || {};
 
-  const statusFields = [
+  const headerStatusFields = [
     { key: 'FullBackupStatus', label: 'Full Backup', icon: Shield },
     { key: 'LogBackupStatus', label: 'Log Backup', icon: Timer },
     { key: 'LastGoodCheckDBStatus', label: 'DBCC', icon: Database },
@@ -220,7 +222,7 @@ export default function InstanceDetailPage() {
 
         {/* Status badges row */}
         <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-white/5">
-          {statusFields.map(f => {
+          {headerStatusFields.map(f => {
             const val = sum[f.key] != null ? Number(sum[f.key]) : null;
             if (val === null || val === 3) return null; // skip N/A
             return (
@@ -229,11 +231,45 @@ export default function InstanceDetailPage() {
               </div>
             );
           })}
-          {statusFields.every(f => {
+          {headerStatusFields.every(f => {
             const val = sum[f.key] != null ? Number(sum[f.key]) : null;
             return val === null || val === 3;
           }) && <span className="text-xs text-gray-500 italic">No status data from Summary_Get</span>}
         </div>
+
+        <button
+          type="button"
+          onClick={() => setShowAllChecks(v => !v)}
+          className="mt-3 text-xs text-blue-400 hover:text-blue-300"
+        >
+          {showAllChecks ? 'Hide' : 'Show'} all Summary_Get checks ({SUMMARY_STATUS_KEYS.length})
+        </button>
+        {showAllChecks && (
+          <div className="mt-3 glass rounded-xl overflow-hidden border border-white/5">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-white/10 text-gray-400 text-left">
+                  <th className="px-3 py-2 font-semibold">Check</th>
+                  <th className="px-3 py-2 font-semibold">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {SUMMARY_STATUS_KEYS.map(({ key, label }) => {
+                  const raw = sum[key];
+                  const val = raw == null ? null : Number(raw);
+                  return (
+                    <tr key={key} className="border-b border-white/5">
+                      <td className="px-3 py-1.5 text-gray-300">{label}</td>
+                      <td className="px-3 py-1.5">
+                        {val == null ? <span className="text-gray-500">—</span> : <StatusBadge status={val} label="" size="xs" />}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </motion.div>
 
       {/* ── Tabs ───────────────────────────────────────────────────────── */}

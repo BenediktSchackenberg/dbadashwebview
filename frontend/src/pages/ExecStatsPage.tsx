@@ -1,6 +1,9 @@
 import { useEffect, useState, useMemo } from 'react';
+import clsx from 'clsx';
 import { api } from '../api/api';
 import LoadingSpinner from '../components/LoadingSpinner';
+import PaginationBar from '../components/PaginationBar';
+import { usePresentationOptional } from '../context/PresentationContext';
 import { motion } from 'framer-motion';
 import { Zap } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
@@ -8,6 +11,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 type SortKey = 'object_name' | 'SchemaName' | 'execution_count' | 'total_worker_time' | 'avg_cpu' | 'total_elapsed_time' | 'avg_duration' | 'total_logical_reads' | 'total_logical_writes';
 
 export default function ExecStatsPage() {
+  const { dataGridTableClass, dataGridShellClass, isDesktopData } = usePresentationOptional();
   const [data, setData] = useState<any[]>([]);
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(true);
@@ -16,6 +20,8 @@ export default function ExecStatsPage() {
   const [sortKey, setSortKey] = useState<SortKey>('total_worker_time');
   const [sortAsc, setSortAsc] = useState(false);
   const [hours, setHours] = useState(24);
+  const [limit, setLimit] = useState(5000);
+  const [offset, setOffset] = useState(0);
 
   useEffect(() => {
     api.instances().then(i => setInstances(Array.isArray(i) ? i : [])).catch(() => {});
@@ -23,11 +29,11 @@ export default function ExecStatsPage() {
 
   useEffect(() => {
     setLoading(true);
-    api.performanceExecStats(selectedInstance, hours)
+    api.performanceExecStats(selectedInstance, hours, limit, offset)
       .then(r => { setData(Array.isArray(r.data) ? r.data : []); setNote(r.note || ''); })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [selectedInstance, hours]);
+  }, [selectedInstance, hours, limit, offset]);
 
   const enriched = useMemo(() => data.map(d => ({
     ...d,
@@ -57,7 +63,13 @@ export default function ExecStatsPage() {
   };
 
   const SortHeader = ({ label, k }: { label: string; k: SortKey }) => (
-    <th className="px-3 py-2 text-left text-xs font-medium text-gray-400 cursor-pointer hover:text-white select-none" onClick={() => handleSort(k)}>
+    <th
+      className={clsx(
+        'text-left text-xs font-medium cursor-pointer select-none',
+        isDesktopData ? 'text-black hover:bg-gray-200' : 'px-3 py-2 text-gray-400 hover:text-white',
+      )}
+      onClick={() => handleSort(k)}
+    >
       {label} {sortKey === k ? (sortAsc ? ' \u25B2' : ' \u25BC') : ''}
     </th>
   );
@@ -89,6 +101,8 @@ export default function ExecStatsPage() {
 
       {note && <div className="glass-card p-3 text-xs text-yellow-400">{note}</div>}
 
+      <PaginationBar offset={offset} limit={limit} rowCount={data.length} onOffsetChange={setOffset} onLimitChange={setLimit} />
+
       {top10.length > 0 && (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="glass-card p-6">
           <h2 className="text-lg font-semibold text-white mb-4">Top 10 by CPU (ms)</h2>
@@ -104,10 +118,15 @@ export default function ExecStatsPage() {
         </motion.div>
       )}
 
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="glass-card overflow-hidden">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+        className={isDesktopData ? dataGridShellClass : 'glass-card overflow-hidden'}
+      >
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="border-b border-white/10">
+          <table className={isDesktopData ? dataGridTableClass : 'w-full text-sm'}>
+            <thead className={isDesktopData ? '' : 'border-b border-white/10'}>
               <tr>
                 <SortHeader label="Object Name" k="object_name" />
                 <SortHeader label="Schema" k="SchemaName" />
@@ -121,20 +140,26 @@ export default function ExecStatsPage() {
               </tr>
             </thead>
             <tbody>
-              {sorted.slice(0, 200).map((d, i) => (
-                <tr key={i} className="border-b border-white/5 hover:bg-slate-800/50">
-                  <td className="px-3 py-2 text-white font-medium">{d.object_name}</td>
-                  <td className="px-3 py-2 text-gray-400">{d.SchemaName}</td>
-                  <td className="px-3 py-2 text-gray-300">{(d.execution_count ?? 0).toLocaleString()}</td>
-                  <td className="px-3 py-2 text-orange-400">{d.total_cpu_ms.toLocaleString()}</td>
-                  <td className="px-3 py-2 text-gray-300">{d.avg_cpu.toLocaleString()}</td>
-                  <td className="px-3 py-2 text-gray-300">{d.total_dur_ms.toLocaleString()}</td>
-                  <td className="px-3 py-2 text-gray-300">{d.avg_duration.toLocaleString()}</td>
-                  <td className="px-3 py-2 text-gray-300">{(d.total_logical_reads ?? 0).toLocaleString()}</td>
-                  <td className="px-3 py-2 text-gray-300">{(d.total_logical_writes ?? 0).toLocaleString()}</td>
+              {sorted.map((d, i) => (
+                <tr key={i} className={isDesktopData ? '' : 'border-b border-white/5 hover:bg-slate-800/50'}>
+                  <td className={clsx(!isDesktopData && 'px-3 py-2 text-white font-medium', isDesktopData && 'font-medium text-black')}>{d.object_name}</td>
+                  <td className={clsx(!isDesktopData && 'px-3 py-2 text-gray-400', isDesktopData && 'text-black')}>{d.SchemaName}</td>
+                  <td className={clsx(!isDesktopData && 'px-3 py-2 text-gray-300', isDesktopData && 'text-black')}>{(d.execution_count ?? 0).toLocaleString()}</td>
+                  <td className={clsx(!isDesktopData && 'px-3 py-2 text-orange-400', isDesktopData && 'dba-cell-warn text-black')}>{d.total_cpu_ms.toLocaleString()}</td>
+                  <td className={clsx(!isDesktopData && 'px-3 py-2 text-gray-300', isDesktopData && 'text-black')}>{d.avg_cpu.toLocaleString()}</td>
+                  <td className={clsx(!isDesktopData && 'px-3 py-2 text-gray-300', isDesktopData && 'text-black')}>{d.total_dur_ms.toLocaleString()}</td>
+                  <td className={clsx(!isDesktopData && 'px-3 py-2 text-gray-300', isDesktopData && 'text-black')}>{d.avg_duration.toLocaleString()}</td>
+                  <td className={clsx(!isDesktopData && 'px-3 py-2 text-gray-300', isDesktopData && 'text-black')}>{(d.total_logical_reads ?? 0).toLocaleString()}</td>
+                  <td className={clsx(!isDesktopData && 'px-3 py-2 text-gray-300', isDesktopData && 'text-black')}>{(d.total_logical_writes ?? 0).toLocaleString()}</td>
                 </tr>
               ))}
-              {sorted.length === 0 && <tr><td colSpan={9} className="px-3 py-8 text-center text-gray-500">No execution stats found</td></tr>}
+              {sorted.length === 0 && (
+                <tr>
+                  <td colSpan={9} className={clsx('py-8 text-center', isDesktopData ? 'text-gray-600' : 'px-3 text-gray-500')}>
+                    No execution stats found
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
