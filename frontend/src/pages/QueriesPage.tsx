@@ -1,11 +1,12 @@
-import { useState, useEffect } from 'react';
+import { Fragment, useState, useEffect } from 'react';
 import { api } from '../api/api';
+import type { InstanceListRow, QueryAnalysisRow } from '../api/types';
 import { useRefresh } from '../App';
 import LoadingSpinner from '../components/LoadingSpinner';
 import EmptyState from '../components/EmptyState';
 import { AlertTriangle } from 'lucide-react';
 
-const mockQueries = [
+const mockQueries: QueryAnalysisRow[] = [
   { query_hash: '0xA1B2C3D4', TotalCPU: 4520000, TotalIO: 1230000, Executions: 340, AvgDurationMs: 1250, QueryText: 'SELECT TOP 100 * FROM dbo.Orders o JOIN dbo.OrderItems oi ON o.OrderID = oi.OrderID WHERE o.OrderDate > @p1' },
   { query_hash: '0xE5F6A7B8', TotalCPU: 3100000, TotalIO: 890000, Executions: 1200, AvgDurationMs: 450, QueryText: 'UPDATE dbo.Inventory SET Quantity = Quantity - @qty WHERE ProductID = @pid' },
   { query_hash: '0xC9D0E1F2', TotalCPU: 2800000, TotalIO: 2100000, Executions: 55, AvgDurationMs: 8900, QueryText: 'SELECT CustomerID, SUM(Amount) AS TotalSpend FROM dbo.Transactions GROUP BY CustomerID HAVING SUM(Amount) > 10000 ORDER BY TotalSpend DESC' },
@@ -15,9 +16,9 @@ const mockQueries = [
 
 export default function QueriesPage() {
   const { lastRefresh } = useRefresh();
-  const [instances, setInstances] = useState<any[]>([]);
+  const [instances, setInstances] = useState<InstanceListRow[]>([]);
   const [selectedInstance, setSelectedInstance] = useState<number | null>(null);
-  const [queries, setQueries] = useState<any[]>([]);
+  const [queries, setQueries] = useState<QueryAnalysisRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [useMock, setUseMock] = useState(false);
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
@@ -87,10 +88,9 @@ export default function QueriesPage() {
               </tr>
             </thead>
             <tbody>
-              {queries.map((q, i) => (
-                <>
+              {queries.map((q) => (
+                <Fragment key={q.query_hash}>
                   <tr
-                    key={i}
                     onClick={() => setExpandedRow(expandedRow === q.query_hash ? null : q.query_hash)}
                     className="border-b border-white/5 hover:bg-slate-800/50 cursor-pointer transition-colors"
                   >
@@ -101,7 +101,7 @@ export default function QueriesPage() {
                     <td className="py-3 text-gray-300 text-right">{(q.AvgDurationMs ?? 0).toLocaleString()}</td>
                   </tr>
                   {expandedRow === q.query_hash && (
-                    <tr key={`${i}-exp`}>
+                    <tr>
                       <td colSpan={5} className="py-3 px-4">
                         <pre className="bg-black/30 rounded-lg p-4 text-xs text-gray-300 font-mono overflow-x-auto whitespace-pre-wrap">
                           <code>{q.QueryText || 'No query text available'}</code>
@@ -109,7 +109,7 @@ export default function QueriesPage() {
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               ))}
             </tbody>
           </table>

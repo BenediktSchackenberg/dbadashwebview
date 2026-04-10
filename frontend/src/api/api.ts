@@ -3,15 +3,19 @@ import type {
   AdConfig,
   AdLoginTestResult,
   AvailabilityGroupSummaryRow,
+  ApiDataResponse,
   ApiErrorShape,
   ApiRow,
   AuthStatusResponse,
   CreateLocalUserRequest,
+  DbSpaceRow,
   HadrOverviewResponse,
   DashboardMonitorResponse,
   DashboardPerformanceResponse,
   DashboardSummaryRow,
   DashboardStats,
+  ExecStatsRow,
+  IdentityColumnRow,
   InstanceBackupRow,
   InstanceCpuRow,
   InstanceDatabaseRow,
@@ -23,9 +27,20 @@ import type {
   InstanceWaitRow,
   LocalUser,
   LoginResponse,
+  MemoryResponse,
+  PatchingRow,
+  PerformanceCounterRow,
+  PerformanceIOResponse,
+  QueryAnalysisRow,
+  QueryStoreRow,
+  RunningQueryRow,
+  SchemaChangeRow,
+  SlowQueryRow,
+  TempDbFileRow,
   ThresholdMap,
   TreeInstanceNode,
   UpdateLocalUserRequest,
+  WaitTimelineRow,
 } from './types';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
@@ -116,25 +131,25 @@ export const api = {
   instanceHadr: (id: number) => request<InstanceHadrResponse>(`/api/instances/${id}/hadr`),
   hadrOverview: () => request<HadrOverviewResponse>('/api/hadr/overview'),
   drives: () => request<ApiRow[]>('/api/drives'),
-  instanceQueries: (id: number) => request<ApiRow[]>(`/api/instances/${id}/queries`),
+  instanceQueries: (id: number) => request<QueryAnalysisRow[]>(`/api/instances/${id}/queries`),
   backupsEstate: () => request<ApiRow[]>('/api/backups/estate'),
   backupsManagement: () => request<any>('/api/backups/management'),
   performanceRunningQueries: (instanceId?: number) =>
-    request<{ data: any[]; note: string }>(`/api/performance/running-queries${instanceId ? `?instanceId=${instanceId}` : ''}`),
+    request<ApiDataResponse<RunningQueryRow>>(`/api/performance/running-queries${instanceId ? `?instanceId=${instanceId}` : ''}`),
   performanceBlocking: (instanceId?: number) =>
-    request<{ data: any[]; note: string }>(`/api/performance/blocking${instanceId ? `?instanceId=${instanceId}` : ''}`),
+    request<ApiDataResponse<RunningQueryRow>>(`/api/performance/blocking${instanceId ? `?instanceId=${instanceId}` : ''}`),
   performanceSlowQueries: (instanceId?: number, hours = 24) =>
-    request<{ data: ApiRow[]; note: string }>(`/api/performance/slow-queries?hours=${hours}${instanceId ? `&instanceId=${instanceId}` : ''}`),
+    request<ApiDataResponse<SlowQueryRow>>(`/api/performance/slow-queries?hours=${hours}${instanceId ? `&instanceId=${instanceId}` : ''}`),
   performanceMemory: (instanceId?: number, hours = 24) =>
-    request<{ clerks: ApiRow[]; counters: ApiRow[]; clerkNote: string; counterNote: string }>(`/api/performance/memory?hours=${hours}${instanceId ? `&instanceId=${instanceId}` : ''}`),
+    request<MemoryResponse>(`/api/performance/memory?hours=${hours}${instanceId ? `&instanceId=${instanceId}` : ''}`),
   performanceIO: (instanceId?: number, hours = 24) =>
-    request<{ fileStats: ApiRow[]; drivePerf: ApiRow[]; fileNote: string; driveNote: string }>(`/api/performance/io?hours=${hours}${instanceId ? `&instanceId=${instanceId}` : ''}`),
+    request<PerformanceIOResponse>(`/api/performance/io?hours=${hours}${instanceId ? `&instanceId=${instanceId}` : ''}`),
   performanceExecStats: (instanceId?: number, hours = 24) =>
-    request<{ data: ApiRow[]; note: string }>(`/api/performance/exec-stats?hours=${hours}${instanceId ? `&instanceId=${instanceId}` : ''}`),
+    request<ApiDataResponse<ExecStatsRow>>(`/api/performance/exec-stats?hours=${hours}${instanceId ? `&instanceId=${instanceId}` : ''}`),
   performanceWaitsTimeline: (instanceId: number, hours = 24) =>
-    request<{ data: ApiRow[]; note: string }>(`/api/performance/waits-timeline?instanceId=${instanceId}&hours=${hours}`),
+    request<ApiDataResponse<WaitTimelineRow>>(`/api/performance/waits-timeline?instanceId=${instanceId}&hours=${hours}`),
   performanceCounters: (instanceId: number, hours = 24) =>
-    request<{ data: ApiRow[]; note: string }>(`/api/performance/counters?instanceId=${instanceId}&hours=${hours}`),
+    request<ApiDataResponse<PerformanceCounterRow>>(`/api/performance/counters?instanceId=${instanceId}&hours=${hours}`),
   monitoringJobTimeline: (instanceId: number, hours = 24) =>
     request<{ data: ApiRow[]; note: string }>(`/api/monitoring/job-timeline?instanceId=${instanceId}&hours=${hours}`),
   monitoringConfiguration: (instanceId: number) =>
@@ -142,17 +157,17 @@ export const api = {
   monitoringConfigurationChanges: (instanceId: number, days = 30) =>
     request<{ data: ApiRow[]; note: string }>(`/api/monitoring/configuration/changes?instanceId=${instanceId}&days=${days}`),
   monitoringPatching: () =>
-    request<{ data: any[]; note: string }>('/api/monitoring/patching'),
+    request<ApiDataResponse<PatchingRow>>('/api/monitoring/patching'),
   monitoringSchemaChanges: (instanceId: number, days = 30) =>
-    request<{ data: ApiRow[]; note: string }>(`/api/monitoring/schema-changes?instanceId=${instanceId}&days=${days}`),
+    request<ApiDataResponse<SchemaChangeRow>>(`/api/monitoring/schema-changes?instanceId=${instanceId}&days=${days}`),
   performanceQueryStore: (instanceId: number) =>
-    request<{ data: ApiRow[]; note: string }>(`/api/performance/query-store?instanceId=${instanceId}`),
+    request<ApiDataResponse<QueryStoreRow>>(`/api/performance/query-store?instanceId=${instanceId}`),
   monitoringIdentityColumns: (instanceId: number) =>
-    request<{ data: ApiRow[]; note: string }>(`/api/monitoring/identity-columns?instanceId=${instanceId}`),
+    request<ApiDataResponse<IdentityColumnRow>>(`/api/monitoring/identity-columns?instanceId=${instanceId}`),
   monitoringTempDB: (instanceId: number) =>
-    request<{ data: ApiRow[]; note: string }>(`/api/monitoring/tempdb?instanceId=${instanceId}`),
+    request<ApiDataResponse<TempDbFileRow>>(`/api/monitoring/tempdb?instanceId=${instanceId}`),
   monitoringDBSpace: (instanceId: number) =>
-    request<{ data: ApiRow[]; note: string }>(`/api/monitoring/db-space?instanceId=${instanceId}`),
+    request<ApiDataResponse<DbSpaceRow>>(`/api/monitoring/db-space?instanceId=${instanceId}`),
   dashboardPerformanceSummary: () =>
     request<DashboardPerformanceResponse>('/api/dashboard/performance-summary'),
   tree: () => request<TreeInstanceNode[]>('/api/tree'),

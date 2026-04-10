@@ -1,15 +1,16 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { api } from '../api/api';
+import type { InstanceListRow, RunningQueryRow } from '../api/types';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { motion } from 'framer-motion';
 import { Activity, ChevronDown, ChevronRight } from 'lucide-react';
 import { clsx } from 'clsx';
 
 export default function RunningQueriesPage() {
-  const [data, setData] = useState<any[]>([]);
+  const [data, setData] = useState<RunningQueryRow[]>([]);
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(true);
-  const [instances, setInstances] = useState<any[]>([]);
+  const [instances, setInstances] = useState<InstanceListRow[]>([]);
   const [selectedInstance, setSelectedInstance] = useState<number | undefined>();
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
 
@@ -57,8 +58,8 @@ export default function RunningQueriesPage() {
           className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
         >
           <option value="">All Instances</option>
-          {instances.map((inst: any) => (
-            <option key={inst.InstanceID} value={inst.InstanceID}>{inst.InstanceDisplayName}</option>
+          {instances.map((inst) => (
+            <option key={inst.InstanceID} value={inst.InstanceID}>{inst.InstanceDisplayName || inst.Instance || inst.InstanceID}</option>
           ))}
         </select>
       </div>
@@ -92,11 +93,10 @@ export default function RunningQueriesPage() {
               </thead>
               <tbody>
                 {data.map((row, i) => {
-                  const isBlocked = row.blocking_session_id && row.blocking_session_id > 0;
+                  const isBlocked = (row.blocking_session_id ?? 0) > 0;
                   return (
-                    <>
+                    <Fragment key={`${row.InstanceID}-${row.session_id ?? i}-${i}`}>
                       <tr
-                        key={i}
                         onClick={() => toggleRow(i)}
                         className={clsx(
                           'border-b border-white/5 cursor-pointer hover:bg-slate-800/50 transition-colors',
@@ -106,7 +106,7 @@ export default function RunningQueriesPage() {
                         <td className="px-4 py-3 text-gray-500">
                           {expandedRows.has(i) ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                         </td>
-                        <td className="px-4 py-3 text-gray-300">{row.InstanceDisplayName}</td>
+                        <td className="px-4 py-3 text-gray-300">{row.InstanceDisplayName || row.InstanceID}</td>
                         <td className="px-4 py-3 text-gray-300">{row.session_id}</td>
                         <td className="px-4 py-3">
                           <span className={clsx('text-xs px-2 py-0.5 rounded-full font-medium',
@@ -128,10 +128,10 @@ export default function RunningQueriesPage() {
                             </span>
                           ) : '-'}
                         </td>
-                        <td className="px-4 py-3 text-gray-300">{formatDuration(row.start_time)}</td>
+                        <td className="px-4 py-3 text-gray-300">{formatDuration(row.start_time || '')}</td>
                       </tr>
                       {expandedRows.has(i) && (
-                        <tr key={`${i}-detail`} className="border-b border-white/5 bg-white/[0.02]">
+                        <tr className="border-b border-white/5 bg-white/[0.02]">
                           <td colSpan={12} className="px-6 py-4">
                             <div className="text-xs text-gray-500 mb-1">Query Text</div>
                             <pre className="text-xs text-gray-300 whitespace-pre-wrap font-mono bg-black/20 rounded-lg p-3 max-h-48 overflow-y-auto">
@@ -140,7 +140,7 @@ export default function RunningQueriesPage() {
                           </td>
                         </tr>
                       )}
-                    </>
+                    </Fragment>
                   );
                 })}
               </tbody>

@@ -373,3 +373,194 @@ export interface SearchJobRow extends ApiRow {
   step_name?: string;
   job_id?: string;
 }
+
+export interface ApiDataResponse<T> {
+  data: T[];
+  note: string;
+}
+
+export interface QueryAnalysisRow extends ApiRow {
+  query_hash: string;
+  TotalCPU?: number | null;
+  TotalIO?: number | null;
+  Executions?: number | null;
+  AvgDurationMs?: number | null;
+  QueryText?: string | null;
+}
+
+export interface RunningQueryRow extends ApiRow {
+  InstanceID: number;
+  InstanceDisplayName?: string | null;
+  session_id?: number | null;
+  start_time?: string | null;
+  status?: string | null;
+  command?: string | null;
+  wait_type?: string | null;
+  wait_resource?: string | null;
+  blocking_session_id?: number | null;
+  cpu_time?: number | null;
+  reads?: number | null;
+  writes?: number | null;
+  logical_reads?: number | null;
+  SnapshotDate?: string | null;
+  database_id?: number | null;
+  database_name?: string | null;
+  query_text?: string | null;
+}
+
+export interface SlowQueryRow extends ApiRow {
+  InstanceID: number;
+  InstanceDisplayName?: string | null;
+  object_name?: string | null;
+  DatabaseID?: number | null;
+  database_name?: string | null;
+  query_text?: string | null;
+  duration_ms?: number | null;
+  cpu_time_ms?: number | null;
+  logical_reads?: number | null;
+  physical_reads?: number | null;
+  writes?: number | null;
+  SnapshotDate?: string | null;
+  client_hostname?: string | null;
+  client_app_name?: string | null;
+  username?: string | null;
+}
+
+export interface MemoryClerkRow extends ApiRow {
+  InstanceID: number;
+  InstanceDisplayName?: string | null;
+  clerk_type?: string | null;
+  clerk_name?: string | null;
+  pages_kb?: number | null;
+  SnapshotDate?: string | null;
+}
+
+export interface MemoryCounterRow extends ApiRow {
+  InstanceID: number;
+  InstanceDisplayName?: string | null;
+  counter_name?: string | null;
+  cntr_value?: number | null;
+  SnapshotDate?: string | null;
+}
+
+export interface MemoryResponse {
+  clerks: MemoryClerkRow[];
+  counters: MemoryCounterRow[];
+  clerkNote: string;
+  counterNote: string;
+}
+
+export interface PerformanceFileStatRow extends ApiRow {
+  InstanceID: number;
+  InstanceDisplayName?: string | null;
+  database_name?: string | null;
+  file_name?: string | null;
+  io_stall_read_ms?: number | null;
+  io_stall_write_ms?: number | null;
+  num_of_reads?: number | null;
+  num_of_writes?: number | null;
+  num_of_bytes_read?: number | null;
+  num_of_bytes_written?: number | null;
+  SnapshotDate?: string | null;
+}
+
+export interface PerformanceIOResponse {
+  fileStats: PerformanceFileStatRow[];
+  drivePerf: ApiRow[];
+  fileNote: string;
+  driveNote: string;
+}
+
+export interface ExecStatsRow extends ApiRow {
+  InstanceID: number;
+  InstanceDisplayName?: string | null;
+  object_name?: string | null;
+  SchemaName?: string | null;
+  execution_count?: number | null;
+  total_worker_time?: number | null;
+  total_elapsed_time?: number | null;
+  total_logical_reads?: number | null;
+  total_logical_writes?: number | null;
+  total_physical_reads?: number | null;
+  SnapshotDate?: string | null;
+}
+
+export interface WaitTimelineRow extends ApiRow {
+  InstanceID: number;
+  SnapshotDate?: string | null;
+  WaitType?: string | null;
+  wait_time_ms?: number | null;
+  waiting_tasks_count?: number | null;
+  signal_wait_time_ms?: number | null;
+}
+
+export interface PerformanceCounterRow extends ApiRow {
+  InstanceID: number;
+  InstanceDisplayName?: string | null;
+  object_name?: string | null;
+  counter_name?: string | null;
+  instance_name?: string | null;
+  cntr_value?: number | null;
+  SnapshotDate?: string | null;
+}
+
+export interface PatchingRow extends ApiRow {
+  instanceId: number;
+  instanceName?: string | null;
+  productVersion?: string | null;
+  productMajorVersion?: number | null;
+  edition?: string | null;
+}
+
+export interface QueryStoreRow extends ApiRow {
+  objectName?: string | null;
+  querySqlText?: string | null;
+  avgCpuTime?: number | null;
+  avgDuration?: number | null;
+  countExecutions?: number | null;
+  avgLogicalIoReads?: number | null;
+}
+
+export interface SchemaChangeRow extends ApiRow {
+  databaseId?: number | null;
+  objectName?: string | null;
+  schemaName?: string | null;
+  objectType?: string | null;
+  objectDateCreated?: string | null;
+  objectDateModified?: string | null;
+  eventDate?: string | null;
+  snapshotValidFrom?: string | null;
+  ddlEvent?: string | null;
+  loginName?: string | null;
+  ddlText?: string | null;
+}
+
+export interface IdentityColumnRow extends ApiRow {
+  instanceId?: number | null;
+  databaseName?: string | null;
+  schemaName?: string | null;
+  tableName?: string | null;
+  columnName?: string | null;
+  seedValue?: number | null;
+  incrementValue?: number | null;
+  lastValue?: number | null;
+  maxValue?: number | null;
+  percentUsed?: number | null;
+}
+
+export interface TempDbFileRow extends ApiRow {
+  fileId?: number | null;
+  name?: string | null;
+  sizeKb?: number | null;
+  usedKb?: number | null;
+}
+
+export interface DbSpaceRow extends ApiRow {
+  databaseName?: string | null;
+  fileName?: string | null;
+  typeDesc?: string | null;
+  sizeKb?: number | null;
+  usedKb?: number | null;
+  growth?: number | null;
+  isPercentGrowth?: boolean | number | null;
+}
