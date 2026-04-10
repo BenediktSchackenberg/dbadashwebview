@@ -1,6 +1,7 @@
 import type { AuthRole, AuthSource } from '../auth/session';
 
 export type ApiRow = Record<string, unknown>;
+export type StatusCode = 1 | 2 | 3 | 4 | 5;
 
 export interface ApiErrorShape {
   error?: string;
@@ -35,6 +36,160 @@ export interface DashboardStats {
   top10LargestDbs: { instanceName: string; databaseName: string; sizeMb: number }[];
   recentAlerts: ApiRow[];
   failedJobs: ApiRow[];
+}
+
+export interface DashboardSummaryRow extends ApiRow {
+  InstanceID: number;
+  InstanceDisplayName?: string;
+  Instance?: string;
+  FullBackupStatus?: StatusCode | null;
+  DiffBackupStatus?: StatusCode | null;
+  LogBackupStatus?: StatusCode | null;
+  LogShippingStatus?: StatusCode | null;
+  DriveStatus?: StatusCode | null;
+  FileFreeSpaceStatus?: StatusCode | null;
+  LogFreeSpaceStatus?: StatusCode | null;
+  JobStatus?: StatusCode | null;
+  AGStatus?: StatusCode | null;
+  CorruptionStatus?: StatusCode | null;
+  LastGoodCheckDBStatus?: StatusCode | null;
+  MemoryDumpStatus?: StatusCode | null;
+  SnapshotAgeStatus?: StatusCode | null;
+  UptimeStatus?: StatusCode | null;
+  IsAgentRunningStatus?: StatusCode | null;
+  DBMailStatus?: StatusCode | null;
+  QueryStoreStatus?: StatusCode | null;
+  AlertStatus?: StatusCode | null;
+  PctMaxSizeStatus?: StatusCode | null;
+  CollectionErrorStatus?: StatusCode | null;
+  DatabaseStateStatus?: StatusCode | null;
+  IdentityStatus?: StatusCode | null;
+  CustomCheckStatus?: StatusCode | null;
+  MirroringStatus?: StatusCode | null;
+  ElasticPoolStorageStatus?: StatusCode | null;
+}
+
+export interface InstanceListRow extends SearchInstanceRow {
+  LastCollected?: string | null;
+  ShowInSummary?: boolean | null;
+  ProductVersion?: string | null;
+  ProductMajorVersion?: number | null;
+  cpu_count?: number | null;
+  physical_memory_kb?: number | null;
+  sqlserver_start_time?: string | null;
+}
+
+export interface InstanceDetailInstance extends InstanceListRow {
+  Alias?: string | null;
+}
+
+export interface InstanceDetailResponse {
+  instance: InstanceDetailInstance;
+  summary?: DashboardSummaryRow | null;
+}
+
+export interface InstanceCpuRow extends ApiRow {
+  EventTime: string;
+  SQLProcessCPU?: number | null;
+  SystemIdleCPU?: number | null;
+  OtherCPU?: number | null;
+  TotalCPU?: number | null;
+}
+
+export interface InstanceWaitRow extends ApiRow {
+  WaitTypeID?: number | null;
+  WaitType?: string | null;
+  TotalWaitMs?: number | null;
+  TotalWaitCount?: number | null;
+  TotalSignalWaitMs?: number | null;
+}
+
+export interface InstanceDriveRow extends ApiRow {
+  DriveID?: number | null;
+  Name?: string | null;
+  Label?: string | null;
+  Capacity?: number | null;
+  FreeSpace?: number | null;
+  UsedSpace?: number | null;
+}
+
+export interface InstanceDatabaseRow extends ApiRow {
+  DatabaseID: number;
+  name: string;
+  state?: number | null;
+  recovery_model?: number | null;
+  LastGoodCheckDbTime?: string | null;
+  IsActive?: boolean | null;
+  is_primary_replica?: boolean | number | null;
+  synchronization_state?: number | null;
+  synchronization_health?: number | null;
+  ag_name?: string | null;
+}
+
+export interface InstanceBackupRow extends ApiRow {
+  DatabaseID: number;
+  DatabaseName?: string | null;
+  type?: string | null;
+  backup_start_date?: string | null;
+  backup_finish_date?: string | null;
+  backup_size?: number | null;
+  compressed_backup_size?: number | null;
+}
+
+export interface InstanceJobRow extends SearchJobRow {
+  step_id?: number | null;
+  run_status?: number | null;
+  RunDateTime?: string | null;
+  RunDurationSec?: number | null;
+  message?: string | null;
+}
+
+export interface DashboardPerformanceRow extends ApiRow {
+  instanceID: number;
+  instanceDisplayName: string;
+  avgCPU: number;
+  maxCPU: number;
+  maxTotalCPU: number;
+  criticalWaitMs: number;
+  lockWaitMs: number;
+  ioWaitMs: number;
+  totalWaitMs: number;
+  signalWaitPct: number;
+  latchWaitMs: number;
+  readLatency: number;
+  writeLatency: number;
+  mBsec: number;
+  iOPs: number;
+}
+
+export interface DashboardPerformanceResponse {
+  data: DashboardPerformanceRow[];
+  note: string;
+}
+
+export interface DashboardMonitorInstance {
+  instanceId: number;
+  instanceName: string;
+  edition?: string | null;
+  productVersion?: string | null;
+  cpuCount?: number | null;
+  memoryKb?: number | null;
+  startTime?: string | null;
+  isOnline: boolean;
+  sqlCpu: number;
+  sysCpu: number;
+  waitMs: number;
+  diskIOKB: number;
+  agName?: string | null;
+  agRole?: string | null;
+  status: number;
+  activeAlerts: string[];
+}
+
+export interface DashboardMonitorResponse {
+  instances: DashboardMonitorInstance[];
+  alertCounts: Record<string, number>;
+  recentErrors: ApiRow[];
 }
 
 export interface TreeDatabaseNode {

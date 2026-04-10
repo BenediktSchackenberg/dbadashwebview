@@ -17,7 +17,7 @@ interface DataTableProps<T> {
   searchKeys?: string[];
 }
 
-export default function DataTable<T extends Record<string, any>>({
+export default function DataTable<T extends Record<string, unknown>>({
   columns, data, onRowClick, searchable = true, searchKeys
 }: DataTableProps<T>) {
   const [sortKey, setSortKey] = useState<string | null>(null);
@@ -28,13 +28,13 @@ export default function DataTable<T extends Record<string, any>>({
     if (!search) return data;
     const q = search.toLowerCase();
     const keys = searchKeys || columns.map(c => c.key);
-    return data.filter(row => keys.some(k => String(row[k] ?? '').toLowerCase().includes(q)));
+    return data.filter(row => keys.some(k => String(row[k as keyof T] ?? '').toLowerCase().includes(q)));
   }, [data, search, searchKeys, columns]);
 
   const sorted = useMemo(() => {
     if (!sortKey) return filtered;
     return [...filtered].sort((a, b) => {
-      const av = a[sortKey], bv = b[sortKey];
+      const av = a[sortKey as keyof T], bv = b[sortKey as keyof T];
       if (av == null) return 1;
       if (bv == null) return -1;
       const cmp = av < bv ? -1 : av > bv ? 1 : 0;
