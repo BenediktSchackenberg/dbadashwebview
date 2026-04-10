@@ -144,6 +144,96 @@ export interface InstanceJobRow extends SearchJobRow {
   message?: string | null;
 }
 
+export interface AvailabilityGroupSummaryRow extends ApiRow {
+  group_id: string;
+  InstanceID: number;
+  name?: string | null;
+  InstanceDisplayName?: string | null;
+}
+
+export interface InstanceHadrGroupRow extends ApiRow {
+  group_id: string;
+  name?: string | null;
+  failure_condition_level?: number | null;
+  health_check_timeout?: number | null;
+  automated_backup_preference_desc?: string | null;
+  basic_features?: boolean | number | null;
+  dtc_support?: boolean | number | null;
+  db_failover?: boolean | number | null;
+  is_distributed?: boolean | number | null;
+  cluster_type?: string | null;
+  is_contained?: boolean | number | null;
+}
+
+export interface InstanceHadrReplicaRow extends ApiRow {
+  group_id: string;
+  replica_id: string;
+  replica_server_name?: string | null;
+  endpoint_url?: string | null;
+  availability_mode_desc?: string | null;
+  failover_mode_desc?: string | null;
+  primary_role_allow_connections_desc?: string | null;
+  secondary_role_allow_connections_desc?: string | null;
+  backup_priority?: number | null;
+  seeding_mode_desc?: string | null;
+  session_timeout?: number | null;
+  read_only_routing_url?: string | null;
+}
+
+export interface InstanceHadrDatabaseRow extends ApiRow {
+  DatabaseID: number;
+  group_id: string;
+  replica_id: string;
+  is_primary_replica?: boolean | number | null;
+  synchronization_state_desc?: string | null;
+  synchronization_health_desc?: string | null;
+  is_suspended?: boolean | number | null;
+  suspend_reason_desc?: string | null;
+  database_state_desc?: string | null;
+  secondary_lag_seconds?: number | null;
+  log_send_queue_size?: number | null;
+  log_send_rate?: number | null;
+  redo_queue_size?: number | null;
+  redo_rate?: number | null;
+  last_sent_time?: string | null;
+  last_received_time?: string | null;
+  last_hardened_time?: string | null;
+  last_redone_time?: string | null;
+  DatabaseName?: string | null;
+}
+
+export interface InstanceHadrResponse {
+  error?: string;
+  ags: InstanceHadrGroupRow[];
+  replicas: InstanceHadrReplicaRow[];
+  databases: InstanceHadrDatabaseRow[];
+}
+
+export interface HadrOverviewGroupRow extends ApiRow {
+  group_id: string;
+  AGName?: string | null;
+  InstanceID: number;
+  InstanceName?: string | null;
+  automated_backup_preference_desc?: string | null;
+  basic_features?: boolean | number | null;
+  db_failover?: boolean | number | null;
+  is_distributed?: boolean | number | null;
+  cluster_type?: string | null;
+  ProductMajorVersion?: number | null;
+  Edition?: string | null;
+  cpu_count?: number | null;
+  physical_memory_kb?: number | null;
+  currentCPU?: number | null;
+  systemIdle?: number | null;
+}
+
+export interface HadrOverviewResponse {
+  error?: string;
+  ags: HadrOverviewGroupRow[];
+  replicas: InstanceHadrReplicaRow[];
+  databases: InstanceHadrDatabaseRow[];
+}
+
 export interface DashboardPerformanceRow extends ApiRow {
   instanceID: number;
   instanceDisplayName: string;

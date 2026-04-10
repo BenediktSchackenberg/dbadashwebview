@@ -1,8 +1,9 @@
 import { clsx } from 'clsx';
 import { Shield, ShieldAlert, ShieldCheck, ShieldQuestion } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 // DBA Dash enum: Critical=1, Warning=2, NA=3, OK=4, Acknowledged=5
-const statusConfig: Record<number, { label: string; color: string; bg: string; icon: any }> = {
+const statusConfig: Record<number, { label: string; color: string; bg: string; icon: LucideIcon }> = {
   1: { label: 'Critical', color: 'text-red-400', bg: 'bg-red-400/10 border-red-400/20', icon: Shield },
   2: { label: 'Warning', color: 'text-yellow-400', bg: 'bg-yellow-400/10 border-yellow-400/20', icon: ShieldAlert },
   3: { label: 'N/A', color: 'text-gray-400', bg: 'bg-gray-400/10 border-gray-400/20', icon: ShieldQuestion },

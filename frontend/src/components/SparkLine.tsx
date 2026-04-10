@@ -1,7 +1,9 @@
 import { AreaChart, Area, ResponsiveContainer } from 'recharts';
 
+type SparkLineRow = Record<string, number | string | null | undefined>;
+
 export default function SparkLine({ data, dataKey, color = '#3b82f6', height = 30 }: {
-  data: any[];
+  data: SparkLineRow[];
   dataKey: string;
   color?: string;
   height?: number;
