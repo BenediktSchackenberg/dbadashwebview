@@ -3,12 +3,17 @@ import type {
   AdConfig,
   AdLoginTestResult,
   AvailabilityGroupSummaryRow,
+  BackupAmpelResponse,
+  BackupManagementResponse,
   ApiDataResponse,
   ApiErrorShape,
   ApiRow,
   AuthStatusResponse,
   CreateLocalUserRequest,
   DbSpaceRow,
+  EstateBackupRow,
+  EstateDriveRow,
+  FleetStatsRow,
   HadrOverviewResponse,
   DashboardMonitorResponse,
   DashboardPerformanceResponse,
@@ -25,9 +30,13 @@ import type {
   InstanceJobRow,
   InstanceListRow,
   InstanceWaitRow,
+  JobTimelineRow,
+  LicenseReportRow,
   LocalUser,
   LoginResponse,
   MemoryResponse,
+  MonitoringConfigurationChangeRow,
+  MonitoringConfigurationRow,
   PatchingRow,
   PerformanceCounterRow,
   PerformanceIOResponse,
@@ -39,6 +48,7 @@ import type {
   TempDbFileRow,
   ThresholdMap,
   TreeInstanceNode,
+  UnderutilizedReportRow,
   UpdateLocalUserRequest,
   WaitTimelineRow,
 } from './types';
@@ -130,10 +140,10 @@ export const api = {
   availabilityGroups: () => request<AvailabilityGroupSummaryRow[]>('/api/availability-groups'),
   instanceHadr: (id: number) => request<InstanceHadrResponse>(`/api/instances/${id}/hadr`),
   hadrOverview: () => request<HadrOverviewResponse>('/api/hadr/overview'),
-  drives: () => request<ApiRow[]>('/api/drives'),
+  drives: () => request<EstateDriveRow[]>('/api/drives'),
   instanceQueries: (id: number) => request<QueryAnalysisRow[]>(`/api/instances/${id}/queries`),
-  backupsEstate: () => request<ApiRow[]>('/api/backups/estate'),
-  backupsManagement: () => request<any>('/api/backups/management'),
+  backupsEstate: () => request<EstateBackupRow[]>('/api/backups/estate'),
+  backupsManagement: () => request<BackupManagementResponse>('/api/backups/management'),
   performanceRunningQueries: (instanceId?: number) =>
     request<ApiDataResponse<RunningQueryRow>>(`/api/performance/running-queries${instanceId ? `?instanceId=${instanceId}` : ''}`),
   performanceBlocking: (instanceId?: number) =>
@@ -151,11 +161,11 @@ export const api = {
   performanceCounters: (instanceId: number, hours = 24) =>
     request<ApiDataResponse<PerformanceCounterRow>>(`/api/performance/counters?instanceId=${instanceId}&hours=${hours}`),
   monitoringJobTimeline: (instanceId: number, hours = 24) =>
-    request<{ data: ApiRow[]; note: string }>(`/api/monitoring/job-timeline?instanceId=${instanceId}&hours=${hours}`),
+    request<ApiDataResponse<JobTimelineRow>>(`/api/monitoring/job-timeline?instanceId=${instanceId}&hours=${hours}`),
   monitoringConfiguration: (instanceId: number) =>
-    request<{ data: ApiRow[]; note: string }>(`/api/monitoring/configuration?instanceId=${instanceId}`),
+    request<ApiDataResponse<MonitoringConfigurationRow>>(`/api/monitoring/configuration?instanceId=${instanceId}`),
   monitoringConfigurationChanges: (instanceId: number, days = 30) =>
-    request<{ data: ApiRow[]; note: string }>(`/api/monitoring/configuration/changes?instanceId=${instanceId}&days=${days}`),
+    request<ApiDataResponse<MonitoringConfigurationChangeRow>>(`/api/monitoring/configuration/changes?instanceId=${instanceId}&days=${days}`),
   monitoringPatching: () =>
     request<ApiDataResponse<PatchingRow>>('/api/monitoring/patching'),
   monitoringSchemaChanges: (instanceId: number, days = 30) =>
@@ -171,10 +181,10 @@ export const api = {
   dashboardPerformanceSummary: () =>
     request<DashboardPerformanceResponse>('/api/dashboard/performance-summary'),
   tree: () => request<TreeInstanceNode[]>('/api/tree'),
-  reportsLicenses: () => request<ApiRow[]>('/api/reports/licenses'),
-  reportsUnderutilized: () => request<ApiRow[]>('/api/reports/underutilized'),
-  reportsFleetStats: (hours = 24) => request<ApiRow[]>(`/api/reports/fleet-stats?hours=${hours}`),
-  reportsBackupAmpel: () => request<{ instances: ApiRow[]; databases: ApiRow[] }>('/api/reports/backup-ampel'),
+  reportsLicenses: () => request<LicenseReportRow[]>('/api/reports/licenses'),
+  reportsUnderutilized: () => request<UnderutilizedReportRow[]>('/api/reports/underutilized'),
+  reportsFleetStats: (hours = 24) => request<FleetStatsRow[]>(`/api/reports/fleet-stats?hours=${hours}`),
+  reportsBackupAmpel: () => request<BackupAmpelResponse>('/api/reports/backup-ampel'),
   dashboardMonitor: () => request<DashboardMonitorResponse>('/api/dashboard/monitor'),
   getThresholds: () =>
     request<{ thresholds: ThresholdMap }>('/api/settings/thresholds'),

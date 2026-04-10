@@ -296,6 +296,141 @@ export interface TreeInstanceNode {
   databases: TreeDatabaseNode[];
 }
 
+export interface EstateBackupRow extends ApiRow {
+  instanceID: number;
+  instanceDisplayName?: string | null;
+  databaseID?: number | null;
+  databaseName?: string | null;
+  fullBackupDate?: string | null;
+  fullBackupSize?: number | null;
+  diffBackupDate?: string | null;
+  logBackupDate?: string | null;
+}
+
+export interface EstateDriveRow extends ApiRow {
+  DriveID?: number | null;
+  InstanceID?: number | null;
+  Name?: string | null;
+  Label?: string | null;
+  Capacity?: number | null;
+  FreeSpace?: number | null;
+  UsedSpace?: number | null;
+  IsActive?: boolean | number | null;
+  InstanceDisplayName?: string | null;
+}
+
+export interface LicenseReportRow extends ApiRow {
+  InstanceID: number;
+  InstanceName?: string | null;
+  Edition?: string | null;
+  ProductVersion?: string | null;
+  ProductMajorVersion?: number | null;
+  cpu_count?: number | null;
+  cores_per_socket?: number | null;
+  socket_count?: number | null;
+  physical_memory_kb?: number | null;
+  sqlserver_start_time?: string | null;
+  LicenseType?: string | null;
+}
+
+export interface UnderutilizedReportRow extends ApiRow {
+  InstanceID: number;
+  InstanceName?: string | null;
+  Edition?: string | null;
+  ProductVersion?: string | null;
+  cpu_count?: number | null;
+  socket_count?: number | null;
+  cores_per_socket?: number | null;
+  physical_memory_kb?: number | null;
+  AvgCPU?: number | null;
+  MaxCPU?: number | null;
+}
+
+export interface FleetStatsRow extends ApiRow {
+  InstanceID: number;
+  InstanceName?: string | null;
+  Edition?: string | null;
+  ProductVersion?: string | null;
+  cpu_count?: number | null;
+  physical_memory_kb?: number | null;
+  AvgCPU24h?: number | null;
+  MaxCPU24h?: number | null;
+  TotalCapacity?: number | null;
+  TotalFree?: number | null;
+  TotalUsed?: number | null;
+}
+
+export interface BackupManagementBackupRow extends ApiRow {
+  instanceId: number;
+  instanceName?: string | null;
+  edition?: string | null;
+  databaseId?: number | null;
+  databaseName?: string | null;
+  type?: string | null;
+  backupStartDate?: string | null;
+  backupFinishDate?: string | null;
+  backupSize?: number | null;
+  compressedBackupSize?: number | null;
+  backupDurationSec?: number | null;
+}
+
+export interface BackupManagementCpuRow extends ApiRow {
+  instanceId: number;
+  avgCpu24h: number;
+}
+
+export interface BackupManagementStats extends ApiRow {
+  backupCount24h: number;
+  totalSize24h: number;
+  avgDurationSec24h: number;
+}
+
+export interface BackupManagementResponse {
+  error?: string;
+  backups: BackupManagementBackupRow[];
+  cpuByInstance: BackupManagementCpuRow[];
+  stats: BackupManagementStats;
+}
+
+export interface BackupAmpelInstanceRow extends ApiRow {
+  InstanceID: number;
+  InstanceName?: string | null;
+  Edition?: string | null;
+  ProductVersion?: string | null;
+  DatabaseCount?: number | null;
+  LastFullBackup?: string | null;
+  LastLogBackup?: string | null;
+  NewestFullBackup?: string | null;
+  NewestLogBackup?: string | null;
+  BackupVolumeGB24h?: number | null;
+  BackedUpDBs24h?: number | null;
+  DbsWithOldFullBackup?: number | null;
+  DbsWithOldLogBackup?: number | null;
+  AvgLogIntervalMin?: number | null;
+  MaxLogIntervalMin?: number | null;
+}
+
+export interface BackupAmpelDatabaseRow extends ApiRow {
+  InstanceID: number;
+  DatabaseID: number;
+  DatabaseName?: string | null;
+  RecoveryModel?: string | null;
+  CompatLevel?: number | null;
+  IsEncrypted?: boolean | number | null;
+  IsPrimaryReplica?: boolean | number | null;
+  AGName?: string | null;
+  LastFullDate?: string | null;
+  FullBackupSize?: number | null;
+  LastDiffDate?: string | null;
+  LastLogDate?: string | null;
+}
+
+export interface BackupAmpelResponse {
+  error?: string;
+  instances: BackupAmpelInstanceRow[];
+  databases: BackupAmpelDatabaseRow[];
+}
+
 export interface LocalUser {
   id: string;
   username: string;
@@ -377,6 +512,38 @@ export interface SearchJobRow extends ApiRow {
 export interface ApiDataResponse<T> {
   data: T[];
   note: string;
+}
+
+export interface JobTimelineRow extends ApiRow {
+  InstanceID: number;
+  InstanceDisplayName?: string | null;
+  job_name?: string | null;
+  step_id?: number | null;
+  step_name?: string | null;
+  run_status?: number | null;
+  RunDateTime?: string | null;
+  RunDurationSec?: number | null;
+  EndDateTime?: string | null;
+}
+
+export interface MonitoringConfigurationRow extends ApiRow {
+  InstanceID: number;
+  InstanceDisplayName?: string | null;
+  name?: string | null;
+  value?: string | number | boolean | null;
+  value_in_use?: string | number | boolean | null;
+  minimum?: string | number | null;
+  maximum?: string | number | null;
+  is_dynamic?: boolean | number | null;
+  is_advanced?: boolean | number | null;
+  ValidFrom?: string | null;
+}
+
+export interface MonitoringConfigurationChangeRow extends ApiRow {
+  name?: string | null;
+  old_value?: string | number | boolean | null;
+  new_value?: string | number | boolean | null;
+  ChangeDate?: string | null;
 }
 
 export interface QueryAnalysisRow extends ApiRow {

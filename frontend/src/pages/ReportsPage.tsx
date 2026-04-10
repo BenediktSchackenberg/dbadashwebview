@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { api } from '../api/api';
+import type { ApiRow, EstateBackupRow } from '../api/types';
 import { useRefresh } from '../App';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { Heart, Database, HardDrive, Briefcase, Server, ArrowLeft, Download } from 'lucide-react';
@@ -21,10 +22,12 @@ const reportDefs = [
   { id: 'resources', title: 'Top Resource Consumers', desc: 'Instances by CPU usage', icon: Server, color: 'text-purple-400' },
 ];
 
+type ReportId = typeof reportDefs[number]['id'];
+
 export default function ReportsPage() {
   const { lastRefresh } = useRefresh();
-  const [activeReport, setActiveReport] = useState<string | null>(null);
-  const [data, setData] = useState<any[]>([]);
+  const [activeReport, setActiveReport] = useState<ReportId | null>(null);
+  const [data, setData] = useState<ApiRow[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -45,12 +48,11 @@ export default function ReportsPage() {
   const complianceScore = useMemo(() => {
     if (activeReport !== 'backups' || data.length === 0) return null;
     const dbs = new Map<string, Date>();
-    data.forEach((b: any) => {
-      if (b.type === 'D' && b.backup_start_date) {
-        const key = `${b.InstanceID}-${b.DatabaseID}`;
-        const d = new Date(b.backup_start_date);
-        if (!dbs.has(key) || d > dbs.get(key)!) dbs.set(key, d);
-      }
+    (data as EstateBackupRow[]).forEach((row) => {
+      if (!row.databaseID || !row.fullBackupDate) return;
+      const key = `${row.instanceID}-${row.databaseID}`;
+      const backupDate = new Date(row.fullBackupDate);
+      if (!dbs.has(key) || backupDate > dbs.get(key)!) dbs.set(key, backupDate);
     });
     const now = Date.now();
     const total = dbs.size;

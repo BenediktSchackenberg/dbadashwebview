@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/api';
+import type { EstateBackupRow, InstanceBackupRow } from '../api/types';
 import { useRefresh } from '../App';
 import LoadingSpinner from '../components/LoadingSpinner';
 import EmptyState from '../components/EmptyState';
@@ -15,11 +16,18 @@ function formatAge(dateStr: string | null): { text: string; color: string } {
   return { text: `${Math.round(age / 24)}d`, color: 'text-red-400' };
 }
 
+function isNewerBackup(candidate: string | null | undefined, current: string | null | undefined): boolean {
+  if (!candidate) return false;
+  if (!current) return true;
+  return candidate > current;
+}
+
 export default function BackupsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { lastRefresh } = useRefresh();
-  const [data, setData] = useState<any[]>([]);
+  const [instanceBackups, setInstanceBackups] = useState<InstanceBackupRow[]>([]);
+  const [estateBackups, setEstateBackups] = useState<EstateBackupRow[]>([]);
   const [instanceName, setInstanceName] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -32,12 +40,14 @@ export default function BackupsPage() {
             api.instanceBackups(Number(id)).catch(() => []),
             api.instance(Number(id)).catch(() => null),
           ]);
-          setData(Array.isArray(backups) ? backups : []);
+          setInstanceBackups(Array.isArray(backups) ? backups : []);
+          setEstateBackups([]);
           setInstanceName(inst?.instance?.InstanceDisplayName || inst?.instance?.ConnectionID || `Instance ${id}`);
         } else {
           // Estate view: all instances with latest backup per DB
           const estate = await api.backupsEstate().catch(() => []);
-          setData(Array.isArray(estate) ? estate : []);
+          setEstateBackups(Array.isArray(estate) ? estate : []);
+          setInstanceBackups([]);
         }
       } finally {
         setLoading(false);
@@ -45,20 +55,21 @@ export default function BackupsPage() {
     })();
   }, [id, lastRefresh]);
 
+  const data = id ? instanceBackups : estateBackups;
   if (loading) return <LoadingSpinner />;
   if (data.length === 0) return <EmptyState message="No backup data available" />;
 
   // Per-instance view: group by database, show latest per type
   if (id) {
     // Group backups by DatabaseName, pick latest per type
-    const byDb = new Map<string, { name: string; full: any; diff: any; log: any }>();
-    for (const row of data) {
+    const byDb = new Map<string, { name: string; full: InstanceBackupRow | null; diff: InstanceBackupRow | null; log: InstanceBackupRow | null }>();
+    for (const row of instanceBackups) {
       const name = row.DatabaseName || `DB ${row.DatabaseID}`;
       if (!byDb.has(name)) byDb.set(name, { name, full: null, diff: null, log: null });
       const entry = byDb.get(name)!;
-      if (row.type === 'D' && (!entry.full || row.backup_start_date > entry.full.backup_start_date)) entry.full = row;
-      if (row.type === 'I' && (!entry.diff || row.backup_start_date > entry.diff.backup_start_date)) entry.diff = row;
-      if (row.type === 'L' && (!entry.log || row.backup_start_date > entry.log.backup_start_date)) entry.log = row;
+      if (row.type === 'D' && isNewerBackup(row.backup_start_date, entry.full?.backup_start_date)) entry.full = row;
+      if (row.type === 'I' && isNewerBackup(row.backup_start_date, entry.diff?.backup_start_date)) entry.diff = row;
+      if (row.type === 'L' && isNewerBackup(row.backup_start_date, entry.log?.backup_start_date)) entry.log = row;
     }
 
     return (
@@ -83,9 +94,9 @@ export default function BackupsPage() {
             </thead>
             <tbody className="divide-y divide-white/5">
               {Array.from(byDb.values()).sort((a, b) => a.name.localeCompare(b.name)).map(db => {
-                const fullAge = formatAge(db.full?.backup_start_date);
-                const diffAge = formatAge(db.diff?.backup_start_date);
-                const logAge = formatAge(db.log?.backup_start_date);
+                const fullAge = formatAge(db.full?.backup_start_date || null);
+                const diffAge = formatAge(db.diff?.backup_start_date || null);
+                const logAge = formatAge(db.log?.backup_start_date || null);
                 return (
                   <tr key={db.name} className="hover:bg-slate-800/50">
                     <td className="px-4 py-2.5 text-white font-medium">{db.name}</td>
@@ -106,10 +117,11 @@ export default function BackupsPage() {
   }
 
   // Estate view: group by instance
-  const byInstance = new Map<string, { name: string; id: number; dbs: any[] }>();
-  for (const row of data) {
-    const name = row.InstanceDisplayName || `Instance ${row.InstanceID}`;
-    if (!byInstance.has(name)) byInstance.set(name, { name, id: row.InstanceID, dbs: [] });
+  const byInstance = new Map<string, { name: string; id: number; dbs: EstateBackupRow[] }>();
+  for (const row of estateBackups) {
+    const instanceId = row.instanceID;
+    const name = row.instanceDisplayName || `Instance ${instanceId}`;
+    if (!byInstance.has(name)) byInstance.set(name, { name, id: instanceId, dbs: [] });
     byInstance.get(name)!.dbs.push(row);
   }
 
@@ -134,13 +146,13 @@ export default function BackupsPage() {
           </thead>
           <tbody className="divide-y divide-white/5">
             {Array.from(byInstance.values()).sort((a, b) => a.name.localeCompare(b.name)).map(inst => {
-              const newestFull = inst.dbs.reduce((best: string | null, d: any) => {
-                if (!d.FullBackupDate) return best;
-                return !best || d.FullBackupDate > best ? d.FullBackupDate : best;
+              const newestFull = inst.dbs.reduce((best: string | null, row) => {
+                if (!row.fullBackupDate) return best;
+                return !best || row.fullBackupDate > best ? row.fullBackupDate : best;
               }, null);
-              const newestLog = inst.dbs.reduce((best: string | null, d: any) => {
-                if (!d.LogBackupDate) return best;
-                return !best || d.LogBackupDate > best ? d.LogBackupDate : best;
+              const newestLog = inst.dbs.reduce((best: string | null, row) => {
+                if (!row.logBackupDate) return best;
+                return !best || row.logBackupDate > best ? row.logBackupDate : best;
               }, null);
               const fullAge = formatAge(newestFull);
               const logAge = formatAge(newestLog);

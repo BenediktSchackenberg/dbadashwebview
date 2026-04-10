@@ -1,13 +1,23 @@
 import { useState, useEffect, useMemo } from 'react';
 import { api } from '../api/api';
+import type { EstateDriveRow } from '../api/types';
 import { useRefresh } from '../App';
 import LoadingSpinner from '../components/LoadingSpinner';
 import CapacityBar from '../components/CapacityBar';
 import { AlertTriangle } from 'lucide-react';
 
+interface EstateDriveViewModel extends EstateDriveRow {
+  capacity: number;
+  free: number;
+  used: number;
+  pct: number;
+  daysUntilFull: number | null;
+  estFullDate: string | null;
+}
+
 export default function EstateDiskPage() {
   const { lastRefresh } = useRefresh();
-  const [drives, setDrives] = useState<any[]>([]);
+  const [drives, setDrives] = useState<EstateDriveRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('');
 
@@ -18,7 +28,7 @@ export default function EstateDiskPage() {
   }, [lastRefresh]);
 
   const filtered = useMemo(() => {
-    let items = drives.map(d => {
+    let items: EstateDriveViewModel[] = drives.map((d) => {
       const capacity = Number(d.Capacity) || 0;
       const free = Number(d.FreeSpace) || 0;
       const used = capacity - free;
