@@ -1,22 +1,28 @@
 using System.Data;
-using System.DirectoryServices.Protocols;
-using System.IdentityModel.Tokens.Jwt;
-using System.Net;
-using System.Security.Claims;
-using System.Text;
-using System.Text.Json;
+using DBADashWebView.Auth;
+using DBADashWebView.Endpoints;
+using DBADashWebView.Settings;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Data.SqlClient;
 using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// JWT
-var jwtSecret = builder.Configuration["Jwt:Secret"]!;
-var jwtIssuer = builder.Configuration["Jwt:Issuer"]!;
-var jwtAudience = builder.Configuration["Jwt:Audience"]!;
-var jwtExpHours = int.Parse(builder.Configuration["Jwt:ExpirationHours"] ?? "12");
-var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret));
+var jwtOptions = builder.Configuration.GetSection("Jwt").Get<JwtOptions>() ?? new JwtOptions();
+if (string.IsNullOrWhiteSpace(jwtOptions.Secret))
+{
+    if (builder.Environment.IsDevelopment())
+    {
+        jwtOptions.Secret = JwtOptions.DevelopmentFallbackSecret;
+    }
+    else
+    {
+        throw new InvalidOperationException("Jwt:Secret must be configured for non-development environments.");
+    }
+}
+
+var signingKey = new SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes(jwtOptions.Secret));
+var corsSettings = builder.Configuration.GetSection("Cors").Get<CorsSettings>() ?? new CorsSettings();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(o =>
@@ -27,22 +33,38 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = jwtIssuer,
-            ValidAudience = jwtAudience,
-            IssuerSigningKey = key
+            ValidIssuer = jwtOptions.Issuer,
+            ValidAudience = jwtOptions.Audience,
+            IssuerSigningKey = signingKey
         };
     });
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy(AppPolicies.AdminOnly, policy => policy.RequireRole(AppRoles.Admin));
 
 builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
-    p.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader()));
+{
+    if (corsSettings.AllowedOrigins.Length > 0)
+    {
+        p.WithOrigins(corsSettings.AllowedOrigins)
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+    }
+}));
 
 builder.Services.ConfigureHttpJsonOptions(o =>
     o.SerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddDataProtection();
+builder.Services.AddSingleton(jwtOptions);
+builder.Services.AddSingleton(signingKey);
+builder.Services.AddSingleton<JwtTokenService>();
+builder.Services.AddSingleton<LocalUserStore>();
+builder.Services.AddSingleton<ActiveDirectoryAuthService>();
+builder.Services.AddSingleton<ThresholdSettingsStore>();
 
 var app = builder.Build();
+app.UseExceptionHandler("/api/error");
 app.UseCors();
 app.UseDefaultFiles();
 app.UseStaticFiles();
@@ -53,104 +75,20 @@ if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
-}
 
-var connStr = builder.Configuration.GetConnectionString("DBADashDB")!;
-
-// ── AD/LDAP Config ───────────────────────────────────────────────────────
-
-var configDir = Path.Combine(AppContext.BaseDirectory, "config");
-Directory.CreateDirectory(configDir);
-var adConfigPath = Path.Combine(configDir, "ad-config.json");
-
-AdConfig LoadAdConfig()
-{
-    if (!File.Exists(adConfigPath)) return new AdConfig();
-    var json = File.ReadAllText(adConfigPath);
-    return JsonSerializer.Deserialize<AdConfig>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new AdConfig();
-}
-
-void SaveAdConfig(AdConfig cfg)
-{
-    var json = JsonSerializer.Serialize(cfg, new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
-    File.WriteAllText(adConfigPath, json);
-}
-
-bool TryAdLogin(string username, string password, AdConfig cfg, out string? displayName, out List<string> groups)
-{
-    displayName = null;
-    groups = new List<string>();
-    if (!cfg.Enabled || string.IsNullOrEmpty(cfg.Server) || string.IsNullOrEmpty(cfg.Domain)) return false;
-
-    try
+    if (jwtOptions.Secret == JwtOptions.DevelopmentFallbackSecret)
     {
-        var userPrincipal = $"{username}@{cfg.Domain}";
-        var ldapServer = cfg.Server;
-        var port = cfg.Port > 0 ? cfg.Port : (cfg.UseSsl ? 636 : 389);
-
-        var ldapId = new LdapDirectoryIdentifier(ldapServer, port);
-        var cred = new NetworkCredential(userPrincipal, password);
-        using var conn = new LdapConnection(ldapId, cred, AuthType.Basic);
-        conn.SessionOptions.ProtocolVersion = 3;
-        if (cfg.UseSsl) conn.SessionOptions.SecureSocketLayer = true;
-        conn.Bind(); // throws on bad creds
-
-        // Search for user to get display name and groups
-        var baseDn = cfg.BaseDn;
-        if (string.IsNullOrEmpty(baseDn))
-            baseDn = string.Join(",", cfg.Domain.Split('.').Select(p => $"DC={p}"));
-
-        var filter = $"(&(objectClass=user)(sAMAccountName={username}))";
-        var searchReq = new SearchRequest(baseDn, filter, SearchScope.Subtree, "displayName", "memberOf", "sAMAccountName");
-        var searchRes = (SearchResponse)conn.SendRequest(searchReq);
-
-        if (searchRes.Entries.Count > 0)
-        {
-            var entry = searchRes.Entries[0];
-            if (entry.Attributes.Contains("displayName"))
-                displayName = entry.Attributes["displayName"][0]?.ToString();
-            if (entry.Attributes.Contains("memberOf"))
-            {
-                foreach (var g in entry.Attributes["memberOf"])
-                {
-                    var groupDn = g?.ToString() ?? "";
-                    var cn = groupDn.Split(',').FirstOrDefault(p => p.StartsWith("CN=", StringComparison.OrdinalIgnoreCase));
-                    if (cn != null) groups.Add(cn[3..]);
-                }
-            }
-        }
-
-        // Check required group
-        if (!string.IsNullOrEmpty(cfg.RequiredGroup))
-        {
-            if (!groups.Any(g => g.Equals(cfg.RequiredGroup, StringComparison.OrdinalIgnoreCase)))
-                return false;
-        }
-
-        return true;
-    }
-    catch
-    {
-        return false;
+        app.Logger.LogWarning("Using the development fallback JWT secret. Configure Jwt:Secret before deploying.");
     }
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────
+var connStr = builder.Configuration.GetConnectionString("DBADashDB") ?? string.Empty;
 
-string GenerateToken(string username, string? displayName = null, string role = "User")
-{
-    var claims = new List<Claim> {
-        new(ClaimTypes.Name, username),
-        new(ClaimTypes.Role, role),
-        new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
-    };
-    if (!string.IsNullOrEmpty(displayName))
-        claims.Add(new Claim("displayName", displayName));
-    var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-    var token = new JwtSecurityToken(jwtIssuer, jwtAudience, claims,
-        expires: DateTime.UtcNow.AddHours(jwtExpHours), signingCredentials: creds);
-    return new JwtSecurityTokenHandler().WriteToken(token);
-}
+await app.Services.GetRequiredService<LocalUserStore>().EnsureSeededAsync();
+
+app.Map("/api/error", () => Results.Problem(
+    title: "Unexpected server error",
+    detail: "The server failed to process the request."));
 
 async Task<List<Dictionary<string, object?>>> QueryAsync(string sql, params (string name, object? value)[] parameters)
 {
@@ -191,92 +129,8 @@ async Task<List<Dictionary<string, object?>>> SpAsync(string sp, params (string 
     return results;
 }
 
-// ── Public endpoints ─────────────────────────────────────────────────────
-
-app.MapGet("/api/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow }));
-
-app.MapPost("/api/auth/login", (LoginRequest req) =>
-{
-    // Try AD first
-    var adCfg = LoadAdConfig();
-    if (adCfg.Enabled)
-    {
-        if (TryAdLogin(req.Username, req.Password, adCfg, out var displayName, out var groups))
-        {
-            var role = groups.Any(g => g.Equals(adCfg.AdminGroup, StringComparison.OrdinalIgnoreCase)) ? "Admin" : "User";
-            return Results.Ok(new { token = GenerateToken(req.Username, displayName, role), username = req.Username, displayName, role, source = "ad" });
-        }
-    }
-
-    // Fallback to local admin
-    if (adCfg.AllowLocalFallback || !adCfg.Enabled)
-    {
-        if (req.Username == "admin" && req.Password == "admin")
-            return Results.Ok(new { token = GenerateToken(req.Username, "Administrator", "Admin"), username = req.Username, displayName = "Administrator", role = "Admin", source = "local" });
-    }
-
-    return Results.Unauthorized();
-});
-
-// ── AD Config endpoints ──────────────────────────────────────────────────
-
-app.MapGet("/api/settings/ad", () =>
-{
-    var cfg = LoadAdConfig();
-    // Don't return bind password
-    return Results.Ok(new
-    {
-        cfg.Enabled,
-        cfg.Server,
-        cfg.Port,
-        cfg.UseSsl,
-        cfg.Domain,
-        cfg.BaseDn,
-        cfg.RequiredGroup,
-        cfg.AdminGroup,
-        cfg.AllowLocalFallback,
-        cfg.BindUser,
-        hasBindPassword = !string.IsNullOrEmpty(cfg.BindPassword)
-    });
-}).RequireAuthorization();
-
-app.MapPost("/api/settings/ad", (AdConfigRequest req) =>
-{
-    var cfg = new AdConfig
-    {
-        Enabled = req.Enabled,
-        Server = req.Server ?? "",
-        Port = req.Port,
-        UseSsl = req.UseSsl,
-        Domain = req.Domain ?? "",
-        BaseDn = req.BaseDn ?? "",
-        RequiredGroup = req.RequiredGroup ?? "",
-        AdminGroup = req.AdminGroup ?? "",
-        AllowLocalFallback = req.AllowLocalFallback,
-        BindUser = req.BindUser ?? "",
-        BindPassword = req.BindPassword ?? ""
-    };
-    // Preserve old bind password if not provided
-    if (string.IsNullOrEmpty(cfg.BindPassword))
-    {
-        var old = LoadAdConfig();
-        cfg.BindPassword = old.BindPassword;
-    }
-    SaveAdConfig(cfg);
-    return Results.Ok(new { success = true, message = "AD configuration saved" });
-}).RequireAuthorization();
-
-app.MapPost("/api/settings/ad/test", (LoginRequest req) =>
-{
-    var adCfg = LoadAdConfig();
-    if (!adCfg.Enabled)
-        return Results.Ok(new { success = false, message = "AD is not enabled" });
-
-    if (TryAdLogin(req.Username, req.Password, adCfg, out var displayName, out var groups))
-        return Results.Ok(new { success = true, message = $"Login successful as {displayName ?? req.Username}", displayName, groups });
-
-    return Results.Ok(new { success = false, message = "AD login failed. Check credentials and AD configuration." });
-}).RequireAuthorization();
+app.MapAuthEndpoints();
+app.MapSettingsEndpoints();
 
 // ── Protected endpoints ──────────────────────────────────────────────────
 
@@ -1606,25 +1460,6 @@ app.MapGet("/api/dashboard/performance-summary", async () =>
     catch (Exception ex) { return Results.Ok(new { data = Array.Empty<object>(), note = ex.Message }); }
 }).RequireAuthorization();
 
-app.MapGet("/api/settings/thresholds", () =>
-{
-    var path = Path.Combine(AppContext.BaseDirectory, "config", "thresholds.json");
-    if (!System.IO.File.Exists(path))
-        return Results.Ok(new { thresholds = new Dictionary<string, object>() });
-    var json = System.IO.File.ReadAllText(path);
-    return Results.Ok(System.Text.Json.JsonSerializer.Deserialize<object>(json));
-}).RequireAuthorization();
-
-app.MapPost("/api/settings/thresholds", async (HttpContext ctx) =>
-{
-    using var reader = new StreamReader(ctx.Request.Body);
-    var body = await reader.ReadToEndAsync();
-    var dir = Path.Combine(AppContext.BaseDirectory, "config");
-    Directory.CreateDirectory(dir);
-    System.IO.File.WriteAllText(Path.Combine(dir, "thresholds.json"), body);
-    return Results.Ok(new { success = true });
-}).RequireAuthorization();
-
 // ── Tree endpoint ────────────────────────────────────────────────────────
 app.MapGet("/api/tree", async () =>
 {
@@ -1703,7 +1538,7 @@ app.MapGet("/api/reports/licenses", async () =>
             ORDER BY i.ProductMajorVersion DESC, COALESCE(i.InstanceDisplayName, i.Instance)");
         return Results.Ok(data);
     }
-    catch (Exception ex)
+    catch
     {
         // Fallback to Instances table if InstanceInfo view doesn't exist
         try
@@ -2428,43 +2263,14 @@ app.MapGet("/api/debug/summary/{id:int}", async (int id) =>
     {
         return Results.Ok(new { error = ex.Message });
     }
-}).RequireAuthorization();
+}).RequireAuthorization(AppPolicies.AdminOnly);
 
 // SPA fallback — serve index.html for all non-API routes
 app.MapFallbackToFile("index.html");
 
 app.Run();
 
-// ── Records ──────────────────────────────────────────────────────────────
-
-record LoginRequest(
-    [property: System.Text.Json.Serialization.JsonPropertyName("username")] string Username,
-    [property: System.Text.Json.Serialization.JsonPropertyName("password")] string Password);
-
-record AdConfigRequest(
-    [property: System.Text.Json.Serialization.JsonPropertyName("enabled")] bool Enabled,
-    [property: System.Text.Json.Serialization.JsonPropertyName("server")] string? Server,
-    [property: System.Text.Json.Serialization.JsonPropertyName("port")] int Port,
-    [property: System.Text.Json.Serialization.JsonPropertyName("useSsl")] bool UseSsl,
-    [property: System.Text.Json.Serialization.JsonPropertyName("domain")] string? Domain,
-    [property: System.Text.Json.Serialization.JsonPropertyName("baseDn")] string? BaseDn,
-    [property: System.Text.Json.Serialization.JsonPropertyName("requiredGroup")] string? RequiredGroup,
-    [property: System.Text.Json.Serialization.JsonPropertyName("adminGroup")] string? AdminGroup,
-    [property: System.Text.Json.Serialization.JsonPropertyName("allowLocalFallback")] bool AllowLocalFallback,
-    [property: System.Text.Json.Serialization.JsonPropertyName("bindUser")] string? BindUser,
-    [property: System.Text.Json.Serialization.JsonPropertyName("bindPassword")] string? BindPassword);
-
-class AdConfig
+public partial class Program
 {
-    public bool Enabled { get; set; }
-    public string Server { get; set; } = "";
-    public int Port { get; set; } = 389;
-    public bool UseSsl { get; set; }
-    public string Domain { get; set; } = "";
-    public string BaseDn { get; set; } = "";
-    public string RequiredGroup { get; set; } = "";
-    public string AdminGroup { get; set; } = "";
-    public bool AllowLocalFallback { get; set; } = true;
-    public string BindUser { get; set; } = "";
-    public string BindPassword { get; set; } = "";
 }
+

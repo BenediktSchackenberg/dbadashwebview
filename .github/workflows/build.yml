@@ -1,16 +1,20 @@
-name: Build & Release
+name: Build, Test & Package
 
 on:
+  pull_request:
   push:
     branches: [main]
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  build:
+  validate:
     runs-on: windows-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -23,25 +27,40 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
 
+      - name: Run frontend tests
+        working-directory: frontend
+        run: npm run test:run
+
       - name: Build frontend
         working-directory: frontend
         run: npm run build
 
+      - name: Restore backend test dependencies
+        run: dotnet restore backend.tests/DBADashWebView.Tests.csproj
+
+      - name: Run backend tests
+        run: dotnet test backend.tests/DBADashWebView.Tests.csproj --configuration Release --no-restore
+
       - name: Publish backend
+        if: github.event_name != 'pull_request'
         working-directory: backend
         run: dotnet publish -c Release -o ../publish
 
       - name: Copy frontend to wwwroot
+        if: github.event_name != 'pull_request'
         run: |
           if (Test-Path publish\wwwroot) { Remove-Item -Recurse publish\wwwroot }
           Copy-Item -Recurse frontend\dist publish\wwwroot
 
       - name: Add web.config
+        if: github.event_name != 'pull_request'
         run: |
           @'
           <?xml version="1.0" encoding="utf-8"?>
@@ -62,28 +81,21 @@ jobs:
           '@ | Set-Content publish\web.config
 
       - name: Create ZIP artifact
+        if: github.event_name != 'pull_request'
         run: Compress-Archive -Path publish\* -DestinationPath dbadash-webview.zip
 
-      - name: Upload artifact
+      - name: Upload build artifact
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: dbadash-webview
           path: dbadash-webview.zip
 
-      - name: Create Release
-        if: github.ref == 'refs/heads/main'
+      - name: Create release
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: build-${{ github.run_number }}
-          name: Build ${{ github.run_number }}
-          body: |
-            Automated build from commit ${{ github.sha }}.
-            
-            ## Deployment
-            1. Extract ZIP to `C:\inetpub\dbadash`
-            2. Edit `appsettings.json` with your DB credentials
-            3. Create IIS site pointing to that folder (App Pool: No Managed Code)
-            4. Browse to `http://yourserver:8080` → Login: admin/admin
+          generate_release_notes: true
           files: dbadash-webview.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Server, Database, Briefcase, X } from 'lucide-react';
 import { clsx } from 'clsx';
+import type { SearchDatabaseRow, SearchInstanceRow, SearchJobRow } from '../api/types';
 
 interface SearchItem {
   type: 'instance' | 'database' | 'job';
@@ -11,9 +12,9 @@ interface SearchItem {
 }
 
 interface SearchDialogProps {
-  instances: any[];
-  databases: any[];
-  jobs: any[];
+  instances: SearchInstanceRow[];
+  databases: SearchDatabaseRow[];
+  jobs: SearchJobRow[];
 }
 
 export default function SearchDialog({ instances, databases, jobs }: SearchDialogProps) {
@@ -47,7 +48,7 @@ export default function SearchDialog({ instances, databases, jobs }: SearchDialo
   for (const inst of instances) {
     allItems.push({
       type: 'instance',
-      label: inst.InstanceDisplayName || inst.ConnectionID || inst.Instance,
+      label: inst.InstanceDisplayName || inst.ConnectionID || inst.Instance || `Instance ${inst.InstanceID}`,
       sublabel: inst.Edition,
       path: `/instances/${inst.InstanceID}`,
     });
@@ -55,7 +56,7 @@ export default function SearchDialog({ instances, databases, jobs }: SearchDialo
   for (const db of databases) {
     allItems.push({
       type: 'database',
-      label: db.name,
+      label: db.name || `Database ${db.DatabaseID}`,
       sublabel: db.InstanceDisplayName || `Instance ${db.InstanceID}`,
       path: `/instances/${db.InstanceID}/databases/${db.DatabaseID}`,
     });
@@ -63,7 +64,7 @@ export default function SearchDialog({ instances, databases, jobs }: SearchDialo
   for (const job of jobs) {
     allItems.push({
       type: 'job',
-      label: job.step_name || job.job_id,
+      label: job.step_name || job.job_id || `Job on ${job.InstanceID}`,
       sublabel: job.InstanceDisplayName,
       path: `/instances/${job.InstanceID}`,
     });

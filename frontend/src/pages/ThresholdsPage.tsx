@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/api';
+import type { ThresholdMap } from '../api/api';
 import { Settings, Save } from 'lucide-react';
-
-type Thresholds = Record<string, { warning: number; critical: number }>;
 
 const metrics = [
   { key: 'avgCPU', label: 'Avg CPU %' },
@@ -20,7 +19,7 @@ const metrics = [
 ];
 
 export default function ThresholdsPage() {
-  const [thresholds, setThresholds] = useState<Thresholds>({});
+  const [thresholds, setThresholds] = useState<ThresholdMap>({});
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
 
@@ -42,14 +41,14 @@ export default function ThresholdsPage() {
     setSaving(true);
     try {
       // Filter out metrics with both values at 0
-      const filtered: Thresholds = {};
+      const filtered: ThresholdMap = {};
       for (const [k, v] of Object.entries(thresholds)) {
         if (v.warning > 0 || v.critical > 0) filtered[k] = v;
       }
       await api.saveThresholds(filtered);
       setToast({ msg: 'Thresholds saved successfully', ok: true });
-    } catch (e: any) {
-      setToast({ msg: `Error: ${e.message}`, ok: false });
+    } catch (e) {
+      setToast({ msg: `Error: ${e instanceof Error ? e.message : 'Unknown error'}`, ok: false });
     } finally {
       setSaving(false);
       setTimeout(() => setToast(null), 3000);

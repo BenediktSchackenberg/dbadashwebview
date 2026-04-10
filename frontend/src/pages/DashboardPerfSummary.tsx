@@ -1,10 +1,10 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/api';
+import type { ThresholdMap } from '../api/types';
 import { RefreshCw, ArrowUpDown, ArrowUp, ArrowDown, Clock, Loader2 } from 'lucide-react';
 
 type SortDir = 'asc' | 'desc';
-type Thresholds = Record<string, { warning: number; critical: number }>;
 
 const columns = [
   { key: 'instanceDisplayName', label: 'Instance', align: 'left' as const },
@@ -22,7 +22,7 @@ const columns = [
   { key: 'iOPs', label: 'IOPs', align: 'right' as const },
 ];
 
-function getCellClass(key: string, value: number, thresholds: Thresholds): string {
+function getCellClass(key: string, value: number, thresholds: ThresholdMap): string {
   const t = thresholds[key];
   if (!t) return '';
   if (value >= t.critical) return 'bg-red-900/50 text-red-300';
@@ -30,7 +30,7 @@ function getCellClass(key: string, value: number, thresholds: Thresholds): strin
   return 'bg-green-900/50 text-green-300';
 }
 
-function formatNum(v: any): string {
+function formatNum(v: unknown): string {
   if (v == null) return '0';
   const n = Number(v);
   if (Number.isInteger(n)) return n.toLocaleString();
@@ -39,7 +39,7 @@ function formatNum(v: any): string {
 
 export default function DashboardPerfSummary() {
   const [data, setData] = useState<any[]>([]);
-  const [thresholds, setThresholds] = useState<Thresholds>({});
+  const [thresholds, setThresholds] = useState<ThresholdMap>({});
   const [loading, setLoading] = useState(true);
   const [sortKey, setSortKey] = useState<string>('maxCPU');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
