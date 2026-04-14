@@ -11,7 +11,9 @@ export default function QueryStorePage() {
   const [note, setNote] = useState('');
   const [sortBy, setSortBy] = useState<'avgCpuTime' | 'avgDuration' | 'countExecutions'>('avgCpuTime');
 
-  useEffect(() => { api.instances().then(setInstances).catch(() => {}); }, []);
+  useEffect(() => {
+    api.instances(true).then(i => setInstances(Array.isArray(i) ? i : [])).catch(() => {});
+  }, []);
   useEffect(() => {
     if (!instanceId) return;
     setLoading(true);
@@ -28,7 +30,11 @@ export default function QueryStorePage() {
       <div className="flex gap-3 items-center flex-wrap">
         <select value={instanceId || ''} onChange={e => setInstanceId(Number(e.target.value) || undefined)} className={inputCls}>
           <option value="">Select Instance...</option>
-          {instances.map((inst: any) => <option key={inst.instanceID} value={inst.instanceID}>{inst.instanceDisplayName || inst.instance}</option>)}
+          {instances.map((inst: any) => (
+            <option key={inst.InstanceID} value={inst.InstanceID}>
+              {inst.InstanceDisplayName || inst.Instance || inst.InstanceID}
+            </option>
+          ))}
         </select>
         <select value={sortBy} onChange={e => setSortBy(e.target.value as any)} className={inputCls}>
           <option value="avgCpuTime">Sort by CPU</option>

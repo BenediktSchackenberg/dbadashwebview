@@ -11,7 +11,9 @@ export default function SchemaChangesPage() {
   const [loading, setLoading] = useState(true);
   const [note, setNote] = useState('');
 
-  useEffect(() => { api.instances().then(setInstances).catch(() => {}); }, []);
+  useEffect(() => {
+    api.instances(true).then(i => setInstances(Array.isArray(i) ? i : [])).catch(() => {});
+  }, []);
   useEffect(() => {
     if (!instanceId) { setData([]); setLoading(false); return; }
     setLoading(true);
@@ -26,7 +28,11 @@ export default function SchemaChangesPage() {
       <div className="flex gap-3 items-center flex-wrap">
         <select value={instanceId || ''} onChange={e => setInstanceId(Number(e.target.value) || undefined)} className={inputCls}>
           <option value="">Select Instance...</option>
-          {instances.map((inst: any) => <option key={inst.instanceID} value={inst.instanceID}>{inst.instanceDisplayName || inst.instance}</option>)}
+          {instances.map((inst: any) => (
+            <option key={inst.InstanceID} value={inst.InstanceID}>
+              {inst.InstanceDisplayName || inst.Instance || inst.InstanceID}
+            </option>
+          ))}
         </select>
         <select value={days} onChange={e => setDays(Number(e.target.value))} className={inputCls}>
           {[7, 14, 30, 90].map(d => <option key={d} value={d}>Last {d} days</option>)}

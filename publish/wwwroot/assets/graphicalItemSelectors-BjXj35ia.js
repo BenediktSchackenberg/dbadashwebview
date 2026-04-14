@@ -1,0 +1,1 @@
+import{bh as r}from"./CategoricalChart-c5i0llTL.js";function d(i,s){var a,t;return(a=(t=i.graphicalItems.cartesianItems.find(e=>e.id===s))===null||t===void 0?void 0:t.xAxisId)!==null&&a!==void 0?a:r}function I(i,s){var a,t;return(a=(t=i.graphicalItems.cartesianItems.find(e=>e.id===s))===null||t===void 0?void 0:t.yAxisId)!==null&&a!==void 0?a:r}export{I as a,d as s};

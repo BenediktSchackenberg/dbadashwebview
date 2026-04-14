@@ -1,0 +1,1 @@
+import{j as e}from"./index-zdx7AZpF.js";import{I as s}from"./inbox-D_ftLjN4.js";function m({message:t="No data available"}){return e.jsxs("div",{className:"flex flex-col items-center justify-center py-16 gap-3 text-gray-500",children:[e.jsx(s,{className:"w-12 h-12"}),e.jsx("p",{className:"text-sm",children:t})]})}export{m as E};
