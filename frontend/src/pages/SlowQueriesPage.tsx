@@ -1,15 +1,16 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { api } from '../api/api';
+import type { InstanceListRow, SlowQueryRow } from '../api/types';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { motion } from 'framer-motion';
 import { Clock, ChevronDown, ChevronRight } from 'lucide-react';
 import { clsx } from 'clsx';
 
 export default function SlowQueriesPage() {
-  const [data, setData] = useState<any[]>([]);
+  const [data, setData] = useState<SlowQueryRow[]>([]);
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(true);
-  const [instances, setInstances] = useState<any[]>([]);
+  const [instances, setInstances] = useState<InstanceListRow[]>([]);
   const [selectedInstance, setSelectedInstance] = useState<number | undefined>();
   const [hours, setHours] = useState(24);
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
@@ -36,15 +37,15 @@ export default function SlowQueriesPage() {
     });
   };
 
-  const databases = [...new Set(data.map(r => r.database_name).filter(Boolean))].sort();
-  const apps = [...new Set(data.map(r => r.client_app_name).filter(Boolean))].sort();
+  const databases = [...new Set(data.map((row) => row.database_name).filter((value): value is string => Boolean(value)))].sort();
+  const apps = [...new Set(data.map((row) => row.client_app_name).filter((value): value is string => Boolean(value)))].sort();
 
   const filtered = data.filter(r =>
     (!dbFilter || r.database_name === dbFilter) &&
     (!appFilter || r.client_app_name === appFilter)
   );
 
-  const fmtMs = (ms: number | null) => {
+  const fmtMs = (ms: number | null | undefined) => {
     if (ms == null) return '-';
     if (ms < 1000) return `${ms}ms`;
     if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
@@ -73,8 +74,8 @@ export default function SlowQueriesPage() {
           <select value={selectedInstance ?? ''} onChange={e => setSelectedInstance(e.target.value ? Number(e.target.value) : undefined)}
             className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none">
             <option value="">All Instances</option>
-            {instances.map((inst: any) => (
-              <option key={inst.InstanceID} value={inst.InstanceID}>{inst.InstanceDisplayName}</option>
+            {instances.map((inst) => (
+              <option key={inst.InstanceID} value={inst.InstanceID}>{inst.InstanceDisplayName || inst.Instance || inst.InstanceID}</option>
             ))}
           </select>
         </div>
@@ -125,13 +126,13 @@ export default function SlowQueriesPage() {
               </thead>
               <tbody>
                 {filtered.map((row, i) => (
-                  <>
-                    <tr key={i} onClick={() => toggleRow(i)}
+                  <Fragment key={`${row.InstanceID}-${row.DatabaseID ?? i}-${i}`}>
+                    <tr onClick={() => toggleRow(i)}
                       className="border-b border-white/5 cursor-pointer hover:bg-slate-800/50 transition-colors">
                       <td className="px-4 py-3 text-gray-500">
                         {expandedRows.has(i) ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                       </td>
-                      <td className="px-4 py-3 text-gray-300">{row.InstanceDisplayName}</td>
+                      <td className="px-4 py-3 text-gray-300">{row.InstanceDisplayName || row.InstanceID}</td>
                       <td className="px-4 py-3 text-gray-300">{row.database_name || '-'}</td>
                       <td className="px-4 py-3 text-gray-300 font-mono text-xs">{row.object_name || '-'}</td>
                       <td className="px-4 py-3">
@@ -145,19 +146,19 @@ export default function SlowQueriesPage() {
                       <td className="px-4 py-3 text-gray-300">{row.writes?.toLocaleString() || '-'}</td>
                       <td className="px-4 py-3 text-gray-400 text-xs">{row.client_hostname || '-'}</td>
                       <td className="px-4 py-3 text-gray-400 text-xs">{row.client_app_name || '-'}</td>
-                      <td className="px-4 py-3 text-gray-400 text-xs">{row.Timestamp ? new Date(row.Timestamp).toLocaleString() : '-'}</td>
+                      <td className="px-4 py-3 text-gray-400 text-xs">{row.SnapshotDate ? new Date(row.SnapshotDate).toLocaleString() : '-'}</td>
                     </tr>
                     {expandedRows.has(i) && (
-                      <tr key={`${i}-detail`} className="border-b border-white/5 bg-white/[0.02]">
+                      <tr className="border-b border-white/5 bg-white/[0.02]">
                         <td colSpan={11} className="px-6 py-4">
                           <div className="text-xs text-gray-500 mb-1">Query Text</div>
                           <pre className="text-xs text-gray-300 whitespace-pre-wrap font-mono bg-black/20 rounded-lg p-3 max-h-48 overflow-y-auto">
-                            {row.text || 'N/A'}
+                            {row.query_text || 'N/A'}
                           </pre>
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 ))}
               </tbody>
             </table>

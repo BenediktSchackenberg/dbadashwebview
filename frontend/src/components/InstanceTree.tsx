@@ -6,20 +6,8 @@ import {
   FileSpreadsheet, TrendingDown, Activity, Monitor
 } from 'lucide-react';
 import { api } from '../api/api';
-
-interface TreeDatabase {
-  databaseId: number;
-  name: string;
-  isSystem: boolean;
-}
-
-interface TreeInstance {
-  instanceId: number;
-  instanceName: string;
-  productVersion: string | null;
-  productMajorVersion: number | null;
-  databases: TreeDatabase[];
-}
+import { getAuthSession } from '../auth/session';
+import type { TreeInstanceNode } from '../api/types';
 
 const versionMap: Record<number, string> = {
   17: 'SQL Server 2025', 16: 'SQL Server 2022', 15: 'SQL Server 2019',
@@ -48,7 +36,7 @@ const instanceCategories = [
 ];
 
 export default function InstanceTree({ onLogout }: { onLogout: () => void }) {
-  const [instances, setInstances] = useState<TreeInstance[]>([]);
+  const [instances, setInstances] = useState<TreeInstanceNode[]>([]);
   const [expandedVersions, setExpandedVersions] = useState<Set<string>>(() => {
     try {
       const stored = sessionStorage.getItem('tree-versions');
@@ -65,9 +53,10 @@ export default function InstanceTree({ onLogout }: { onLogout: () => void }) {
   const [expandedSysDb, setExpandedSysDb] = useState<Set<number>>(new Set());
   const [search, setSearch] = useState('');
   const location = useLocation();
+  const session = getAuthSession();
 
   useEffect(() => {
-    api.tree().then((data: any) => {
+    api.tree().then((data) => {
       setInstances(Array.isArray(data) ? data : []);
     }).catch(() => {});
   }, []);
@@ -88,7 +77,7 @@ export default function InstanceTree({ onLogout }: { onLogout: () => void }) {
 
   // Group by SQL Server version
   const versionGroups = useMemo(() => {
-    const groups = new Map<string, TreeInstance[]>();
+    const groups = new Map<string, TreeInstanceNode[]>();
     filtered.forEach(inst => {
       const major = inst.productMajorVersion || 0;
       const label = versionMap[major] || `SQL Server (v${major || '?'})`;
@@ -312,7 +301,10 @@ export default function InstanceTree({ onLogout }: { onLogout: () => void }) {
           <div className="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center">
             <User className="w-3.5 h-3.5 text-blue-400" />
           </div>
-          <span className="text-xs text-gray-300">admin</span>
+          <div className="min-w-0">
+            <p className="truncate text-xs text-gray-300">{session?.displayName || session?.username || 'Signed in'}</p>
+            <p className="text-[10px] text-gray-500">{session?.role || 'Viewer'}</p>
+          </div>
         </div>
         <button onClick={onLogout}
           className="flex items-center gap-2.5 px-2 py-1.5 rounded text-xs text-gray-400 hover:text-red-400 hover:bg-red-400/5 transition-all w-full">

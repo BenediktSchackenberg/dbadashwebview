@@ -1,10 +1,10 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/api';
+import type { DashboardPerformanceRow, ThresholdMap } from '../api/types';
 import { RefreshCw, ArrowUpDown, ArrowUp, ArrowDown, Clock, Loader2 } from 'lucide-react';
 
 type SortDir = 'asc' | 'desc';
-type Thresholds = Record<string, { warning: number; critical: number }>;
 
 const columns = [
   { key: 'instanceDisplayName', label: 'Instance', align: 'left' as const },
@@ -20,28 +20,30 @@ const columns = [
   { key: 'writeLatency', label: 'Write Latency (ms)', align: 'right' as const },
   { key: 'mBsec', label: 'MB/sec', align: 'right' as const },
   { key: 'iOPs', label: 'IOPs', align: 'right' as const },
-];
+] as const;
 
-function getCellClass(key: string, value: number, thresholds: Thresholds): string {
-  const t = thresholds[key];
-  if (!t) return '';
-  if (value >= t.critical) return 'bg-red-900/50 text-red-300';
-  if (value >= t.warning) return 'bg-amber-900/50 text-amber-300';
+type DashboardPerformanceColumnKey = typeof columns[number]['key'];
+
+function getCellClass(key: string, value: number, thresholds: ThresholdMap): string {
+  const threshold = thresholds[key];
+  if (!threshold) return '';
+  if (value >= threshold.critical) return 'bg-red-900/50 text-red-300';
+  if (value >= threshold.warning) return 'bg-amber-900/50 text-amber-300';
   return 'bg-green-900/50 text-green-300';
 }
 
-function formatNum(v: any): string {
-  if (v == null) return '0';
-  const n = Number(v);
-  if (Number.isInteger(n)) return n.toLocaleString();
-  return n.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 });
+function formatNum(value: unknown): string {
+  if (value == null) return '0';
+  const numericValue = Number(value);
+  if (Number.isInteger(numericValue)) return numericValue.toLocaleString();
+  return numericValue.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 });
 }
 
 export default function DashboardPerfSummary() {
-  const [data, setData] = useState<any[]>([]);
-  const [thresholds, setThresholds] = useState<Thresholds>({});
+  const [data, setData] = useState<DashboardPerformanceRow[]>([]);
+  const [thresholds, setThresholds] = useState<ThresholdMap>({});
   const [loading, setLoading] = useState(true);
-  const [sortKey, setSortKey] = useState<string>('maxCPU');
+  const [sortKey, setSortKey] = useState<DashboardPerformanceColumnKey>('maxCPU');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [countdown, setCountdown] = useState(30);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
@@ -49,31 +51,33 @@ export default function DashboardPerfSummary() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [perfRes, thRes] = await Promise.all([
+      const [perfRes, thresholdRes] = await Promise.all([
         api.dashboardPerformanceSummary().catch(() => ({ data: [], note: '' })),
         api.getThresholds().catch(() => ({ thresholds: {} })),
       ]);
-      const incoming = perfRes.data || [];
-      // Diff-merge: only update rows that actually changed
-      setData(prev => {
-        if (prev.length === 0) return incoming;
-        const prevMap = new Map(prev.map(r => [r.instanceID, r]));
+      const incoming = Array.isArray(perfRes.data) ? perfRes.data : [];
+      setData((previous) => {
+        if (previous.length === 0) return incoming;
+        const previousMap = new Map(previous.map((row) => [row.instanceID, row]));
         let changed = false;
-        const merged = incoming.map(row => {
-          const old = prevMap.get(row.instanceID);
-          if (!old) { changed = true; return row; }
-          // Compare all numeric fields — if identical, keep old reference (skip re-render)
-          const keys = Object.keys(row);
-          const same = keys.every(k => row[k] === old[k]);
-          if (same) return old;
+        const merged = incoming.map((row) => {
+          const existing = previousMap.get(row.instanceID);
+          if (!existing) {
+            changed = true;
+            return row;
+          }
+
+          const keys = Object.keys(row) as (keyof DashboardPerformanceRow)[];
+          const same = keys.every((key) => row[key] === existing[key]);
+          if (same) return existing;
           changed = true;
           return row;
         });
-        // Also detect removed rows
-        if (merged.length !== prev.length) changed = true;
-        return changed ? merged : prev;
+
+        if (merged.length !== previous.length) changed = true;
+        return changed ? merged : previous;
       });
-      setThresholds(thRes.thresholds || {});
+      setThresholds(thresholdRes.thresholds || {});
       setLastRefresh(new Date());
     } finally {
       setLoading(false);
@@ -85,31 +89,39 @@ export default function DashboardPerfSummary() {
 
   useEffect(() => {
     timerRef.current = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) { fetchData(); return 30; }
-        return prev - 1;
+      setCountdown((previous) => {
+        if (previous <= 1) {
+          fetchData();
+          return 30;
+        }
+        return previous - 1;
       });
     }, 1000);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [fetchData]);
 
-  const handleSort = (key: string) => {
-    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-    else { setSortKey(key); setSortDir(key === 'instanceDisplayName' ? 'asc' : 'desc'); }
+  const handleSort = (key: DashboardPerformanceColumnKey) => {
+    if (sortKey === key) setSortDir((direction) => direction === 'asc' ? 'desc' : 'asc');
+    else {
+      setSortKey(key);
+      setSortDir(key === 'instanceDisplayName' ? 'asc' : 'desc');
+    }
   };
 
-  const sorted = [...data].sort((a, b) => {
-    const av = a[sortKey], bv = b[sortKey];
+  const sorted = [...data].sort((left, right) => {
+    const leftValue = left[sortKey];
+    const rightValue = right[sortKey];
     if (sortKey === 'instanceDisplayName') {
-      const cmp = String(av || '').localeCompare(String(bv || ''));
-      return sortDir === 'asc' ? cmp : -cmp;
+      const comparison = String(leftValue || '').localeCompare(String(rightValue || ''));
+      return sortDir === 'asc' ? comparison : -comparison;
     }
-    const cmp = (Number(av) || 0) - (Number(bv) || 0);
-    return sortDir === 'asc' ? cmp : -cmp;
+
+    const comparison = (Number(leftValue) || 0) - (Number(rightValue) || 0);
+    return sortDir === 'asc' ? comparison : -comparison;
   });
 
-  const SortIcon = ({ col }: { col: string }) => {
-    if (sortKey !== col) return <ArrowUpDown className="w-3 h-3 opacity-40" />;
+  const SortIcon = ({ column }: { column: DashboardPerformanceColumnKey }) => {
+    if (sortKey !== column) return <ArrowUpDown className="w-3 h-3 opacity-40" />;
     return sortDir === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />;
   };
 
@@ -141,38 +153,37 @@ export default function DashboardPerfSummary() {
           <table className="w-full text-sm font-[Inter]">
             <thead>
               <tr className="bg-slate-800/80 sticky top-0 z-10">
-                {columns.map(col => (
+                {columns.map((column) => (
                   <th
-                    key={col.key}
-                    onClick={() => handleSort(col.key)}
-                    className={`py-2 px-3 text-xs font-semibold uppercase tracking-wider cursor-pointer select-none whitespace-nowrap transition-colors hover:text-white ${col.align === 'right' ? 'text-right' : 'text-left'} text-gray-400`}
+                    key={column.key}
+                    onClick={() => handleSort(column.key)}
+                    className={`py-2 px-3 text-xs font-semibold uppercase tracking-wider cursor-pointer select-none whitespace-nowrap transition-colors hover:text-white ${column.align === 'right' ? 'text-right' : 'text-left'} text-gray-400`}
                   >
                     <span className="inline-flex items-center gap-1">
-                      {col.label}
-                      <SortIcon col={col.key} />
+                      {column.label}
+                      <SortIcon column={column.key} />
                     </span>
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {sorted.map((row, i) => (
-                <tr key={row.instanceID || i} className="hover:bg-white/5 transition-colors">
-                  {columns.map(col => {
-                    if (col.key === 'instanceDisplayName') {
+              {sorted.map((row) => (
+                <tr key={row.instanceID} className="hover:bg-white/5 transition-colors">
+                  {columns.map((column) => {
+                    if (column.key === 'instanceDisplayName') {
                       return (
-                        <td key={col.key} className="py-2 px-3 text-left whitespace-nowrap">
+                        <td key={column.key} className="py-2 px-3 text-left whitespace-nowrap">
                           <Link to={`/instances/${row.instanceID}`} className="text-blue-400 hover:text-blue-300 hover:underline">
                             {row.instanceDisplayName || 'Unknown'}
                           </Link>
                         </td>
                       );
                     }
-                    const val = Number(row[col.key]) || 0;
-                    const cellClass = getCellClass(col.key, val, thresholds);
+                    const value = Number(row[column.key]) || 0;
                     return (
-                      <td key={col.key} className={`py-2 px-3 text-right font-mono whitespace-nowrap ${cellClass}`}>
-                        {formatNum(val)}
+                      <td key={column.key} className={`py-2 px-3 text-right font-mono whitespace-nowrap ${getCellClass(column.key, value, thresholds)}`}>
+                        {formatNum(value)}
                       </td>
                     );
                   })}

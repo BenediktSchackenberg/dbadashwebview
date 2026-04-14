@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api/api';
+import type { InstanceListRow, TempDbFileRow } from '../api/types';
 import { Thermometer } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 export default function TempDBPage() {
-  const [data, setData] = useState<any[]>([]);
-  const [instances, setInstances] = useState<any[]>([]);
+  const [data, setData] = useState<TempDbFileRow[]>([]);
+  const [instances, setInstances] = useState<InstanceListRow[]>([]);
   const [instanceId, setInstanceId] = useState<number | undefined>();
   const [loading, setLoading] = useState(false);
   const [note, setNote] = useState('');
@@ -25,7 +26,7 @@ export default function TempDBPage() {
       <h1 className="text-2xl font-bold text-white flex items-center gap-3"><Thermometer className="w-7 h-7 text-orange-400" /> TempDB</h1>
       <select value={instanceId || ''} onChange={e => setInstanceId(Number(e.target.value) || undefined)} className={inputCls}>
         <option value="">Select Instance...</option>
-        {instances.map((inst: any) => <option key={inst.instanceID} value={inst.instanceID}>{inst.instanceDisplayName || inst.instance}</option>)}
+        {instances.map((inst) => <option key={inst.InstanceID} value={inst.InstanceID}>{inst.InstanceDisplayName || inst.Instance || inst.InstanceID}</option>)}
       </select>
       {note && <p className="text-xs text-amber-400/70">{note}</p>}
       {!instanceId ? <p className="text-gray-500 text-sm">Select an instance to view TempDB info.</p> :

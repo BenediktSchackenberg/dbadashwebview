@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api/api';
+import type { InstanceListRow, QueryStoreRow } from '../api/types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Search as SearchIcon } from 'lucide-react';
 
 export default function QueryStorePage() {
-  const [data, setData] = useState<any[]>([]);
-  const [instances, setInstances] = useState<any[]>([]);
+  const [data, setData] = useState<QueryStoreRow[]>([]);
+  const [instances, setInstances] = useState<InstanceListRow[]>([]);
   const [instanceId, setInstanceId] = useState<number | undefined>();
   const [loading, setLoading] = useState(false);
   const [note, setNote] = useState('');
@@ -28,9 +29,9 @@ export default function QueryStorePage() {
       <div className="flex gap-3 items-center flex-wrap">
         <select value={instanceId || ''} onChange={e => setInstanceId(Number(e.target.value) || undefined)} className={inputCls}>
           <option value="">Select Instance...</option>
-          {instances.map((inst: any) => <option key={inst.instanceID} value={inst.instanceID}>{inst.instanceDisplayName || inst.instance}</option>)}
+          {instances.map((inst) => <option key={inst.InstanceID} value={inst.InstanceID}>{inst.InstanceDisplayName || inst.Instance || inst.InstanceID}</option>)}
         </select>
-        <select value={sortBy} onChange={e => setSortBy(e.target.value as any)} className={inputCls}>
+        <select value={sortBy} onChange={e => setSortBy(e.target.value as typeof sortBy)} className={inputCls}>
           <option value="avgCpuTime">Sort by CPU</option>
           <option value="avgDuration">Sort by Duration</option>
           <option value="countExecutions">Sort by Exec Count</option>
@@ -58,7 +59,7 @@ export default function QueryStorePage() {
               </tr></thead>
               <tbody>{sorted.map((d, i) => (
                 <tr key={i} className="border-b border-white/5 hover:bg-slate-800/50">
-                  <td className="py-2 text-white max-w-xs truncate" title={d.querySqlText}>{d.objectName || d.querySqlText?.substring(0, 80)}</td>
+                  <td className="py-2 text-white max-w-xs truncate" title={d.querySqlText || undefined}>{d.objectName || d.querySqlText?.substring(0, 80)}</td>
                   <td className="py-2 text-gray-300">{d.countExecutions?.toLocaleString()}</td>
                   <td className="py-2 text-gray-300">{d.avgCpuTime?.toFixed(1)}</td>
                   <td className="py-2 text-gray-300">{d.avgDuration?.toFixed(1)}</td>

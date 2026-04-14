@@ -1,18 +1,28 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { api } from '../api/api';
+import type {
+  InstanceListRow,
+  MonitoringConfigurationChangeRow,
+  MonitoringConfigurationRow,
+} from '../api/types';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { motion } from 'framer-motion';
 import { Settings } from 'lucide-react';
 
+function valueToText(value: string | number | boolean | null | undefined): string {
+  if (value === null || value === undefined || value === '') return '-';
+  return String(value);
+}
+
 export default function ConfigurationPage() {
   const { id: routeId } = useParams();
-  const [config, setConfig] = useState<any[]>([]);
-  const [changes, setChanges] = useState<any[]>([]);
+  const [config, setConfig] = useState<MonitoringConfigurationRow[]>([]);
+  const [changes, setChanges] = useState<MonitoringConfigurationChangeRow[]>([]);
   const [configNote, setConfigNote] = useState('');
   const [changesNote, setChangesNote] = useState('');
   const [loading, setLoading] = useState(true);
-  const [instances, setInstances] = useState<any[]>([]);
+  const [instances, setInstances] = useState<InstanceListRow[]>([]);
   const [selectedInstance, setSelectedInstance] = useState<number | undefined>(routeId ? Number(routeId) : undefined);
   const [tab, setTab] = useState<'current' | 'changes'>('current');
   const [search, setSearch] = useState('');
@@ -38,7 +48,7 @@ export default function ConfigurationPage() {
   const filtered = useMemo(() => {
     if (!search) return config;
     const q = search.toLowerCase();
-    return config.filter(c => (c.name || '').toLowerCase().includes(q));
+    return config.filter((row) => (row.name || '').toLowerCase().includes(q));
   }, [config, search]);
 
   if (loading) return <LoadingSpinner />;
@@ -59,7 +69,7 @@ export default function ConfigurationPage() {
           {!routeId && (
             <select value={selectedInstance ?? ''} onChange={e => setSelectedInstance(e.target.value ? Number(e.target.value) : undefined)} className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-gray-300">
               <option value="">Select Instance</option>
-              {instances.map((inst: any) => <option key={inst.InstanceID} value={inst.InstanceID}>{inst.InstanceDisplayName || inst.InstanceID}</option>)}
+              {instances.map((inst) => <option key={inst.InstanceID} value={inst.InstanceID}>{inst.InstanceDisplayName || inst.Instance || inst.InstanceID}</option>)}
             </select>
           )}
         </div>
@@ -102,17 +112,17 @@ export default function ConfigurationPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.map((c, i) => {
-                      const mismatch = c.value !== undefined && c.value_in_use !== undefined && c.value !== c.value_in_use;
+                    {filtered.map((row, i) => {
+                      const mismatch = row.value !== undefined && row.value_in_use !== undefined && row.value !== row.value_in_use;
                       return (
                         <tr key={i} className={`border-b border-white/5 hover:bg-slate-800/50 ${mismatch ? 'bg-yellow-500/5' : ''}`}>
-                          <td className="px-3 py-2 text-white font-medium">{c.name}</td>
-                          <td className={`px-3 py-2 ${mismatch ? 'text-yellow-400' : 'text-gray-300'}`}>{c.value}</td>
-                          <td className={`px-3 py-2 ${mismatch ? 'text-yellow-400' : 'text-gray-300'}`}>{c.value_in_use}</td>
-                          <td className="px-3 py-2 text-gray-500">{c.minimum}</td>
-                          <td className="px-3 py-2 text-gray-500">{c.maximum}</td>
-                          <td className="px-3 py-2 text-gray-400">{c.is_dynamic ? 'Yes' : 'No'}</td>
-                          <td className="px-3 py-2 text-gray-400">{c.is_advanced ? 'Yes' : 'No'}</td>
+                          <td className="px-3 py-2 text-white font-medium">{row.name}</td>
+                          <td className={`px-3 py-2 ${mismatch ? 'text-yellow-400' : 'text-gray-300'}`}>{valueToText(row.value)}</td>
+                          <td className={`px-3 py-2 ${mismatch ? 'text-yellow-400' : 'text-gray-300'}`}>{valueToText(row.value_in_use)}</td>
+                          <td className="px-3 py-2 text-gray-500">{valueToText(row.minimum)}</td>
+                          <td className="px-3 py-2 text-gray-500">{valueToText(row.maximum)}</td>
+                          <td className="px-3 py-2 text-gray-400">{row.is_dynamic ? 'Yes' : 'No'}</td>
+                          <td className="px-3 py-2 text-gray-400">{row.is_advanced ? 'Yes' : 'No'}</td>
                         </tr>
                       );
                     })}
@@ -139,12 +149,12 @@ export default function ConfigurationPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {changes.map((c, i) => (
+                    {changes.map((row, i) => (
                       <tr key={i} className="border-b border-white/5 hover:bg-slate-800/50">
-                        <td className="px-3 py-2 text-white font-medium">{c.name}</td>
-                        <td className="px-3 py-2 text-red-400">{c.old_value}</td>
-                        <td className="px-3 py-2 text-green-400">{c.new_value}</td>
-                        <td className="px-3 py-2 text-gray-400">{c.ChangeDate ? new Date(c.ChangeDate).toLocaleString() : '-'}</td>
+                        <td className="px-3 py-2 text-white font-medium">{row.name}</td>
+                        <td className="px-3 py-2 text-red-400">{valueToText(row.old_value)}</td>
+                        <td className="px-3 py-2 text-green-400">{valueToText(row.new_value)}</td>
+                        <td className="px-3 py-2 text-gray-400">{row.ChangeDate ? new Date(row.ChangeDate).toLocaleString() : '-'}</td>
                       </tr>
                     ))}
                     {changes.length === 0 && <tr><td colSpan={4} className="px-3 py-8 text-center text-gray-500">No configuration changes detected</td></tr>}

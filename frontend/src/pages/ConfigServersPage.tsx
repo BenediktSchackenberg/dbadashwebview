@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api/api';
+import type { InstanceListRow } from '../api/types';
 import { useRefresh } from '../App';
 import LoadingSpinner from '../components/LoadingSpinner';
 import StatusBadge from '../components/StatusBadge';
@@ -7,7 +8,7 @@ import { Plus, Edit2, Trash2, X } from 'lucide-react';
 
 export default function ConfigServersPage() {
   const { lastRefresh } = useRefresh();
-  const [instances, setInstances] = useState<any[]>([]);
+  const [instances, setInstances] = useState<InstanceListRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [newServer, setNewServer] = useState({ name: '', authType: 'Windows' });

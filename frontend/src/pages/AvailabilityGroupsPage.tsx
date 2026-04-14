@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/api';
+import type {
+  HadrOverviewGroupRow,
+  InstanceHadrDatabaseRow,
+  InstanceHadrGroupRow,
+  InstanceHadrReplicaRow,
+  InstanceHadrResponse,
+} from '../api/types';
 import LoadingSpinner from '../components/LoadingSpinner';
 import EmptyState from '../components/EmptyState';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -11,6 +18,10 @@ import {
 } from 'lucide-react';
 
 /* ── helpers ── */
+
+function asBoolean(value: boolean | number | null | undefined): boolean {
+  return value === true || value === 1;
+}
 
 function formatBytes(kb: number | null | undefined): string {
   if (kb == null) return '';
@@ -27,7 +38,7 @@ function formatLag(seconds: number | null | undefined): { text: string; color: s
   return { text: s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`, color: 'text-red-400' };
 }
 
-function syncStateBadge(state: string | null): string {
+function syncStateBadge(state: string | null | undefined): string {
   if (!state) return 'bg-gray-500/20 text-gray-400';
   const s = state.toUpperCase();
   if (s === 'SYNCHRONIZED') return 'bg-green-500/20 text-green-300';
@@ -37,7 +48,7 @@ function syncStateBadge(state: string | null): string {
   return 'bg-gray-500/20 text-gray-400';
 }
 
-function healthDotColor(h: string | null): string {
+function healthDotColor(h: string | null | undefined): string {
   if (!h) return 'bg-gray-400';
   const s = h.toUpperCase();
   if (s === 'HEALTHY') return 'bg-green-400';
@@ -45,7 +56,7 @@ function healthDotColor(h: string | null): string {
   return 'bg-red-400';
 }
 
-function healthBg(h: string | null): string {
+function healthBg(h: string | null | undefined): string {
   if (!h) return 'bg-gray-500/10 text-gray-400';
   const s = h.toUpperCase();
   if (s === 'HEALTHY') return 'bg-emerald-500/10 text-emerald-400';
@@ -65,7 +76,7 @@ function cpuTextColor(cpu: number): string {
   return 'text-red-400';
 }
 
-function extractPort(url: string | null): string {
+function extractPort(url: string | null | undefined): string {
   if (!url) return '';
   const m = url.match(/:(\d+)$/);
   return m ? m[1] : '';
@@ -127,7 +138,11 @@ class UnionFind {
 
 /* ── Build clusters from raw API data ── */
 
-function buildClusters(rawAgs: any[], rawReplicas: any[], rawDatabases: any[]): AGCluster[] {
+function buildClusters(
+  rawAgs: HadrOverviewGroupRow[],
+  rawReplicas: InstanceHadrReplicaRow[],
+  rawDatabases: InstanceHadrDatabaseRow[],
+): AGCluster[] {
   // Map group_id → set of instanceIds
   const groupInstances = new Map<string, Set<number>>();
   for (const ag of rawAgs) {
@@ -136,7 +151,7 @@ function buildClusters(rawAgs: any[], rawReplicas: any[], rawDatabases: any[]): 
     groupInstances.get(gid)!.add(ag.InstanceID);
   }
 
-  // Union-find to cluster instances that share any AG
+  // Union-find to cluster instances that share an AG
   const uf = new UnionFind();
   for (const instanceIds of groupInstances.values()) {
     const arr = Array.from(instanceIds);
@@ -149,7 +164,7 @@ function buildClusters(rawAgs: any[], rawReplicas: any[], rawDatabases: any[]): 
     if (!instanceGroups.has(ag.InstanceID)) instanceGroups.set(ag.InstanceID, new Set());
     instanceGroups.get(ag.InstanceID)!.add(ag.group_id);
   }
-  // Instances sharing any group are already unioned above. Now do transitive:
+  // Instances sharing a group are already unioned above. Now do transitive:
   // If instance A has group G1, and instance B has group G1, they're unioned.
   // Already done. Good.
 
@@ -162,24 +177,24 @@ function buildClusters(rawAgs: any[], rawReplicas: any[], rawDatabases: any[]): 
   }
 
   // Build replica lookup: replica_id → replica info
-  const replicaMap = new Map<string, any>();
+  const replicaMap = new Map<string, InstanceHadrReplicaRow>();
   for (const r of rawReplicas) {
     replicaMap.set(r.replica_id, r);
   }
 
   // Build instance info lookup from rawAgs (deduplicated)
-  const instanceInfoMap = new Map<number, any>();
+  const instanceInfoMap = new Map<number, HadrOverviewGroupRow>();
   for (const ag of rawAgs) {
     if (!instanceInfoMap.has(ag.InstanceID)) {
       instanceInfoMap.set(ag.InstanceID, ag);
     }
   }
 
-  // Determine which instances are primary for any AG
+  // Determine which instances are primary for at least one AG
   // A database with is_primary_replica=true: find its replica_id → replica_server_name → match to instance
   const primaryForGroup = new Map<string, Set<number>>(); // group_id → set of primary instanceIds
   for (const db of rawDatabases) {
-    if (db.is_primary_replica) {
+    if (asBoolean(db.is_primary_replica)) {
       const gid = db.group_id;
       const replica = replicaMap.get(db.replica_id);
       if (replica) {
@@ -244,20 +259,20 @@ function buildClusters(rawAgs: any[], rawReplicas: any[], rawDatabases: any[]): 
 
     // Build AG groups
     const ags: AGGroup[] = Array.from(clusterGroupIds).map(gid => {
-      const agInfo = rawAgs.find((a: any) => a.group_id === gid)!;
+      const agInfo = rawAgs.find((a) => a.group_id === gid)!;
       // Get unique databases for this group (deduplicate by DatabaseID, prefer primary)
       const dbMap = new Map<number, AGDatabase>();
       for (const db of rawDatabases) {
         if (db.group_id !== gid) continue;
         const existing = dbMap.get(db.DatabaseID);
-        if (!existing || db.is_primary_replica) {
+        if (!existing || asBoolean(db.is_primary_replica)) {
           dbMap.set(db.DatabaseID, {
             databaseId: db.DatabaseID,
             databaseName: db.DatabaseName || `DB ${db.DatabaseID}`,
             syncState: db.synchronization_state_desc || '',
             health: db.synchronization_health_desc || '',
-            isSuspended: !!db.is_suspended,
-            lagSeconds: db.is_primary_replica ? null : (db.secondary_lag_seconds ?? null),
+            isSuspended: asBoolean(db.is_suspended),
+            lagSeconds: asBoolean(db.is_primary_replica) ? null : (db.secondary_lag_seconds ?? null),
             logSendQueue: db.log_send_queue_size ?? null,
             redoQueue: db.redo_queue_size ?? null,
             logSendRate: db.log_send_rate ?? null,
@@ -282,7 +297,7 @@ function buildClusters(rawAgs: any[], rawReplicas: any[], rawDatabases: any[]): 
 /* ── Per-Instance View (unchanged) ── */
 
 function InstanceHadrView({ instanceId }: { instanceId: number }) {
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<InstanceHadrResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [instanceName, setInstanceName] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -333,7 +348,7 @@ function InstanceHadrView({ instanceId }: { instanceId: number }) {
   };
 
   const primaryReplicaIds = new Set(
-    databases.filter((d: any) => d.is_primary_replica).map((d: any) => d.replica_id)
+    databases.filter((database) => asBoolean(database.is_primary_replica)).map((database) => database.replica_id)
   );
 
   return (
@@ -343,14 +358,14 @@ function InstanceHadrView({ instanceId }: { instanceId: number }) {
         <h1 className="text-2xl font-bold text-white">HA/DR — {instanceName}</h1>
       </div>
 
-      {ags.map((ag: any) => {
+      {ags.map((ag: InstanceHadrGroupRow) => {
         const gid = ag.group_id;
-        const agReplicas = replicas.filter((r: any) => r.group_id === gid);
-        const agDbs = databases.filter((d: any) => d.group_id === gid);
+        const agReplicas = replicas.filter((replica) => replica.group_id === gid);
+        const agDbs = databases.filter((database) => database.group_id === gid);
         const isExpanded = expanded.has(gid);
-        const uniqueDbCount = new Set(agDbs.map((d: any) => d.DatabaseID)).size;
+        const uniqueDbCount = new Set(agDbs.map((database) => database.DatabaseID)).size;
 
-        const healths = agDbs.map((d: any) => d.synchronization_health_desc?.toUpperCase());
+        const healths = agDbs.map((database) => database.synchronization_health_desc?.toUpperCase());
         const overallHealth = healths.includes('NOT_HEALTHY') ? 'NOT_HEALTHY'
           : healths.includes('PARTIALLY_HEALTHY') ? 'PARTIALLY_HEALTHY'
           : healths.length > 0 ? 'HEALTHY' : 'UNKNOWN';
@@ -393,11 +408,11 @@ function InstanceHadrView({ instanceId }: { instanceId: number }) {
                       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 text-sm">
                         {[
                           ['Backup Preference', ag.automated_backup_preference_desc],
-                          ['DB Failover', ag.db_failover ? 'Enabled' : 'Disabled'],
-                          ['Basic AG', ag.basic_features ? 'Yes' : 'No'],
-                          ['DTC Support', ag.dtc_support ? 'Yes' : 'No'],
-                          ['Distributed', ag.is_distributed ? 'Yes' : 'No'],
-                          ['Contained', ag.is_contained ? 'Yes' : 'No'],
+                          ['DB Failover', asBoolean(ag.db_failover) ? 'Enabled' : 'Disabled'],
+                          ['Basic AG', asBoolean(ag.basic_features) ? 'Yes' : 'No'],
+                          ['DTC Support', asBoolean(ag.dtc_support) ? 'Yes' : 'No'],
+                          ['Distributed', asBoolean(ag.is_distributed) ? 'Yes' : 'No'],
+                          ['Contained', asBoolean(ag.is_contained) ? 'Yes' : 'No'],
                           ['Health Check Timeout', ag.health_check_timeout != null ? `${ag.health_check_timeout}ms` : ''],
                           ['Failure Condition Level', ag.failure_condition_level ?? ''],
                         ].map(([label, value]) => (
@@ -414,7 +429,7 @@ function InstanceHadrView({ instanceId }: { instanceId: number }) {
                         <Server className="w-4 h-4 text-blue-400" /> Replica Topology
                       </h3>
                       <div className="flex flex-wrap items-center gap-2">
-                        {agReplicas.map((r: any, i: number) => {
+                        {agReplicas.map((r: InstanceHadrReplicaRow, i: number) => {
                           const isPrimary = primaryReplicaIds.has(r.replica_id);
                           return (
                             <div key={r.replica_id} className="flex items-center gap-2">
@@ -466,23 +481,23 @@ function InstanceHadrView({ instanceId }: { instanceId: number }) {
                             </thead>
                             <tbody className="divide-y divide-white/5">
                               {[...agDbs]
-                                .sort((a: any, b: any) => {
+                                .sort((a, b) => {
                                   const nameComp = (a.DatabaseName || '').localeCompare(b.DatabaseName || '');
                                   if (nameComp !== 0) return nameComp;
-                                  return (b.is_primary_replica ? 1 : 0) - (a.is_primary_replica ? 1 : 0);
+                                  return Number(asBoolean(b.is_primary_replica)) - Number(asBoolean(a.is_primary_replica));
                                 })
-                                .map((d: any, i: number) => {
-                                  const replica = agReplicas.find((r: any) => r.replica_id === d.replica_id);
-                                  const lag = formatLag(d.is_primary_replica ? null : d.secondary_lag_seconds);
+                                .map((d: InstanceHadrDatabaseRow, i: number) => {
+                                  const replica = agReplicas.find((r) => r.replica_id === d.replica_id);
+                                  const lag = formatLag(asBoolean(d.is_primary_replica) ? null : d.secondary_lag_seconds);
                                   return (
                                     <tr key={`${d.DatabaseID}-${d.replica_id}-${i}`} className="hover:bg-slate-800/50">
                                       <td className="px-3 py-2 text-white font-medium">{d.DatabaseName || ''}</td>
                                       <td className="px-3 py-2 text-gray-300">{replica?.replica_server_name || ''}</td>
                                       <td className="px-3 py-2">
                                         <span className={clsx('text-xs rounded-full px-2 py-0.5 font-medium',
-                                          d.is_primary_replica ? 'bg-blue-500/10 text-blue-400' : 'bg-gray-500/10 text-gray-400'
+                                          asBoolean(d.is_primary_replica) ? 'bg-blue-500/10 text-blue-400' : 'bg-gray-500/10 text-gray-400'
                                         )}>
-                                          {d.is_primary_replica ? 'PRIMARY' : 'SECONDARY'}
+                                          {asBoolean(d.is_primary_replica) ? 'PRIMARY' : 'SECONDARY'}
                                         </span>
                                       </td>
                                       <td className="px-3 py-2">
@@ -501,7 +516,7 @@ function InstanceHadrView({ instanceId }: { instanceId: number }) {
                                       <td className="px-3 py-2 text-xs text-gray-400">{d.log_send_rate != null ? `${d.log_send_rate} KB/s` : ''}</td>
                                       <td className="px-3 py-2 text-xs text-gray-400">
                                         {d.redo_rate != null ? `${d.redo_rate} KB/s` : ''}
-                                        {d.is_suspended && (
+                                        {asBoolean(d.is_suspended) && (
                                           <span className="ml-2 inline-flex items-center gap-1 text-yellow-400">
                                             <AlertTriangle className="w-3 h-3" />
                                             {d.suspend_reason_desc || 'Suspended'}
@@ -544,8 +559,8 @@ function EstateView() {
         if (d.error) { setError(d.error); return; }
         const built = buildClusters(d.ags || [], d.replicas || [], d.databases || []);
         setClusters(built);
-      } catch (e: any) {
-        setError(e.message || 'Failed to load');
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : 'Failed to load');
       } finally {
         setLoading(false);
       }
@@ -572,9 +587,9 @@ function EstateView() {
   // Search filter: match server names, AG names, or database names
   const q = search.toLowerCase().trim();
   const filteredClusters = q ? clusters.map(cluster => {
-    // Check if any server matches
+    // Check if a server matches
     const serverMatch = cluster.servers.some(s => s.instanceName.toLowerCase().includes(q));
-    // Filter AGs: keep AG if name matches or any DB matches
+    // Filter AGs: keep AG if name matches or a DB matches
     const filteredAGs = cluster.ags.map(ag => {
       const agNameMatch = ag.name.toLowerCase().includes(q);
       const matchingDbs = ag.databases.filter(d => d.databaseName.toLowerCase().includes(q));

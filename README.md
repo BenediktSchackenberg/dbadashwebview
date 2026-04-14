@@ -138,8 +138,8 @@ Purpose-built reports for IT managers:
 
 ### ⚙️ Administration
 - **Configurable Thresholds** — define warning/critical levels per metric
-- **Active Directory Authentication** — LDAP integration with group-based roles
-- **Local + AD Auth** — hardcoded admin fallback when AD is down
+- **Active Directory Authentication** - LDAP integration with Admin / Operator / Viewer role mapping
+- **Local + AD Auth** - persisted local users with hashed passwords and optional AD fallback
 - **Server Management** — view monitored instances and connection details
 - **Groups & Tags** — organize instances for filtering
 - **Users & RBAC** — Admin / Operator / Viewer roles
@@ -194,14 +194,23 @@ Purpose-built reports for IT managers:
 
 1. Download the latest release from [Releases](https://github.com/BenediktSchackenberg/dbadashwebview/releases)
 2. Extract the ZIP
-3. Edit `appsettings.json`:
+3. Configure secrets and connection settings via `appsettings.json` or environment variables:
 
 ```json
 {
   "ConnectionStrings": {
-    "DBADashDB": "Server=YOUR_SQL_SERVER;Database=DBADashDB;User Id=YOUR_USER;Password=YOUR_PASSWORD;TrustServerCertificate=true;"
+    "DBADashDB": "Server=YOUR_SQL_SERVER;Database=DBADashDB;Trusted_Connection=True;TrustServerCertificate=true;"
+  },
+  "Jwt": {
+    "Secret": "REPLACE_WITH_A_LONG_RANDOM_SECRET"
   }
 }
+```
+
+```powershell
+$env:ConnectionStrings__DBADashDB="Server=YOUR_SQL_SERVER;Database=DBADashDB;Trusted_Connection=True;TrustServerCertificate=true;"
+$env:Jwt__Secret="replace-with-a-long-random-secret"
+$env:LocalAuth__BootstrapAdminPassword="change-me-on-first-run"
 ```
 
 4. Deploy to IIS (see below) or run standalone:
@@ -210,7 +219,7 @@ dotnet DBADashWebView.dll
 # Open http://localhost:5000
 ```
 
-5. Login with `admin` / `admin` (change this in production!)
+5. On first start, seed the first local admin with `LocalAuth__BootstrapAdminPassword`, sign in, then create your permanent users under **Settings -> Users**.
 
 ---
 
@@ -257,7 +266,7 @@ Edit `C:\inetpub\dbadash\appsettings.json` — set your DBADashDB server, creden
 | Blank page, no errors | Check connection string — server reachable? Correct DB name? |
 | No instances showing | SQL user needs `db_datareader` on DBADashDB |
 | "HTTP Error 500.19" | Hosting Bundle not installed or `web.config` invalid |
-| Login fails | Default credentials: `admin` / `admin` |
+| Login fails | Verify `Jwt__Secret`, the DB connection string, and whether the first local admin has been bootstrapped |
 | CORS errors | Deploy frontend and backend together (same origin) |
 
 Enable detailed logging:
@@ -284,20 +293,25 @@ GRANT EXECUTE ON SCHEMA::dbo TO [dbadashweb];
 
 ### Active Directory Authentication
 
-Configure via **Settings → Users → LDAP tab**, or directly edit `config/ad-config.json`:
+Configure via **Settings -> Users -> Active Directory**, or directly edit `config/ad-config.json`:
 
 ```json
 {
   "Enabled": true,
-  "Server": "ldap://dc01.corp.local",
-  "BaseDN": "DC=corp,DC=local",
+  "Server": "dc01.corp.local",
+  "BaseDn": "DC=corp,DC=local",
   "BindUser": "CN=svc-dbadash,OU=Service,DC=corp,DC=local",
+  "OperatorGroup": "CN=DBA-Operators,OU=Groups,DC=corp,DC=local",
   "AdminGroup": "CN=DBA-Admins,OU=Groups,DC=corp,DC=local",
   "AllowLocalFallback": true
 }
 ```
 
-When `AllowLocalFallback` is true, the built-in `admin` account still works when AD is unreachable.
+Bind passwords are stored protected on the server. Local users are stored in `config/local-users.json` with hashed passwords.
+
+### Local Authentication Bootstrap
+
+Set `LocalAuth__BootstrapAdminPassword` once before first start to seed the first admin account. After you can sign in, create permanent users in **Settings -> Users**, then remove the bootstrap password from configuration.
 
 ### Dashboard Thresholds
 
@@ -313,7 +327,8 @@ All endpoints require JWT authentication via `Authorization: Bearer <token>` hea
 <summary><strong>Authentication</strong></summary>
 
 ```
-POST /api/auth/login              { "username": "...", "password": "..." }  →  { "token": "..." }
+GET  /api/auth/status             Returns auth/bootstrap status
+POST /api/auth/login              { "username": "...", "password": "..." }  ->  { "token": "...", "role": "Admin|Operator|Viewer" }
 GET  /api/health                  Health check (no auth required)
 ```
 </details>
@@ -404,6 +419,9 @@ GET /api/reports/backup-ampel              Backup Ampel (traffic-light report)
 GET  /api/settings/ad                      AD/LDAP configuration
 POST /api/settings/ad                      Update AD config
 POST /api/settings/ad/test                 Test AD login
+GET  /api/settings/users                   List local users
+POST /api/settings/users                   Create local user
+PUT  /api/settings/users/{id}              Update local user
 GET  /api/settings/thresholds              Dashboard thresholds
 POST /api/settings/thresholds              Update thresholds
 GET  /api/debug/summary/{id}               Raw Summary_Get output (troubleshooting)

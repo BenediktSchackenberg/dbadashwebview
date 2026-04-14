@@ -1,17 +1,24 @@
 import { useEffect, useState, useMemo } from 'react';
 import { api } from '../api/api';
+import type { ExecStatsRow, InstanceListRow } from '../api/types';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { motion } from 'framer-motion';
 import { Zap } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 type SortKey = 'object_name' | 'SchemaName' | 'execution_count' | 'total_worker_time' | 'avg_cpu' | 'total_elapsed_time' | 'avg_duration' | 'total_logical_reads' | 'total_logical_writes';
+type EnrichedExecStatsRow = ExecStatsRow & {
+  avg_cpu: number;
+  avg_duration: number;
+  total_cpu_ms: number;
+  total_dur_ms: number;
+};
 
 export default function ExecStatsPage() {
-  const [data, setData] = useState<any[]>([]);
+  const [data, setData] = useState<ExecStatsRow[]>([]);
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(true);
-  const [instances, setInstances] = useState<any[]>([]);
+  const [instances, setInstances] = useState<InstanceListRow[]>([]);
   const [selectedInstance, setSelectedInstance] = useState<number | undefined>();
   const [sortKey, setSortKey] = useState<SortKey>('total_worker_time');
   const [sortAsc, setSortAsc] = useState(false);
@@ -29,17 +36,18 @@ export default function ExecStatsPage() {
       .finally(() => setLoading(false));
   }, [selectedInstance, hours]);
 
-  const enriched = useMemo(() => data.map(d => ({
+  const enriched = useMemo<EnrichedExecStatsRow[]>(() => data.map((d) => ({
     ...d,
-    avg_cpu: d.execution_count > 0 ? Math.round(d.total_worker_time / d.execution_count / 1000) : 0,
-    avg_duration: d.execution_count > 0 ? Math.round(d.total_elapsed_time / d.execution_count / 1000) : 0,
-    total_cpu_ms: Math.round(d.total_worker_time / 1000),
-    total_dur_ms: Math.round(d.total_elapsed_time / 1000),
+    avg_cpu: (d.execution_count ?? 0) > 0 ? Math.round((d.total_worker_time ?? 0) / (d.execution_count ?? 1) / 1000) : 0,
+    avg_duration: (d.execution_count ?? 0) > 0 ? Math.round((d.total_elapsed_time ?? 0) / (d.execution_count ?? 1) / 1000) : 0,
+    total_cpu_ms: Math.round((d.total_worker_time ?? 0) / 1000),
+    total_dur_ms: Math.round((d.total_elapsed_time ?? 0) / 1000),
   })), [data]);
 
   const sorted = useMemo(() => {
     const s = [...enriched].sort((a, b) => {
-      const av = a[sortKey] ?? 0, bv = b[sortKey] ?? 0;
+      const av = a[sortKey] ?? 0;
+      const bv = b[sortKey] ?? 0;
       return sortAsc ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
     });
     return s;
@@ -82,7 +90,7 @@ export default function ExecStatsPage() {
           </select>
           <select value={selectedInstance ?? ''} onChange={e => setSelectedInstance(e.target.value ? Number(e.target.value) : undefined)} className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-gray-300">
             <option value="">All Instances</option>
-            {instances.map((inst: any) => <option key={inst.InstanceID} value={inst.InstanceID}>{inst.InstanceDisplayName || inst.InstanceID}</option>)}
+            {instances.map((inst) => <option key={inst.InstanceID} value={inst.InstanceID}>{inst.InstanceDisplayName || inst.Instance || inst.InstanceID}</option>)}
           </select>
         </div>
       </div>

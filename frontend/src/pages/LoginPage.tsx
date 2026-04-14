@@ -1,27 +1,32 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api, setToken } from '../api/api';
+import { api } from '../api/api';
 import { Database, Lock, User, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
+import type { AuthStatusResponse } from '../api/types';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');
+  const [authStatus, setAuthStatus] = useState<AuthStatusResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    api.authStatus().then(setAuthStatus).catch(() => {});
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      const res = await api.login(username, password);
-      setToken(res.token);
+      await api.login(username, password);
       navigate('/');
-    } catch {
-      setError('Invalid credentials');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Invalid credentials');
     } finally {
       setLoading(false);
     }
@@ -52,6 +57,18 @@ export default function LoginPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
+            {authStatus?.bootstrapRequired && (
+              <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+                Local auth is not initialized yet. Set `LocalAuth__BootstrapAdminPassword` on the server and restart once to seed the first admin user.
+              </div>
+            )}
+
+            {!authStatus?.localAuthEnabled && authStatus?.adEnabled && (
+              <div className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-3 py-2 text-sm text-blue-200">
+                Local auth is disabled. Sign in with your Active Directory account.
+              </div>
+            )}
+
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1.5">Username</label>
               <div className="relative">

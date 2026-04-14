@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { api } from '../api/api';
+import type { InstanceListRow, JobTimelineRow } from '../api/types';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { motion } from 'framer-motion';
 import { CalendarClock } from 'lucide-react';
@@ -14,12 +15,17 @@ const STATUS_COLORS: Record<number, { bg: string; text: string; label: string }>
 
 const STATUS_BAR_COLORS: Record<number, string> = { 0: '#ef4444', 1: '#22c55e', 2: '#eab308', 3: '#6b7280' };
 
+interface JobTimelineRun extends JobTimelineRow {
+  startMs: number;
+  endMs: number;
+}
+
 export default function JobTimelinePage() {
   const { id: routeId } = useParams();
-  const [data, setData] = useState<any[]>([]);
+  const [data, setData] = useState<JobTimelineRow[]>([]);
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(true);
-  const [instances, setInstances] = useState<any[]>([]);
+  const [instances, setInstances] = useState<InstanceListRow[]>([]);
   const [selectedInstance, setSelectedInstance] = useState<number | undefined>(routeId ? Number(routeId) : undefined);
   const [hours, setHours] = useState(24);
 
@@ -38,19 +44,22 @@ export default function JobTimelinePage() {
 
   // Build gantt data
   const { jobs, timeRange } = useMemo(() => {
-    if (data.length === 0) return { jobs: new Map<string, any[]>(), timeRange: { min: 0, max: 1 } };
+    if (data.length === 0) return { jobs: new Map<string, JobTimelineRun[]>(), timeRange: { min: 0, max: 1 } };
     let minT = Infinity, maxT = -Infinity;
-    const jobMap = new Map<string, any[]>();
-    data.forEach(d => {
-      const name = d.job_name || 'Unknown';
-      const start = new Date(d.RunDateTime).getTime();
-      const dur = (d.RunDurationSec || 0) * 1000;
+    const jobMap = new Map<string, JobTimelineRun[]>();
+    data.forEach((row) => {
+      if (!row.RunDateTime) return;
+      const name = row.job_name || 'Unknown';
+      const start = new Date(row.RunDateTime).getTime();
+      if (!Number.isFinite(start)) return;
+      const dur = (row.RunDurationSec || 0) * 1000;
       const end = start + dur;
       if (start < minT) minT = start;
       if (end > maxT) maxT = end;
       if (!jobMap.has(name)) jobMap.set(name, []);
-      jobMap.get(name)!.push({ ...d, startMs: start, endMs: end });
+      jobMap.get(name)!.push({ ...row, startMs: start, endMs: end });
     });
+    if (!Number.isFinite(minT)) return { jobs: new Map<string, JobTimelineRun[]>(), timeRange: { min: 0, max: 1 } };
     if (maxT <= minT) maxT = minT + 3600000;
     return { jobs: jobMap, timeRange: { min: minT, max: maxT } };
   }, [data]);
@@ -89,7 +98,7 @@ export default function JobTimelinePage() {
           {!routeId && (
             <select value={selectedInstance ?? ''} onChange={e => setSelectedInstance(e.target.value ? Number(e.target.value) : undefined)} className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-gray-300">
               <option value="">Select Instance</option>
-              {instances.map((inst: any) => <option key={inst.InstanceID} value={inst.InstanceID}>{inst.InstanceDisplayName || inst.InstanceID}</option>)}
+              {instances.map((inst) => <option key={inst.InstanceID} value={inst.InstanceID}>{inst.InstanceDisplayName || inst.Instance || inst.InstanceID}</option>)}
             </select>
           )}
         </div>
@@ -128,11 +137,12 @@ export default function JobTimelinePage() {
                   {runs.map((run, ri) => {
                     const left = ((run.startMs - timeRange.min) / range) * 100;
                     const width = Math.max(((run.endMs - run.startMs) / range) * 100, 0.3);
-                    const color = STATUS_BAR_COLORS[run.run_status] || '#6b7280';
+                    const status = run.run_status ?? 3;
+                    const color = STATUS_BAR_COLORS[status] || '#6b7280';
                     return (
                       <div key={ri} className="absolute top-1 h-5 rounded cursor-pointer hover:opacity-80 transition-opacity"
                         style={{ left: `${left}%`, width: `${width}%`, backgroundColor: color, minWidth: 3 }}
-                        title={`${name}\nStart: ${new Date(run.startMs).toLocaleString()}\nDuration: ${run.RunDurationSec}s\nStatus: ${STATUS_COLORS[run.run_status]?.label || 'Unknown'}`}
+                        title={`${name}\nStart: ${new Date(run.startMs).toLocaleString()}\nDuration: ${run.RunDurationSec ?? 0}s\nStatus: ${STATUS_COLORS[status]?.label || 'Unknown'}`}
                       />
                     );
                   })}
@@ -159,12 +169,13 @@ export default function JobTimelinePage() {
               </thead>
               <tbody>
                 {data.slice(0, 100).map((d, i) => {
-                  const st = STATUS_COLORS[d.run_status] || STATUS_COLORS[3];
+                  const status = d.run_status ?? 3;
+                  const st = STATUS_COLORS[status] || STATUS_COLORS[3];
                   return (
                     <tr key={i} className="border-b border-white/5 hover:bg-slate-800/50">
                       <td className="px-3 py-2 text-white font-medium">{d.job_name}</td>
-                      <td className="px-3 py-2 text-gray-300">{new Date(d.RunDateTime).toLocaleString()}</td>
-                      <td className="px-3 py-2 text-gray-300">{d.RunDurationSec}s</td>
+                      <td className="px-3 py-2 text-gray-300">{d.RunDateTime ? new Date(d.RunDateTime).toLocaleString() : '-'}</td>
+                      <td className="px-3 py-2 text-gray-300">{d.RunDurationSec ?? 0}s</td>
                       <td className="px-3 py-2"><span className={`px-2 py-0.5 rounded text-xs ${st.bg} ${st.text}`}>{st.label}</span></td>
                     </tr>
                   );
