@@ -1,7 +1,5 @@
 import { defineConfig } from '@playwright/test';
 
-process.env.PLAYWRIGHT_BROWSERS_PATH ??= '0';
-
 export default defineConfig({
   testDir: './tests/e2e',
   timeout: 30_000,
