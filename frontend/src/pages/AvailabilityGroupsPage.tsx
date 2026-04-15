@@ -632,7 +632,7 @@ function EstateView() {
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
             <input
               type="text"
-              placeholder="Server, AG, Datenbank..."
+              placeholder="Server, AG, database..."
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="bg-white/5 border border-white/10 rounded-lg pl-9 pr-8 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50 w-56"
@@ -661,7 +661,7 @@ function EstateView() {
       {filteredClusters.length === 0 && q && (
         <div className="glass rounded-xl p-8 text-center">
           <Search className="w-8 h-8 text-gray-600 mx-auto mb-3" />
-          <p className="text-gray-400">Keine Ergebnisse für &ldquo;{search}&rdquo;</p>
+          <p className="text-gray-400">No results for &ldquo;{search}&rdquo;</p>
           <button onClick={() => setSearch('')} className="text-sm text-blue-400 hover:text-blue-300 mt-2">Filter zurücksetzen</button>
         </div>
       )}
