@@ -226,13 +226,13 @@ export default function SqlMonitorPage() {
             <Server className="w-6 h-6 text-blue-400" />
             <div>
               <h1 className="text-xl font-bold text-white">SQL Monitor</h1>
-              <p className="text-xs text-gray-500">{instances.length} Instanzen · {ok} healthy · {warn} warning · {crit} critical</p>
+              <p className="text-xs text-gray-500">{instances.length} Instances · {ok} healthy · {warn} warning · {crit} critical</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-              <input type="text" placeholder="Server suchen..." value={search} onChange={e => setSearch(e.target.value)}
+              <input type="text" placeholder="Search servers..." value={search} onChange={e => setSearch(e.target.value)}
                 className="bg-white/5 border border-white/10 rounded-lg pl-9 pr-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50 w-48"
               />
               {search && <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2"><X className="w-3.5 h-3.5 text-gray-500" /></button>}
@@ -283,7 +283,7 @@ export default function SqlMonitorPage() {
                   ))}
                 </div>
                 {filtered.length === 0 && (
-                  <p className="text-center text-gray-500 py-8">{instances.length > 0 ? 'Keine Server gefunden' : 'Keine Daten verfügbar'}</p>
+                  <p className="text-center text-gray-500 py-8">{instances.length > 0 ? 'No servers found' : 'No data available'}</p>
                 )}
               </motion.div>
             )}
