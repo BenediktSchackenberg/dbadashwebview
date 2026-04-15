@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { api } from '../api/api';
+import type { ApiRow, InstanceCpuRow, InstanceListRow, InstanceWaitRow } from '../api/types';
 import { useRefresh } from '../App';
 import LoadingSpinner from '../components/LoadingSpinner';
 import EmptyState from '../components/EmptyState';
@@ -8,13 +9,18 @@ import {
   ResponsiveContainer, Brush, ReferenceLine
 } from 'recharts';
 
+interface AlertTimelineRow extends ApiRow {
+  EventTime?: string | null;
+  ErrorDate?: string | null;
+}
+
 export default function AnalysisPage() {
   const { lastRefresh } = useRefresh();
-  const [instances, setInstances] = useState<any[]>([]);
+  const [instances, setInstances] = useState<InstanceListRow[]>([]);
   const [selectedInstance, setSelectedInstance] = useState<number | null>(null);
-  const [cpuData, setCpuData] = useState<any[]>([]);
-  const [waitsData, setWaitsData] = useState<any[]>([]);
-  const [alerts, setAlerts] = useState<any[]>([]);
+  const [cpuData, setCpuData] = useState<InstanceCpuRow[]>([]);
+  const [waitsData, setWaitsData] = useState<InstanceWaitRow[]>([]);
+  const [alerts, setAlerts] = useState<AlertTimelineRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [metrics, setMetrics] = useState({ cpu: true, ioWaits: false, memory: false });
   const [showBaseline, setShowBaseline] = useState(false);
@@ -55,8 +61,8 @@ export default function AnalysisPage() {
 
   const alertTimes = useMemo(() => {
     return alerts
-      .filter((a: any) => a.EventTime || a.ErrorDate)
-      .map((a: any) => new Date(a.EventTime || a.ErrorDate).toLocaleTimeString())
+      .filter((alert) => alert.EventTime || alert.ErrorDate)
+      .map((alert) => new Date(alert.EventTime || alert.ErrorDate || '').toLocaleTimeString())
       .slice(0, 10);
   }, [alerts]);
 
@@ -144,7 +150,7 @@ export default function AnalysisPage() {
         <div className="glass rounded-xl p-6 gradient-border">
           <h3 className="text-lg font-semibold text-white mb-3">Top Wait Types (Last Hour)</h3>
           <div className="space-y-2">
-            {waitsData.slice(0, 10).map((w: any, i: number) => (
+            {waitsData.slice(0, 10).map((w, i) => (
               <div key={i} className="flex items-center justify-between text-sm">
                 <span className="text-gray-300">{w.WaitType || `WaitType ${w.WaitTypeID}`}</span>
                 <span className="text-gray-400">{(w.TotalWaitMs ?? 0).toLocaleString()} ms</span>

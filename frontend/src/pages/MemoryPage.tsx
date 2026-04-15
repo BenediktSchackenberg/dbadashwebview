@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/api';
+import type { InstanceListRow, MemoryClerkRow, MemoryCounterRow } from '../api/types';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { motion } from 'framer-motion';
 import { HardDrive } from 'lucide-react';
@@ -7,12 +8,12 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, A
 import TimeRangeSelector from '../components/TimeRangeSelector';
 
 export default function MemoryPage() {
-  const [clerks, setClerks] = useState<any[]>([]);
-  const [counters, setCounters] = useState<any[]>([]);
+  const [clerks, setClerks] = useState<MemoryClerkRow[]>([]);
+  const [counters, setCounters] = useState<MemoryCounterRow[]>([]);
   const [clerkNote, setClerkNote] = useState('');
   const [counterNote, setCounterNote] = useState('');
   const [loading, setLoading] = useState(true);
-  const [instances, setInstances] = useState<any[]>([]);
+  const [instances, setInstances] = useState<InstanceListRow[]>([]);
   const [selectedInstance, setSelectedInstance] = useState<number | undefined>();
   const [hours, setHours] = useState(24);
 
@@ -57,7 +58,9 @@ export default function MemoryPage() {
 
   // Memory counters over time for area chart
   const pleOverTime = counters
-    .filter(c => c.counter_name?.includes('Page life expectancy'))
+    .filter((counter): counter is MemoryCounterRow & { SnapshotDate: string } =>
+      Boolean(counter.counter_name?.includes('Page life expectancy') && counter.SnapshotDate)
+    )
     .sort((a, b) => new Date(a.SnapshotDate).getTime() - new Date(b.SnapshotDate).getTime())
     .map(c => ({ time: new Date(c.SnapshotDate).toLocaleTimeString(), ple: c.cntr_value }));
 
@@ -74,8 +77,8 @@ export default function MemoryPage() {
           <select value={selectedInstance ?? ''} onChange={e => setSelectedInstance(e.target.value ? Number(e.target.value) : undefined)}
             className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none">
             <option value="">All Instances</option>
-            {instances.map((inst: any) => (
-              <option key={inst.InstanceID} value={inst.InstanceID}>{inst.InstanceDisplayName}</option>
+            {instances.map((inst) => (
+              <option key={inst.InstanceID} value={inst.InstanceID}>{inst.InstanceDisplayName || inst.Instance || inst.InstanceID}</option>
             ))}
           </select>
           <TimeRangeSelector value={hours} onChange={setHours} />

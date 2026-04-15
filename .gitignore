@@ -1,11 +1,18 @@
 # .NET
 backend/bin/
 backend/obj/
+backend.tests/bin/
+backend.tests/obj/
 backend/Properties/launchSettings.json
+backend/config/
+backend/TestResults/
 
 # Node
 frontend/node_modules/
 frontend/dist/
+frontend/coverage/
+frontend/playwright-report/
+frontend/test-results/
 
 # IDE
 .vs/

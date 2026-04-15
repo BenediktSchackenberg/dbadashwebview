@@ -1,6 +1,16 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../api/api';
+import type {
+  DashboardSummaryRow,
+  InstanceBackupRow,
+  InstanceCpuRow,
+  InstanceDatabaseRow,
+  InstanceDetailResponse,
+  InstanceDriveRow,
+  InstanceJobRow,
+  InstanceWaitRow,
+} from '../api/types';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts';
 import StatusBadge from '../components/StatusBadge';
 import CapacityBar from '../components/CapacityBar';
@@ -18,14 +28,14 @@ import { format, formatDistanceToNow } from 'date-fns';
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
-function backupAgeColor(date: string | null, type: 'full' | 'log') {
+function backupAgeColor(date: string | null | undefined, type: 'full' | 'log') {
   if (!date) return 'text-gray-500';
   const hours = (Date.now() - new Date(date).getTime()) / 3600000;
   if (type === 'log') return hours < 1 ? 'text-emerald-400' : hours < 4 ? 'text-yellow-400' : 'text-red-400';
   return hours < 24 ? 'text-emerald-400' : hours < 48 ? 'text-yellow-400' : 'text-red-400';
 }
 
-function formatBytes(b: number) {
+function formatBytes(b: number | null | undefined) {
   if (!b) return '—';
   if (b > 1e12) return `${(b / 1e12).toFixed(1)} TB`;
   if (b > 1e9) return `${(b / 1e9).toFixed(1)} GB`;
@@ -53,23 +63,32 @@ const syncStateLabel = (s: number | null) => {
 
 // ── Component ────────────────────────────────────────────────────────────
 
+type BackupRollup = {
+  name: string;
+  DatabaseID: number;
+  full: InstanceBackupRow | null;
+  diff: InstanceBackupRow | null;
+  log: InstanceBackupRow | null;
+};
+
 export default function InstanceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const instanceId = parseInt(id!);
   const [tab, setTab] = useState('performance');
-  const [detail, setDetail] = useState<any>(null);
-  const [cpu, setCpu] = useState<any[]>([]);
-  const [waits, setWaits] = useState<any[]>([]);
-  const [drives, setDrives] = useState<any[]>([]);
-  const [databases, setDatabases] = useState<any[]>([]);
-  const [backups, setBackups] = useState<any[]>([]);
-  const [jobs, setJobs] = useState<any[]>([]);
+  const [detail, setDetail] = useState<InstanceDetailResponse | null>(null);
+  const [cpu, setCpu] = useState<InstanceCpuRow[]>([]);
+  const [waits, setWaits] = useState<InstanceWaitRow[]>([]);
+  const [drives, setDrives] = useState<InstanceDriveRow[]>([]);
+  const [databases, setDatabases] = useState<InstanceDatabaseRow[]>([]);
+  const [backups, setBackups] = useState<InstanceBackupRow[]>([]);
+  const [jobs, setJobs] = useState<InstanceJobRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [jobFilter, setJobFilter] = useState<'all' | 'failed' | 'success'>('all');
   const [hours, setHours] = useState(24);
 
   useEffect(() => {
     (async () => {
+      setLoading(true);
       try {
         const [d, c, w, dr, db, b, j] = await Promise.all([
           api.instance(instanceId).catch(() => null),
@@ -95,10 +114,10 @@ export default function InstanceDetailPage() {
 
   // ── Derived data ───────────────────────────────────────────────────────
 
-  const inst = detail?.instance || {};
-  const sum = detail?.summary || {};
+  const inst = detail?.instance ?? ({} as InstanceDetailResponse['instance']);
+  const sum = detail?.summary ?? ({} as DashboardSummaryRow);
 
-  const statusFields = [
+  const statusFields: Array<{ key: keyof DashboardSummaryRow; label: string; icon: unknown }> = [
     { key: 'FullBackupStatus', label: 'Full Backup', icon: Shield },
     { key: 'LogBackupStatus', label: 'Log Backup', icon: Timer },
     { key: 'LastGoodCheckDBStatus', label: 'DBCC', icon: Database },
@@ -109,15 +128,26 @@ export default function InstanceDetailPage() {
   ];
 
   const backupsByDb = useMemo(() => {
-    const map = new Map<string, { name: string; DatabaseID: number; full: any; diff: any; log: any }>();
+    const map = new Map<string, BackupRollup>();
     for (const b of backups) {
-      const key = b.DatabaseName || b.DatabaseID;
-      if (!map.has(key)) map.set(key, { name: b.DatabaseName, DatabaseID: b.DatabaseID, full: null, diff: null, log: null });
+      const key = String(b.DatabaseName || b.DatabaseID);
+      if (!map.has(key)) {
+        map.set(key, {
+          name: b.DatabaseName || String(b.DatabaseID),
+          DatabaseID: b.DatabaseID,
+          full: null,
+          diff: null,
+          log: null,
+        });
+      }
       const entry = map.get(key)!;
       const date = b.backup_start_date ? new Date(b.backup_start_date).getTime() : 0;
-      if (b.type === 'D' && (!entry.full || date > new Date(entry.full.backup_start_date).getTime())) entry.full = b;
-      if (b.type === 'I' && (!entry.diff || date > new Date(entry.diff.backup_start_date).getTime())) entry.diff = b;
-      if (b.type === 'L' && (!entry.log || date > new Date(entry.log.backup_start_date).getTime())) entry.log = b;
+      const fullDate = entry.full?.backup_start_date ? new Date(entry.full.backup_start_date).getTime() : 0;
+      const diffDate = entry.diff?.backup_start_date ? new Date(entry.diff.backup_start_date).getTime() : 0;
+      const logDate = entry.log?.backup_start_date ? new Date(entry.log.backup_start_date).getTime() : 0;
+      if (b.type === 'D' && (!entry.full || date > fullDate)) entry.full = b;
+      if (b.type === 'I' && (!entry.diff || date > diffDate)) entry.diff = b;
+      if (b.type === 'L' && (!entry.log || date > logDate)) entry.log = b;
     }
     return Array.from(map.values());
   }, [backups]);
@@ -420,7 +450,7 @@ export default function InstanceDetailPage() {
                   </thead>
                   <tbody className="divide-y divide-white/5">
                     {filteredJobs.map((j, i) => {
-                      const s = jobStatusLabel(j.run_status);
+                      const s = jobStatusLabel(j.run_status ?? -1);
                       return (
                         <motion.tr key={i} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.015 }}
                           className="hover:bg-white/[0.03] transition-colors">
@@ -460,7 +490,7 @@ export default function InstanceDetailPage() {
                 </thead>
                 <tbody className="divide-y divide-white/5">
                   {databases.map((d, i) => {
-                    const sync = syncStateLabel(d.synchronization_state);
+                    const sync = syncStateLabel(d.synchronization_state ?? null);
                     const isSecondary = d.is_primary_replica === false || d.is_primary_replica === 0;
                     const isInAG = d.is_primary_replica != null;
                     return (
@@ -484,7 +514,7 @@ export default function InstanceDetailPage() {
                             'bg-red-400/10 text-red-400 border-red-400/20'
                           )}>{d.state === 0 ? 'Online' : d.state === 1 ? 'Restoring' : d.state === 6 ? 'Offline' : `State ${d.state}`}</span>
                         </td>
-                        <td className="px-5 py-3 text-gray-400 text-xs">{recoveryLabel(d.recovery_model)}</td>
+                        <td className="px-5 py-3 text-gray-400 text-xs">{recoveryLabel(d.recovery_model ?? -1)}</td>
                         <td className="px-5 py-3">
                           {!isInAG ? <span className="text-gray-600 text-xs">—</span> :
                            isSecondary ? <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">Secondary</span> :

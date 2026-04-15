@@ -12,18 +12,18 @@ import { api } from '../api/api';
 interface MonitorInstance {
   instanceId: number;
   instanceName: string;
-  edition: string | null;
-  productVersion: string | null;
-  cpuCount: number | null;
-  memoryKb: number | null;
-  startTime: string | null;
+  edition?: string | null;
+  productVersion?: string | null;
+  cpuCount?: number | null;
+  memoryKb?: number | null;
+  startTime?: string | null;
   isOnline: boolean;
   sqlCpu: number;
   sysCpu: number;
   waitMs: number;
   diskIOKB: number;
-  agName: string;
-  agRole: string;
+  agName?: string | null;
+  agRole?: string | null;
   status: number; // 1=Critical, 2=Warning, 3=NA, 4=OK
   activeAlerts: string[];
 }

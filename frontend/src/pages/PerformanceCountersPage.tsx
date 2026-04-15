@@ -1,17 +1,22 @@
 import { useEffect, useState, useMemo } from 'react';
 import { api } from '../api/api';
+import type { InstanceListRow, PerformanceCounterRow } from '../api/types';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { motion } from 'framer-motion';
 import { Gauge } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 const COLORS = ['#3b82f6','#ef4444','#f59e0b','#10b981','#8b5cf6','#ec4899','#06b6d4','#f97316'];
+interface CounterPoint {
+  time: string;
+  value: number;
+}
 
 export default function PerformanceCountersPage() {
-  const [data, setData] = useState<any[]>([]);
+  const [data, setData] = useState<PerformanceCounterRow[]>([]);
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(true);
-  const [instances, setInstances] = useState<any[]>([]);
+  const [instances, setInstances] = useState<InstanceListRow[]>([]);
   const [selectedInstance, setSelectedInstance] = useState<number | undefined>();
   const [hours, setHours] = useState(24);
   const [search, setSearch] = useState('');
@@ -31,7 +36,7 @@ export default function PerformanceCountersPage() {
 
   // Group by object_name (category)
   const categories = useMemo(() => {
-    const map = new Map<string, Map<string, { time: string; value: number }[]>>();
+    const map = new Map<string, Map<string, CounterPoint[]>>();
     data.forEach(d => {
       const cat = d.object_name || 'Unknown';
       const counter = d.counter_name || 'Unknown';
@@ -39,7 +44,7 @@ export default function PerformanceCountersPage() {
       const catMap = map.get(cat)!;
       if (!catMap.has(counter)) catMap.set(counter, []);
       catMap.get(counter)!.push({
-        time: new Date(d.SnapshotDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        time: new Date(d.SnapshotDate || 0).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         value: d.cntr_value || 0,
       });
     });
@@ -57,7 +62,7 @@ export default function PerformanceCountersPage() {
   // Key counters for quick charts
   const keyCounterNames = ['Page life expectancy', 'Batch Requests/sec', 'SQL Compilations/sec', 'Buffer cache hit ratio'];
   const keyCounters = useMemo(() => {
-    const result: { name: string; data: { time: string; value: number }[] }[] = [];
+    const result: { name: string; data: CounterPoint[] }[] = [];
     categories.forEach((counters) => {
       counters.forEach((points, name) => {
         if (keyCounterNames.some(k => name.includes(k)) && !result.find(r => r.name === name)) {
@@ -90,7 +95,7 @@ export default function PerformanceCountersPage() {
           </select>
           <select value={selectedInstance ?? ''} onChange={e => setSelectedInstance(e.target.value ? Number(e.target.value) : undefined)} className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-gray-300">
             <option value="">Select Instance</option>
-            {instances.map((inst: any) => <option key={inst.InstanceID} value={inst.InstanceID}>{inst.InstanceDisplayName || inst.InstanceID}</option>)}
+            {instances.map((inst) => <option key={inst.InstanceID} value={inst.InstanceID}>{inst.InstanceDisplayName || inst.Instance || inst.InstanceID}</option>)}
           </select>
         </div>
       </div>

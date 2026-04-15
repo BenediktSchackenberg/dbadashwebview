@@ -62,10 +62,10 @@ export function useAutoRefresh<T>(
  * Diff-merge helper for arrays keyed by a field.
  * Returns a new array only if something changed; unchanged items keep their reference.
  */
-export function diffMergeArray<T extends Record<string, any>>(
+export function diffMergeArray<T extends Record<string, unknown>, K extends keyof T>(
   prev: T[],
   next: T[],
-  keyField: string,
+  keyField: K,
 ): T[] {
   if (prev.length === 0) return next;
   const prevMap = new Map(prev.map(r => [r[keyField], r]));
@@ -73,7 +73,7 @@ export function diffMergeArray<T extends Record<string, any>>(
   const merged = next.map(row => {
     const old = prevMap.get(row[keyField]);
     if (!old) { changed = true; return row; }
-    const keys = Object.keys(row);
+    const keys = Object.keys(row) as Array<keyof T>;
     const same = keys.length === Object.keys(old).length && keys.every(k => row[k] === old[k]);
     if (same) return old;
     changed = true;

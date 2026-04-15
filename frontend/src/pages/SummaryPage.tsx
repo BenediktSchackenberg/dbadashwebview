@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { api } from '../api/api';
 import { RefreshCw, Clock, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import type { DashboardSummaryRow } from '../api/types';
 
 /* ─── DBA Dash Status Enum (from DBADashGUI/DBAChecksStatus.cs) ───
    Critical = 1, Warning = 2, NA = 3, OK = 4, Acknowledged = 5
@@ -45,7 +46,7 @@ function cellBg(count: number, type: 'ok' | 'warning' | 'critical' | 'na' | 'ack
 }
 
 export default function SummaryPage() {
-  const [summary, setSummary] = useState<any[]>([]);
+  const [summary, setSummary] = useState<DashboardSummaryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [countdown, setCountdown] = useState(30);
   const [lastRefresh, setLastRefresh] = useState(new Date());

@@ -1,24 +1,13 @@
+import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import { api } from '../api/api';
+import type { InstanceListRow, RunningQueryRow } from '../api/types';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { motion } from 'framer-motion';
 import { AlertTriangle } from 'lucide-react';
 import { clsx } from 'clsx';
 
-interface BlockingRow {
-  InstanceID: number;
-  InstanceDisplayName: string;
-  session_id: number;
-  blocking_session_id: number;
-  start_time: string;
-  status: string;
-  command: string;
-  wait_type: string;
-  wait_resource: string;
-  cpu_time: number;
-  query_text: string;
-  SnapshotDate: string;
-}
+type BlockingRow = RunningQueryRow;
 
 interface BlockNode {
   row: BlockingRow | null;
@@ -31,7 +20,7 @@ export default function BlockingPage() {
   const [data, setData] = useState<BlockingRow[]>([]);
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(true);
-  const [instances, setInstances] = useState<any[]>([]);
+  const [instances, setInstances] = useState<InstanceListRow[]>([]);
   const [selectedInstance, setSelectedInstance] = useState<number | undefined>();
 
   useEffect(() => {
@@ -49,15 +38,15 @@ export default function BlockingPage() {
   const buildTree = (): BlockNode[] => {
     if (data.length === 0) return [];
     const bySession = new Map<number, BlockingRow>();
-    const blockedIds = new Set<number>();
     data.forEach(r => {
-      bySession.set(r.session_id, r);
-      if (r.blocking_session_id > 0) blockedIds.add(r.session_id);
+      if (r.session_id != null) {
+        bySession.set(r.session_id, r);
+      }
     });
 
     const blockerIds = new Set<number>();
     data.forEach(r => {
-      if (r.blocking_session_id > 0) blockerIds.add(r.blocking_session_id);
+      if ((r.blocking_session_id ?? 0) > 0) blockerIds.add(r.blocking_session_id!);
     });
 
     const rootIds = [...blockerIds].filter(id => {
@@ -70,12 +59,14 @@ export default function BlockingPage() {
       visited.add(sessionId);
       const children = data
         .filter(r => r.blocking_session_id === sessionId)
-        .map(r => buildNode(r.session_id, visited));
+        .map(r => buildNode(r.session_id!, visited));
       return { row: bySession.get(sessionId) || null, sessionId, children, isRoot: true };
     };
 
     if (rootIds.length === 0) {
-      return data.map(r => ({ row: r, sessionId: r.session_id, children: [], isRoot: false }));
+      return data
+        .filter((row): row is BlockingRow & { session_id: number } => row.session_id != null)
+        .map(r => ({ row: r, sessionId: r.session_id, children: [], isRoot: false }));
     }
     return rootIds.map(id => buildNode(id, new Set()));
   };
@@ -88,7 +79,7 @@ export default function BlockingPage() {
     return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
   };
 
-  const renderNode = (node: BlockNode, depth: number): React.ReactNode => (
+  const renderNode = (node: BlockNode, depth: number): ReactNode => (
     <div key={`${node.sessionId}-${depth}`}>
       <div
         className={clsx(
@@ -111,10 +102,10 @@ export default function BlockingPage() {
             </span>
             {node.row && (
               <>
-                <span className="text-xs text-gray-500">{node.row.InstanceDisplayName}</span>
+                <span className="text-xs text-gray-500">{node.row.InstanceDisplayName || node.row.InstanceID}</span>
                 {node.row.wait_type && <span className="text-xs px-2 py-0.5 rounded bg-white/5 text-gray-400">{node.row.wait_type}</span>}
                 {node.row.wait_resource && <span className="text-xs text-gray-500 font-mono">{node.row.wait_resource}</span>}
-                <span className="text-xs text-gray-500">{formatDuration(node.row.start_time)}</span>
+                <span className="text-xs text-gray-500">{formatDuration(node.row.start_time || '')}</span>
               </>
             )}
           </div>
@@ -143,8 +134,8 @@ export default function BlockingPage() {
           className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
         >
           <option value="">All Instances</option>
-          {instances.map((inst: any) => (
-            <option key={inst.InstanceID} value={inst.InstanceID}>{inst.InstanceDisplayName}</option>
+          {instances.map((inst) => (
+            <option key={inst.InstanceID} value={inst.InstanceID}>{inst.InstanceDisplayName || inst.Instance || inst.InstanceID}</option>
           ))}
         </select>
       </div>

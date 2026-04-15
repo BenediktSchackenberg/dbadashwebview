@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { GitBranch } from 'lucide-react';
 import { api } from '../api/api';
+import type { InstanceListRow, SchemaChangeRow } from '../api/types';
 
 export default function SchemaChangesPage() {
-  const [data, setData] = useState<any[]>([]);
-  const [instances, setInstances] = useState<any[]>([]);
+  const [data, setData] = useState<SchemaChangeRow[]>([]);
+  const [instances, setInstances] = useState<InstanceListRow[]>([]);
   const [instanceId, setInstanceId] = useState<number | undefined>();
   const [days, setDays] = useState(30);
   const [loading, setLoading] = useState(true);
@@ -26,7 +27,7 @@ export default function SchemaChangesPage() {
       <div className="flex gap-3 items-center flex-wrap">
         <select value={instanceId || ''} onChange={e => setInstanceId(Number(e.target.value) || undefined)} className={inputCls}>
           <option value="">Select Instance...</option>
-          {instances.map((inst: any) => <option key={inst.instanceID} value={inst.instanceID}>{inst.instanceDisplayName || inst.instance}</option>)}
+          {instances.map((inst) => <option key={inst.InstanceID} value={inst.InstanceID}>{inst.InstanceDisplayName || inst.Instance || inst.InstanceID}</option>)}
         </select>
         <select value={days} onChange={e => setDays(Number(e.target.value))} className={inputCls}>
           {[7, 14, 30, 90].map(d => <option key={d} value={d}>Last {d} days</option>)}
@@ -49,7 +50,7 @@ export default function SchemaChangesPage() {
                   </div>
                   <div className="text-xs text-gray-500 mt-1">
                     {d.loginName && <span>by {d.loginName} — </span>}
-                    {new Date(d.eventDate).toLocaleString()}
+                    {d.eventDate ? new Date(d.eventDate).toLocaleString() : 'Unknown time'}
                   </div>
                   {d.ddlText && <pre className="mt-2 text-xs text-gray-400 bg-black/20 rounded p-2 overflow-x-auto max-h-32">{d.ddlText}</pre>}
                 </div>

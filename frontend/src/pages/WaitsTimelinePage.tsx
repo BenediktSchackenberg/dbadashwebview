@@ -1,17 +1,24 @@
 import { useEffect, useState, useMemo } from 'react';
 import { api } from '../api/api';
+import type { InstanceListRow, WaitTimelineRow } from '../api/types';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { motion } from 'framer-motion';
 import { Clock } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 const COLORS = ['#3b82f6','#ef4444','#f59e0b','#10b981','#8b5cf6','#ec4899','#06b6d4','#f97316','#84cc16','#6366f1'];
+interface WaitTotalsRow {
+  WaitType: string;
+  wait_time_ms: number;
+  waiting_tasks_count: number;
+  signal_wait_time_ms: number;
+}
 
 export default function WaitsTimelinePage() {
-  const [data, setData] = useState<any[]>([]);
+  const [data, setData] = useState<WaitTimelineRow[]>([]);
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(true);
-  const [instances, setInstances] = useState<any[]>([]);
+  const [instances, setInstances] = useState<InstanceListRow[]>([]);
   const [selectedInstance, setSelectedInstance] = useState<number | undefined>();
   const [hours, setHours] = useState(24);
 
@@ -41,16 +48,16 @@ export default function WaitsTimelinePage() {
     });
     const sortedTypes = [...totalsMap.entries()].sort((a, b) => b[1].wait_time_ms - a[1].wait_time_ms);
     const topTypes = sortedTypes.slice(0, 10).map(e => e[0]);
-    const totals = sortedTypes.map(([wt, v]) => ({ WaitType: wt, ...v }));
+    const totals: WaitTotalsRow[] = sortedTypes.map(([wt, v]) => ({ WaitType: wt, ...v }));
 
     // Group by time bucket
-    const timeMap = new Map<string, Record<string, number>>();
+    const timeMap = new Map<string, { time: string } & Record<string, number | string>>();
     data.forEach(d => {
-      const t = new Date(d.SnapshotDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      if (!timeMap.has(t)) timeMap.set(t, { time: t as any });
+      const t = new Date(d.SnapshotDate || 0).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      if (!timeMap.has(t)) timeMap.set(t, { time: t });
       const entry = timeMap.get(t)!;
       const wt = d.WaitType || 'Unknown';
-      if (topTypes.includes(wt)) entry[wt] = (entry[wt] || 0) + (d.wait_time_ms || 0);
+      if (topTypes.includes(wt)) entry[wt] = Number(entry[wt] || 0) + (d.wait_time_ms || 0);
     });
     return { chartData: [...timeMap.values()], waitTypes: topTypes, totals };
   }, [data]);
@@ -75,7 +82,7 @@ export default function WaitsTimelinePage() {
           </select>
           <select value={selectedInstance ?? ''} onChange={e => setSelectedInstance(e.target.value ? Number(e.target.value) : undefined)} className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-gray-300">
             <option value="">Select Instance</option>
-            {instances.map((inst: any) => <option key={inst.InstanceID} value={inst.InstanceID}>{inst.InstanceDisplayName || inst.InstanceID}</option>)}
+            {instances.map((inst) => <option key={inst.InstanceID} value={inst.InstanceID}>{inst.InstanceDisplayName || inst.Instance || inst.InstanceID}</option>)}
           </select>
         </div>
       </div>
