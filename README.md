@@ -190,11 +190,13 @@ Purpose-built reports for IT managers:
 | [.NET 8 Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) | 8.0+ (Hosting Bundle for IIS) |
 | SQL Server | 2012+ |
 
-### Download & Run
+### Step 1 — Download
 
-1. Download the latest release from [Releases](https://github.com/BenediktSchackenberg/dbadashwebview/releases)
-2. Extract the ZIP
-3. Configure secrets and connection settings via `appsettings.json` or environment variables:
+Download the latest build from [GitHub Actions → Artifacts](https://github.com/BenediktSchackenberg/dbadashwebview/actions) or from [Releases](https://github.com/BenediktSchackenberg/dbadashwebview/releases) and extract the ZIP.
+
+### Step 2 — Configure `appsettings.json`
+
+Open `appsettings.json` in the extracted folder and fill in the following values:
 
 ```json
 {
@@ -202,24 +204,38 @@ Purpose-built reports for IT managers:
     "DBADashDB": "Server=YOUR_SQL_SERVER;Database=DBADashDB;Trusted_Connection=True;TrustServerCertificate=true;"
   },
   "Jwt": {
-    "Secret": "REPLACE_WITH_A_LONG_RANDOM_SECRET"
+    "Secret": "replace-with-a-long-random-string-min-32-chars"
+  },
+  "LocalAuth": {
+    "Enabled": true,
+    "UserStorePath": "config/local-users.json",
+    "BootstrapAdminUsername": "admin",
+    "BootstrapAdminDisplayName": "Administrator",
+    "BootstrapAdminPassword": "your-initial-password-here"
   }
 }
 ```
 
-```powershell
-$env:ConnectionStrings__DBADashDB="Server=YOUR_SQL_SERVER;Database=DBADashDB;Trusted_Connection=True;TrustServerCertificate=true;"
-$env:Jwt__Secret="replace-with-a-long-random-secret"
-$env:LocalAuth__BootstrapAdminPassword="change-me-on-first-run"
-```
+> **Important:** All three values must be set — `DBADashDB`, `Jwt.Secret`, and `LocalAuth.BootstrapAdminPassword`.  
+> The `BootstrapAdminPassword` is used **only on the first start** to create the initial admin user. After that, you can change or remove it.
 
-4. Deploy to IIS (see below) or run standalone:
-```bash
+### Step 3 — Run
+
+**Standalone (development/testing):**
+```powershell
 dotnet DBADashWebView.dll
 # Open http://localhost:5000
 ```
 
-5. On first start, seed the first local admin with `LocalAuth__BootstrapAdminPassword`, sign in, then create your permanent users under **Settings -> Users**.
+**IIS (production):** See the [IIS Deployment](#-iis-deployment) section below.
+
+### Step 4 — Log in
+
+Open the app in your browser and log in with:
+- **Username:** `admin` (or whatever you set in `BootstrapAdminUsername`)
+- **Password:** the value you set in `BootstrapAdminPassword`
+
+After your first login, go to **Settings → Users** to create permanent users with proper passwords. You can then remove the `BootstrapAdminPassword` from `appsettings.json`.
 
 ---
 
