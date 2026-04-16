@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { api } from '../api/api';
 import type { InstanceListRow, SlowQueryRow } from '../api/types';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -13,7 +13,8 @@ export default function SlowQueriesPage() {
   const [instances, setInstances] = useState<InstanceListRow[]>([]);
   const [selectedInstance, setSelectedInstance] = useState<number | undefined>();
   const [hours, setHours] = useState(24);
-  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [expandedServers, setExpandedServers] = useState<Set<string>>(new Set());
   const [dbFilter, setDbFilter] = useState('');
   const [appFilter, setAppFilter] = useState('');
 
@@ -29,10 +30,23 @@ export default function SlowQueriesPage() {
       .finally(() => setLoading(false));
   }, [selectedInstance, hours]);
 
-  const toggleRow = (i: number) => {
+  useEffect(() => {
+    setExpandedRows(new Set());
+    setExpandedServers(new Set());
+  }, [selectedInstance, hours, dbFilter, appFilter]);
+
+  const toggleRow = (key: string) => {
     setExpandedRows(prev => {
       const next = new Set(prev);
-      next.has(i) ? next.delete(i) : next.add(i);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  };
+
+  const toggleServer = (serverName: string) => {
+    setExpandedServers(prev => {
+      const next = new Set(prev);
+      next.has(serverName) ? next.delete(serverName) : next.add(serverName);
       return next;
     });
   };
@@ -45,12 +59,68 @@ export default function SlowQueriesPage() {
     (!appFilter || r.client_app_name === appFilter)
   );
 
+  const groupedByInstance = useMemo(() => {
+    return filtered.reduce((acc, row) => {
+      const serverName = row.InstanceDisplayName || String(row.InstanceID);
+      if (!acc[serverName]) {
+        acc[serverName] = [];
+      }
+      acc[serverName].push(row);
+      return acc;
+    }, {} as Record<string, SlowQueryRow[]>);
+  }, [filtered]);
+
+  const serverNames = useMemo(() => Object.keys(groupedByInstance).sort(), [groupedByInstance]);
+
   const fmtMs = (ms: number | null | undefined) => {
     if (ms == null) return '-';
     if (ms < 1000) return `${ms}ms`;
     if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
     return `${(ms / 60000).toFixed(1)}m`;
   };
+
+  const renderRows = (rows: SlowQueryRow[], keyPrefix: string, showInstanceColumn: boolean) => (
+    rows.map((row, i) => {
+      const rowKey = `${keyPrefix}-${row.InstanceID}-${row.DatabaseID ?? 'db'}-${i}`;
+      return (
+        <Fragment key={rowKey}>
+          <tr onClick={() => toggleRow(rowKey)}
+            className="border-b border-white/5 cursor-pointer hover:bg-slate-800/50 transition-colors">
+            <td className="px-4 py-3 text-gray-500">
+              {expandedRows.has(rowKey) ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+            </td>
+            {showInstanceColumn && (
+              <td className="px-4 py-3 text-gray-300">{row.InstanceDisplayName || row.InstanceID}</td>
+            )}
+            <td className="px-4 py-3 text-gray-300">{row.database_name || '-'}</td>
+            <td className="px-4 py-3 text-gray-300 font-mono text-xs">{row.object_name || '-'}</td>
+            <td className="px-4 py-3">
+              <span className={clsx('font-medium',
+                (row.duration_ms || 0) > 30000 ? 'text-red-400' :
+                (row.duration_ms || 0) > 5000 ? 'text-yellow-400' : 'text-gray-300'
+              )}>{fmtMs(row.duration_ms)}</span>
+            </td>
+            <td className="px-4 py-3 text-gray-300">{fmtMs(row.cpu_time_ms)}</td>
+            <td className="px-4 py-3 text-gray-300">{row.logical_reads?.toLocaleString() || '-'}</td>
+            <td className="px-4 py-3 text-gray-300">{row.writes?.toLocaleString() || '-'}</td>
+            <td className="px-4 py-3 text-gray-400 text-xs">{row.client_hostname || '-'}</td>
+            <td className="px-4 py-3 text-gray-400 text-xs">{row.client_app_name || '-'}</td>
+            <td className="px-4 py-3 text-gray-400 text-xs">{row.SnapshotDate ? new Date(row.SnapshotDate).toLocaleString() : '-'}</td>
+          </tr>
+          {expandedRows.has(rowKey) && (
+            <tr className="border-b border-white/5 bg-white/[0.02]">
+              <td colSpan={showInstanceColumn ? 11 : 10} className="px-6 py-4">
+                <div className="text-xs text-gray-500 mb-1">Query Text</div>
+                <pre className="text-xs text-gray-300 whitespace-pre-wrap font-mono bg-black/20 rounded-lg p-3 max-h-48 overflow-y-auto">
+                  {row.query_text || 'N/A'}
+                </pre>
+              </td>
+            </tr>
+          )}
+        </Fragment>
+      );
+    })
+  );
 
   if (loading) return <LoadingSpinner />;
 
@@ -105,7 +175,7 @@ export default function SlowQueriesPage() {
           <Clock className="w-12 h-12 text-gray-600 mx-auto mb-4" />
           <p className="text-gray-400">No slow queries found</p>
         </motion.div>
-      ) : (
+      ) : selectedInstance ? (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="glass-ultra rounded-2xl overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -125,45 +195,67 @@ export default function SlowQueriesPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((row, i) => (
-                  <Fragment key={`${row.InstanceID}-${row.DatabaseID ?? i}-${i}`}>
-                    <tr onClick={() => toggleRow(i)}
-                      className="border-b border-white/5 cursor-pointer hover:bg-slate-800/50 transition-colors">
-                      <td className="px-4 py-3 text-gray-500">
-                        {expandedRows.has(i) ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                      </td>
-                      <td className="px-4 py-3 text-gray-300">{row.InstanceDisplayName || row.InstanceID}</td>
-                      <td className="px-4 py-3 text-gray-300">{row.database_name || '-'}</td>
-                      <td className="px-4 py-3 text-gray-300 font-mono text-xs">{row.object_name || '-'}</td>
-                      <td className="px-4 py-3">
-                        <span className={clsx('font-medium',
-                          (row.duration_ms || 0) > 30000 ? 'text-red-400' :
-                          (row.duration_ms || 0) > 5000 ? 'text-yellow-400' : 'text-gray-300'
-                        )}>{fmtMs(row.duration_ms)}</span>
-                      </td>
-                      <td className="px-4 py-3 text-gray-300">{fmtMs(row.cpu_time_ms)}</td>
-                      <td className="px-4 py-3 text-gray-300">{row.logical_reads?.toLocaleString() || '-'}</td>
-                      <td className="px-4 py-3 text-gray-300">{row.writes?.toLocaleString() || '-'}</td>
-                      <td className="px-4 py-3 text-gray-400 text-xs">{row.client_hostname || '-'}</td>
-                      <td className="px-4 py-3 text-gray-400 text-xs">{row.client_app_name || '-'}</td>
-                      <td className="px-4 py-3 text-gray-400 text-xs">{row.SnapshotDate ? new Date(row.SnapshotDate).toLocaleString() : '-'}</td>
-                    </tr>
-                    {expandedRows.has(i) && (
-                      <tr className="border-b border-white/5 bg-white/[0.02]">
-                        <td colSpan={11} className="px-6 py-4">
-                          <div className="text-xs text-gray-500 mb-1">Query Text</div>
-                          <pre className="text-xs text-gray-300 whitespace-pre-wrap font-mono bg-black/20 rounded-lg p-3 max-h-48 overflow-y-auto">
-                            {row.query_text || 'N/A'}
-                          </pre>
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                ))}
+                {renderRows(filtered, 'instance-view', true)}
               </tbody>
             </table>
           </div>
         </motion.div>
+      ) : (
+        <div className="space-y-4">
+          {serverNames.map((serverName) => {
+            const serverRows = groupedByInstance[serverName] || [];
+            const isExpanded = expandedServers.has(serverName);
+
+            return (
+              <motion.div
+                key={serverName}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="glass-ultra rounded-2xl overflow-hidden"
+              >
+                <button
+                  type="button"
+                  onClick={() => toggleServer(serverName)}
+                  className="w-full flex items-center justify-between px-4 py-3 border-b border-white/10 hover:bg-slate-800/40 transition-colors"
+                >
+                  <div className="flex items-center gap-2 text-left">
+                    {isExpanded ? (
+                      <ChevronDown className="w-4 h-4 text-gray-400" />
+                    ) : (
+                      <ChevronRight className="w-4 h-4 text-gray-400" />
+                    )}
+                    <span className="text-sm font-semibold text-gray-200">{serverName}</span>
+                  </div>
+                  <span className="text-xs text-gray-400">{serverRows.length} quer{serverRows.length === 1 ? 'y' : 'ies'}</span>
+                </button>
+
+                {isExpanded && (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-white/10 text-left">
+                          <th className="px-4 py-3 text-gray-300 font-semibold"></th>
+                          <th className="px-4 py-3 text-gray-300 font-semibold">Database</th>
+                          <th className="px-4 py-3 text-gray-300 font-semibold">Object</th>
+                          <th className="px-4 py-3 text-gray-300 font-semibold">Duration</th>
+                          <th className="px-4 py-3 text-gray-300 font-semibold">CPU</th>
+                          <th className="px-4 py-3 text-gray-300 font-semibold">Reads</th>
+                          <th className="px-4 py-3 text-gray-300 font-semibold">Writes</th>
+                          <th className="px-4 py-3 text-gray-300 font-semibold">Client</th>
+                          <th className="px-4 py-3 text-gray-300 font-semibold">App</th>
+                          <th className="px-4 py-3 text-gray-300 font-semibold">Timestamp</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {renderRows(serverRows, `server-${serverName}`, false)}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </motion.div>
+            );
+          })}
+        </div>
       )}
     </div>
   );
