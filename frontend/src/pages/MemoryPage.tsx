@@ -12,7 +12,7 @@ export default function MemoryPage() {
   const [counters, setCounters] = useState<MemoryCounterRow[]>([]);
   const [clerkNote, setClerkNote] = useState('');
   const [counterNote, setCounterNote] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [instances, setInstances] = useState<InstanceListRow[]>([]);
   const [selectedInstance, setSelectedInstance] = useState<number | undefined>();
   const [hours, setHours] = useState(24);
@@ -22,6 +22,7 @@ export default function MemoryPage() {
   }, []);
 
   useEffect(() => {
+    if (!selectedInstance) { setLoading(false); return; }
     setLoading(true);
     api.performanceMemory(selectedInstance, hours)
       .then(r => {
@@ -35,6 +36,17 @@ export default function MemoryPage() {
   }, [selectedInstance, hours]);
 
   if (loading) return <LoadingSpinner />;
+  if (!selectedInstance) return (
+    <div className="flex flex-col items-center justify-center py-24 text-center">
+      <div className="w-16 h-16 rounded-2xl bg-slate-800/50 flex items-center justify-center mb-4">
+        <svg className="w-8 h-8 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 12h14M12 5l7 7-7 7" />
+        </svg>
+      </div>
+      <p className="text-gray-400 font-medium">Select an instance to load data</p>
+      <p className="text-gray-600 text-sm mt-1">Choose a server from the dropdown above</p>
+    </div>
+  );
 
   // Aggregate top clerks by name
   const clerkAgg = new Map<string, number>();
