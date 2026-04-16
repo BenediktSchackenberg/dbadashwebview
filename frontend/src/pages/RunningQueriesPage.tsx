@@ -1,15 +1,12 @@
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useState, useCallback } from 'react';
 import { api } from '../api/api';
 import type { InstanceListRow, RunningQueryRow } from '../api/types';
-import LoadingSpinner from '../components/LoadingSpinner';
+import { useAutoRefresh } from '../hooks/useAutoRefresh';
 import { motion } from 'framer-motion';
-import { Activity, ChevronDown, ChevronRight } from 'lucide-react';
+import { Activity, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
 import { clsx } from 'clsx';
 
 export default function RunningQueriesPage() {
-  const [data, setData] = useState<RunningQueryRow[]>([]);
-  const [note, setNote] = useState('');
-  const [loading, setLoading] = useState(true);
   const [instances, setInstances] = useState<InstanceListRow[]>([]);
   const [selectedInstance, setSelectedInstance] = useState<number | undefined>();
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
@@ -18,13 +15,15 @@ export default function RunningQueriesPage() {
     api.instances().then(i => setInstances(Array.isArray(i) ? i : [])).catch(() => {});
   }, []);
 
-  useEffect(() => {
-    setLoading(true);
-    api.performanceRunningQueries(selectedInstance)
-      .then(r => { setData(r.data || []); setNote(r.note || ''); })
-      .catch(() => setData([]))
-      .finally(() => setLoading(false));
-  }, [selectedInstance]);
+  const fetchFn = useCallback(
+    () => api.performanceRunningQueries(selectedInstance),
+    [selectedInstance],
+  );
+
+  const { data: result, loading, countdown, refresh } = useAutoRefresh(fetchFn, { interval: 30 });
+
+  const data: RunningQueryRow[] = result?.data ?? [];
+  const note: string = result?.note ?? '';
 
   const toggleRow = (i: number) => {
     setExpandedRows(prev => {
@@ -43,8 +42,6 @@ export default function RunningQueriesPage() {
     return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
   };
 
-  if (loading) return <LoadingSpinner />;
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -52,21 +49,38 @@ export default function RunningQueriesPage() {
           <Activity className="w-6 h-6 text-blue-400" />
           <h1 className="text-2xl font-bold text-white">Running Queries</h1>
         </div>
-        <select
-          value={selectedInstance ?? ''}
-          onChange={e => setSelectedInstance(e.target.value ? Number(e.target.value) : undefined)}
-          className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-        >
-          <option value="">All Instances</option>
-          {instances.map((inst) => (
-            <option key={inst.InstanceID} value={inst.InstanceID}>{inst.InstanceDisplayName || inst.Instance || inst.InstanceID}</option>
-          ))}
-        </select>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={refresh}
+            title="Refresh now"
+            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition-colors"
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span>Refresh in {countdown}s</span>
+          </button>
+          <select
+            value={selectedInstance ?? ''}
+            onChange={e => {
+              setExpandedRows(new Set());
+              setSelectedInstance(e.target.value ? Number(e.target.value) : undefined);
+            }}
+            className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+          >
+            <option value="">All Instances</option>
+            {instances.map((inst) => (
+              <option key={inst.InstanceID} value={inst.InstanceID}>{inst.InstanceDisplayName || inst.Instance || inst.InstanceID}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {note && <div className="text-sm text-yellow-400/80 bg-yellow-400/5 border border-yellow-400/20 rounded-lg px-4 py-2">{note}</div>}
 
-      {data.length === 0 ? (
+      {loading && data.length === 0 ? (
+        <div className="flex justify-center py-12">
+          <div className="w-8 h-8 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : data.length === 0 ? (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="glass-ultra rounded-2xl p-12 text-center">
           <Activity className="w-12 h-12 text-gray-600 mx-auto mb-4" />
           <p className="text-gray-400">No running queries found</p>
