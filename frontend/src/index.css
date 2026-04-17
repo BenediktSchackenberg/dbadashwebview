@@ -104,3 +104,25 @@ body {
   background: rgba(255, 255, 255, 0.9);
   border-color: rgba(0, 0, 0, 0.1);
 }
+
+/* TabNav — dark default, light-mode override */
+.tabnav-container {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.tabnav-inactive:hover {
+  background: rgba(51, 65, 85, 0.5);
+}
+
+.light-mode .tabnav-container {
+  background: rgba(148, 163, 184, 0.25);
+}
+
+.light-mode .tabnav-inactive {
+  color: #475569;
+}
+
+.light-mode .tabnav-inactive:hover {
+  background: rgba(148, 163, 184, 0.35);
+  color: #1e293b;
+}
