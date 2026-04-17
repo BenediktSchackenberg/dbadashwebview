@@ -56,6 +56,9 @@ public static class PerformanceEndpointMappings
                            rq.SnapshotDateUTC AS SnapshotDate,
                            rq.database_id,
                            d.name AS database_name,
+                           rq.login_name,
+                           rq.host_name,
+                           rq.program_name,
                            CAST(NULL AS nvarchar(max)) AS query_text
                     FROM dbo.RunningQueries rq
                     JOIN dbo.Instances i ON rq.InstanceID = i.InstanceID

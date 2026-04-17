@@ -147,6 +147,23 @@ export default function RunningQueriesPage() {
                       {expandedRows.has(i) && (
                         <tr className="border-b border-white/5 bg-white/[0.02]">
                           <td colSpan={12} className="px-6 py-4">
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3 text-xs">
+                              {row.login_name && (
+                                <div><span className="text-gray-500">Login: </span><span className="text-gray-300">{row.login_name}</span></div>
+                              )}
+                              {row.host_name && (
+                                <div><span className="text-gray-500">Host: </span><span className="text-gray-300">{row.host_name}</span></div>
+                              )}
+                              {row.program_name && (
+                                <div className="col-span-2"><span className="text-gray-500">Program: </span><span className="text-gray-300">{row.program_name}</span></div>
+                              )}
+                              {row.wait_resource && (
+                                <div className="col-span-2"><span className="text-gray-500">Wait resource: </span><span className="text-gray-300 font-mono">{row.wait_resource}</span></div>
+                              )}
+                              {row.logical_reads != null && (
+                                <div><span className="text-gray-500">Logical reads: </span><span className="text-gray-300">{row.logical_reads.toLocaleString()}</span></div>
+                              )}
+                            </div>
                             <div className="text-xs text-gray-500 mb-1">Query Text</div>
                             <pre className="text-xs text-gray-300 whitespace-pre-wrap font-mono bg-black/20 rounded-lg p-3 max-h-48 overflow-y-auto">
                               {row.query_text || 'N/A'}
