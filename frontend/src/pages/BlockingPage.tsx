@@ -1,10 +1,10 @@
 import type { ReactNode } from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { api } from '../api/api';
 import type { InstanceListRow, RunningQueryRow } from '../api/types';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { motion } from 'framer-motion';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { clsx } from 'clsx';
 
 type BlockingRow = RunningQueryRow;
@@ -27,7 +27,7 @@ export default function BlockingPage() {
     api.instances().then(i => setInstances(Array.isArray(i) ? i : [])).catch(() => {});
   }, []);
 
-  useEffect(() => {
+  const fetchData = useCallback(() => {
     if (!selectedInstance) { setLoading(false); return; }
     setLoading(true);
     api.performanceBlocking(selectedInstance)
@@ -35,6 +35,8 @@ export default function BlockingPage() {
       .catch(() => setData([]))
       .finally(() => setLoading(false));
   }, [selectedInstance]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   const buildTree = (): BlockNode[] => {
     if (data.length === 0) return [];
@@ -140,16 +142,29 @@ export default function BlockingPage() {
           <AlertTriangle className="w-6 h-6 text-red-400" />
           <h1 className="text-2xl font-bold text-white">Blocking</h1>
         </div>
-        <select
-          value={selectedInstance ?? ''}
-          onChange={e => setSelectedInstance(e.target.value ? Number(e.target.value) : undefined)}
-          className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-        >
-          <option value="">All Instances</option>
-          {instances.map((inst) => (
-            <option key={inst.InstanceID} value={inst.InstanceID}>{inst.InstanceDisplayName || inst.Instance || inst.InstanceID}</option>
-          ))}
-        </select>
+        <div className="flex items-center gap-2">
+          {selectedInstance && (
+            <button
+              onClick={fetchData}
+              disabled={loading}
+              title="Refresh"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-slate-800/50 transition-all disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+          )}
+          <select
+            value={selectedInstance ?? ''}
+            onChange={e => setSelectedInstance(e.target.value ? Number(e.target.value) : undefined)}
+            className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+          >
+            <option value="">All Instances</option>
+            {instances.map((inst) => (
+              <option key={inst.InstanceID} value={inst.InstanceID}>{inst.InstanceDisplayName || inst.Instance || inst.InstanceID}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {note && <div className="text-sm text-yellow-400/80 bg-yellow-400/5 border border-yellow-400/20 rounded-lg px-4 py-2">{note}</div>}
