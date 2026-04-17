@@ -572,6 +572,9 @@ export interface RunningQueryRow extends ApiRow {
   SnapshotDate?: string | null;
   database_id?: number | null;
   database_name?: string | null;
+  login_name?: string | null;
+  host_name?: string | null;
+  program_name?: string | null;
   query_text?: string | null;
 }
 
