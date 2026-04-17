@@ -8,7 +8,7 @@ interface Tab {
 
 export default function TabNav({ tabs, active, onChange }: { tabs: Tab[]; active: string; onChange: (key: string) => void }) {
   return (
-    <div className="flex gap-1 p-1 bg-white/5 rounded-lg w-fit">
+    <div className="tabnav-container flex gap-1 p-1 rounded-lg w-fit">
       {tabs.map(tab => (
         <button
           key={tab.key}
@@ -17,7 +17,7 @@ export default function TabNav({ tabs, active, onChange }: { tabs: Tab[]; active
             'px-4 py-2 text-sm font-medium rounded-md transition-all',
             active === tab.key
               ? 'bg-blue-500/20 text-blue-400 shadow-sm'
-              : 'text-gray-400 hover:text-gray-200 hover:bg-slate-800/50'
+              : 'tabnav-inactive text-gray-400 hover:text-gray-200'
           )}
         >
           {tab.label}
