@@ -190,13 +190,24 @@ Purpose-built reports for IT managers:
 | [.NET 8 Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) | 8.0+ (Hosting Bundle for IIS) |
 | SQL Server | 2012+ |
 
-### Step 1 — Download
+### 1) Download and extract
 
-Download the latest build from [GitHub Actions → Artifacts](https://github.com/BenediktSchackenberg/dbadashwebview/actions) or from [Releases](https://github.com/BenediktSchackenberg/dbadashwebview/releases) and extract the ZIP.
+Download the latest ZIP from [Releases](https://github.com/BenediktSchackenberg/dbadashwebview/releases) (or [GitHub Actions → Artifacts](https://github.com/BenediktSchackenberg/dbadashwebview/actions)) and extract it to your target folder.
 
-### Step 2 — Configure `appsettings.json`
+### 2) Configure `appsettings.json`
 
-Open `appsettings.json` in the extracted folder and fill in the following values:
+Open `appsettings.json` in the extracted folder. At minimum, set these required fields:
+
+| JSON field | Required | What it does | Example |
+|------------|----------|--------------|---------|
+| `ConnectionStrings.DBADashDB` | ✅ Yes | SQL connection string to your DBA Dash repository DB | `Server=SQL01;Database=DBADashDB;Trusted_Connection=True;TrustServerCertificate=true;` |
+| `Jwt.Secret` | ✅ Yes | Secret used to sign login tokens (JWT) | `very-long-random-secret-with-32-plus-characters` |
+| `LocalAuth.BootstrapAdminPassword` | ✅ Yes (first start) | Initial admin password used once to bootstrap the first local admin user | `UseAStrongTempPassword!` |
+| `LocalAuth.BootstrapAdminUsername` | Recommended | Username for the bootstrap admin | `admin` |
+| `LocalAuth.BootstrapAdminDisplayName` | Recommended | Display name shown in UI | `Administrator` |
+| `LocalAuth.UserStorePath` | Recommended | Path where local users are stored | `config/local-users.json` |
+
+Minimal working example:
 
 ```json
 {
@@ -216,26 +227,73 @@ Open `appsettings.json` in the extracted folder and fill in the following values
 }
 ```
 
-> **Important:** All three values must be set — `DBADashDB`, `Jwt.Secret`, and `LocalAuth.BootstrapAdminPassword`.  
-> The `BootstrapAdminPassword` is used **only on the first start** to create the initial admin user. After that, you can change or remove it.
+> **Important:** WebView will not start correctly without `ConnectionStrings.DBADashDB` and `Jwt.Secret`.  
+> `LocalAuth.BootstrapAdminPassword` is only needed to create the first local admin account.
 
-### Step 3 — Run
+### 3) Start the app
 
-**Standalone (development/testing):**
+**Standalone (test/dev):**
 ```powershell
 dotnet DBADashWebView.dll
 # Open http://localhost:5000
 ```
 
-**IIS (production):** See the [IIS Deployment](#-iis-deployment) section below.
+**IIS (production):** follow [IIS Deployment](#-iis-deployment) below.
 
-### Step 4 — Log in
+### 4) First login and cleanup
 
-Open the app in your browser and log in with:
-- **Username:** `admin` (or whatever you set in `BootstrapAdminUsername`)
-- **Password:** the value you set in `BootstrapAdminPassword`
+1. Sign in with:
+   - **Username:** value from `LocalAuth.BootstrapAdminUsername` (default `admin`)
+   - **Password:** value from `LocalAuth.BootstrapAdminPassword`
+2. Go to **Settings → Users** and create your permanent users/accounts.
+3. Remove `BootstrapAdminPassword` from `appsettings.json` after bootstrap is complete.
 
-After your first login, go to **Settings → Users** to create permanent users with proper passwords. You can then remove the `BootstrapAdminPassword` from `appsettings.json`.
+### 5) Verify data access
+
+If login works but dashboards are empty, check:
+- the SQL login in your connection string can read `DBADashDB`
+- DBA Dash collectors are writing fresh data
+- firewall/network allows the app server to reach SQL Server
+
+---
+
+## 🧭 Feature Mapping (DBA Dash Windows → Web)
+
+The table below maps common DBA Dash Windows areas to their WebView equivalent pages/routes.
+
+| DBA Dash (Windows) | WebView page | Route |
+|--------------------|--------------|-------|
+| Summary tab (status matrix) | Summary Dashboard | `/` |
+| SQL Monitor-style instance overview | SQL Monitor | `/monitor` |
+| Alerts / check failures / failed jobs | Alerts | `/alerts` |
+| Instance details (checks overview) | Instance Detail | `/instances/:id` |
+| Instance → Backups | Instance Backups | `/instances/:id/backups` |
+| Instance → Drives / storage | Instance Drives | `/instances/:id/drives` |
+| Instance → Configuration | Configuration (instance) | `/instances/:id/configuration` |
+| Instance → HA/DR | Availability Groups (instance) | `/instances/:id/hadr` |
+| Instance → Jobs | Job Timeline (instance) | `/instances/:id/jobs` |
+| Running Queries | Running Queries | `/performance/running-queries` |
+| Blocking | Blocking Analysis | `/performance/blocking` |
+| Slow Queries | Slow Queries | `/performance/slow-queries` |
+| Wait Statistics | Waits Timeline | `/performance/waits-timeline` |
+| Memory | Memory | `/performance/memory` |
+| IO Performance | IO Performance | `/performance/io` |
+| Query Store | Query Store | `/performance/query-store` |
+| Backup Ampel / estate backup health | Backup Ampel Report | `/reports/backup-ampel` |
+| Availability Groups (fleet-wide) | AlwaysOn Overview | `/availability-groups` |
+| License reporting | License Overview | `/reports/licenses` |
+| Underutilized server analysis | Underutilized Servers | `/reports/underutilized` |
+| Fleet health/resource summary | Fleet Statistics | `/reports/fleet-stats` |
+| Configuration tracking changes | Schema/Config Monitoring | `/monitoring/configuration`, `/monitoring/schema-changes` |
+| Identity columns tracking | Identity Columns | `/monitoring/identity-columns` |
+| TempDB monitoring | TempDB | `/monitoring/tempdb` |
+| Database space tracking | Database Space | `/monitoring/db-space` |
+| Threshold configuration | Threshold Settings | `/settings/thresholds` |
+| User management / RBAC | Users Settings | `/settings/users` |
+
+> Notes:
+> - `:id` in routes means the numeric instance ID.
+> - Some workflows are split into dedicated pages in WebView instead of one combined Windows tab.
 
 ---
 
