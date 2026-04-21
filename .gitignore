@@ -6,6 +6,7 @@ backend.tests/obj/
 backend/Properties/launchSettings.json
 backend/config/
 backend/TestResults/
+.dotnet-home/
 
 # Node
 frontend/node_modules/

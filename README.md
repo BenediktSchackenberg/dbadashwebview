@@ -223,6 +223,17 @@ dotnet DBADashWebView.dll
 
 ---
 
+### Development in Visual Studio
+
+Open `DBADashWebView.sln` from the repository root to load the ASP.NET Core backend and the xUnit test project in Visual Studio. The React/Vite SPA remains in `frontend/`; run `npm install` once and use `npm run dev` or `npm run build` from that folder for frontend work.
+
+```powershell
+dotnet build DBADashWebView.sln
+dotnet test DBADashWebView.sln
+```
+
+---
+
 ## 🖥️ IIS Deployment
 
 ### 1. Install the ASP.NET Core Hosting Bundle
