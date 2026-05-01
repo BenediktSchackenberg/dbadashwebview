@@ -1,12 +1,12 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
-  Database, ChevronRight, ChevronDown, LayoutDashboard, Bell, HardDrive, Network,
+  Database, ChevronRight, ChevronDown, HardDrive,
   Settings, ClipboardCheck, Shield, Play, BarChart3, Search, LogOut, User, Folder, Server,
-  FileSpreadsheet, TrendingDown, Activity, Monitor
 } from 'lucide-react';
 import { api } from '../api/api';
 import { getAuthSession } from '../auth/session';
+import NavMenu from './NavMenu';
 import type { TreeInstanceNode } from '../api/types';
 
 const versionMap: Record<number, string> = {
@@ -14,15 +14,6 @@ const versionMap: Record<number, string> = {
   14: 'SQL Server 2017', 13: 'SQL Server 2016', 12: 'SQL Server 2014',
   11: 'SQL Server 2012', 10: 'SQL Server 2008',
 };
-
-const globalViews = [
-  { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { path: '/monitor', icon: Monitor, label: 'SQL Monitor' },
-  { path: '/alerts', icon: Bell, label: 'Alerts' },
-  { path: '/estate/backups', icon: Database, label: 'Backups' },
-  { path: '/drives', icon: HardDrive, label: 'Drives' },
-  { path: '/availability-groups', icon: Network, label: 'AlwaysOn Overview' },
-];
 
 const instanceCategories = [
   { key: 'configuration', icon: Settings, label: 'Configuration', path: (id: number) => `/instances/${id}/configuration` },
@@ -131,42 +122,7 @@ export default function InstanceTree({ onLogout }: { onLogout: () => void }) {
       </div>
 
       <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'thin', scrollbarColor: '#475569 transparent' }}>
-        {/* Global Views */}
-        <div className="px-3 py-2">
-          <div className="text-xs font-semibold uppercase tracking-wider text-gray-500 px-0 py-2">Global Views</div>
-          {globalViews.map(item => (
-            <Link key={item.path} to={item.path}
-              className={`flex items-center gap-2.5 py-1.5 px-2 rounded text-sm transition-all ${
-                isActive(item.path)
-                  ? 'bg-blue-500/15 text-blue-400 border-l-2 border-blue-400'
-                  : 'text-gray-400 hover:text-white hover:bg-white/5 border-l-2 border-transparent'
-              }`}>
-              <item.icon className={`w-4 h-4 ${isActive(item.path) ? 'text-blue-400' : 'text-gray-500'}`} />
-              <span>{item.label}</span>
-            </Link>
-          ))}
-        </div>
-
-        {/* Reporting */}
-        <div className="px-3 py-2">
-          <div className="text-xs font-semibold uppercase tracking-wider text-gray-500 px-0 py-2">Reporting</div>
-          {[
-            { path: '/reports/licenses', icon: FileSpreadsheet, label: 'License Overview' },
-            { path: '/reports/underutilized', icon: TrendingDown, label: 'Underutilized Servers' },
-            { path: '/reports/fleet-stats', icon: Activity, label: 'Fleet Statistics' },
-            { path: '/reports/backup-ampel', icon: Shield, label: 'Backup Ampel Report' },
-          ].map(item => (
-            <Link key={item.path} to={item.path}
-              className={`flex items-center gap-2.5 py-1.5 px-2 rounded text-sm transition-all ${
-                isActive(item.path)
-                  ? 'bg-blue-500/15 text-blue-400 border-l-2 border-blue-400'
-                  : 'text-gray-400 hover:text-white hover:bg-white/5 border-l-2 border-transparent'
-              }`}>
-              <item.icon className={`w-4 h-4 ${isActive(item.path) ? 'text-blue-400' : 'text-gray-500'}`} />
-              <span>{item.label}</span>
-            </Link>
-          ))}
-        </div>
+        <NavMenu />
 
         {/* SQL Servers grouped by version */}
         <div className="px-3 py-2">
