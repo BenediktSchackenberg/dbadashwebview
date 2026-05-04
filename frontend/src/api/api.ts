@@ -148,18 +148,34 @@ export const api = {
     request<ApiDataResponse<RunningQueryRow>>(`/api/performance/running-queries${instanceId ? `?instanceId=${instanceId}` : ''}`),
   performanceBlocking: (instanceId?: number) =>
     request<ApiDataResponse<RunningQueryRow>>(`/api/performance/blocking${instanceId ? `?instanceId=${instanceId}` : ''}`),
-  performanceSlowQueries: (instanceId?: number, hours = 24) =>
-    request<ApiDataResponse<SlowQueryRow>>(`/api/performance/slow-queries?hours=${hours}${instanceId ? `&instanceId=${instanceId}` : ''}`),
+  performanceSlowQueries: (instanceId?: number, hours = 24, from?: string, to?: string) =>
+    request<ApiDataResponse<SlowQueryRow>>(
+      `/api/performance/slow-queries?${from && to
+        ? `from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+        : `hours=${hours}`}${instanceId ? `&instanceId=${instanceId}` : ''}`
+    ),
   performanceMemory: (instanceId?: number, hours = 24) =>
     request<MemoryResponse>(`/api/performance/memory?hours=${hours}${instanceId ? `&instanceId=${instanceId}` : ''}`),
   performanceIO: (instanceId?: number, hours = 24) =>
     request<PerformanceIOResponse>(`/api/performance/io?hours=${hours}${instanceId ? `&instanceId=${instanceId}` : ''}`),
-  performanceExecStats: (instanceId?: number, hours = 24) =>
-    request<ApiDataResponse<ExecStatsRow>>(`/api/performance/exec-stats?hours=${hours}${instanceId ? `&instanceId=${instanceId}` : ''}`),
-  performanceWaitsTimeline: (instanceId: number, hours = 24) =>
-    request<ApiDataResponse<WaitTimelineRow>>(`/api/performance/waits-timeline?instanceId=${instanceId}&hours=${hours}`),
-  performanceCounters: (instanceId: number, hours = 24) =>
-    request<ApiDataResponse<PerformanceCounterRow>>(`/api/performance/counters?instanceId=${instanceId}&hours=${hours}`),
+  performanceExecStats: (instanceId?: number, hours = 24, from?: string, to?: string) =>
+    request<ApiDataResponse<ExecStatsRow>>(
+      `/api/performance/exec-stats?${from && to
+        ? `from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+        : `hours=${hours}`}${instanceId ? `&instanceId=${instanceId}` : ''}`
+    ),
+  performanceWaitsTimeline: (instanceId: number, hours = 24, from?: string, to?: string) =>
+    request<ApiDataResponse<WaitTimelineRow>>(
+      `/api/performance/waits-timeline?instanceId=${instanceId}&${from && to
+        ? `from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+        : `hours=${hours}`}`
+    ),
+  performanceCounters: (instanceId: number, hours = 24, from?: string, to?: string) =>
+    request<ApiDataResponse<PerformanceCounterRow>>(
+      `/api/performance/counters?instanceId=${instanceId}&${from && to
+        ? `from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+        : `hours=${hours}`}`
+    ),
   monitoringJobTimeline: (instanceId: number, hours = 24) =>
     request<ApiDataResponse<JobTimelineRow>>(`/api/monitoring/job-timeline?instanceId=${instanceId}&hours=${hours}`),
   monitoringConfiguration: (instanceId: number) =>

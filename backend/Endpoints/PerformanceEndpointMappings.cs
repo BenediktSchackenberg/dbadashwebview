@@ -119,12 +119,15 @@ public static class PerformanceEndpointMappings
             }
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/performance/slow-queries", async (int? instanceId, int? hours, SqlDataService sql, ILogger<Program> logger, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/performance/slow-queries", async (int? instanceId, int? hours, DateTimeOffset? from, DateTimeOffset? to, SqlDataService sql, ILogger<Program> logger, CancellationToken cancellationToken) =>
         {
             var effectiveHours = hours ?? 24;
             try
             {
                 var filter = instanceId.HasValue ? "AND sq.InstanceID = @instanceId" : string.Empty;
+                var timeFilter = from.HasValue && to.HasValue
+                    ? "sq.timestamp BETWEEN @from AND @to"
+                    : "sq.timestamp > DATEADD(hour, -@hours, GETUTCDATE())";
                 var query = $"""
                     SELECT TOP 200 sq.InstanceID,
                            COALESCE(i.InstanceDisplayName, i.Instance) AS InstanceDisplayName,
@@ -144,14 +147,16 @@ public static class PerformanceEndpointMappings
                     FROM dbo.SlowQueries sq
                     JOIN dbo.Instances i ON sq.InstanceID = i.InstanceID
                     LEFT JOIN dbo.Databases d ON sq.DatabaseID = d.DatabaseID
-                    WHERE sq.timestamp > DATEADD(hour, -@hours, GETUTCDATE()) {filter}
+                    WHERE {timeFilter} {filter}
                     ORDER BY sq.duration DESC
                     """;
                 var data = await sql.QueryAsync(
                     query,
                     cancellationToken,
                     ("@instanceId", instanceId.HasValue ? instanceId.Value : DBNull.Value),
-                    ("@hours", effectiveHours));
+                    ("@hours", effectiveHours),
+                    ("@from", from.HasValue ? from.Value : DBNull.Value),
+                    ("@to", to.HasValue ? to.Value : DBNull.Value));
                 return Results.Ok(new { data, note = string.Empty });
             }
             catch (Exception ex)
@@ -292,7 +297,7 @@ public static class PerformanceEndpointMappings
             return Results.Ok(new { fileStats, drivePerf, fileNote, driveNote });
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/performance/exec-stats", async (int? instanceId, int? hours, SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/performance/exec-stats", async (int? instanceId, int? hours, DateTimeOffset? from, DateTimeOffset? to, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             var effectiveHours = hours ?? 24;
             object data = Array.Empty<object>();
@@ -301,6 +306,9 @@ public static class PerformanceEndpointMappings
             try
             {
                 var filter = instanceId.HasValue ? "AND os.InstanceID = @instanceId" : string.Empty;
+                var timeFilter = from.HasValue && to.HasValue
+                    ? "os.SnapshotDate BETWEEN @from AND @to"
+                    : "os.SnapshotDate > DATEADD(hour, -@hours, GETUTCDATE())";
                 var query = $"""
                     SELECT TOP 500 os.InstanceID,
                            COALESCE(i.InstanceDisplayName, i.Instance) AS InstanceDisplayName,
@@ -316,13 +324,15 @@ public static class PerformanceEndpointMappings
                     FROM dbo.ObjectExecutionStats os
                     JOIN dbo.Instances i ON os.InstanceID = i.InstanceID
                     JOIN dbo.DBObjects dbo_obj ON os.ObjectID = dbo_obj.ObjectID
-                    WHERE os.SnapshotDate > DATEADD(hour, -@hours, GETUTCDATE()) {filter}
+                    WHERE {timeFilter} {filter}
                     ORDER BY os.total_worker_time DESC
                     """;
                 data = await sql.QueryAsync(
                     query,
                     cancellationToken,
                     ("@hours", effectiveHours),
+                    ("@from", from.HasValue ? from.Value : DBNull.Value),
+                    ("@to", to.HasValue ? to.Value : DBNull.Value),
                     ("@instanceId", instanceId.HasValue ? instanceId.Value : DBNull.Value));
             }
             catch (Exception ex)
@@ -333,7 +343,7 @@ public static class PerformanceEndpointMappings
             return Results.Ok(new { data, note });
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/performance/waits-timeline", async (int? instanceId, int? hours, SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/performance/waits-timeline", async (int? instanceId, int? hours, DateTimeOffset? from, DateTimeOffset? to, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             var effectiveHours = hours ?? 24;
             object data = Array.Empty<object>();
@@ -346,7 +356,10 @@ public static class PerformanceEndpointMappings
 
             try
             {
-                data = await sql.QueryAsync("""
+                var timeFilter = from.HasValue && to.HasValue
+                    ? "w.SnapshotDate BETWEEN @from AND @to"
+                    : "w.SnapshotDate > DATEADD(hour, -@hours, GETUTCDATE())";
+                var query = $"""
                     SELECT w.InstanceID,
                            w.SnapshotDate,
                            wt.WaitType,
@@ -356,12 +369,16 @@ public static class PerformanceEndpointMappings
                     FROM dbo.Waits w
                     JOIN dbo.WaitType wt ON w.WaitTypeID = wt.WaitTypeID
                     WHERE w.InstanceID = @instanceId
-                      AND w.SnapshotDate > DATEADD(hour, -@hours, GETUTCDATE())
+                      AND {timeFilter}
                     ORDER BY w.SnapshotDate
-                    """,
+                    """;
+                data = await sql.QueryAsync(
+                    query,
                     cancellationToken,
                     ("@instanceId", instanceId.Value),
-                    ("@hours", effectiveHours));
+                    ("@hours", effectiveHours),
+                    ("@from", from.HasValue ? from.Value : DBNull.Value),
+                    ("@to", to.HasValue ? to.Value : DBNull.Value));
             }
             catch (Exception ex)
             {
@@ -371,7 +388,7 @@ public static class PerformanceEndpointMappings
             return Results.Ok(new { data, note });
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/performance/counters", async (int? instanceId, int? hours, SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/performance/counters", async (int? instanceId, int? hours, DateTimeOffset? from, DateTimeOffset? to, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             var effectiveHours = hours ?? 24;
             object data = Array.Empty<object>();
@@ -384,7 +401,10 @@ public static class PerformanceEndpointMappings
 
             try
             {
-                data = await sql.QueryAsync("""
+                var timeFilter = from.HasValue && to.HasValue
+                    ? "pc.SnapshotDate BETWEEN @from AND @to"
+                    : "pc.SnapshotDate > DATEADD(hour, -@hours, GETUTCDATE())";
+                var query = $"""
                     SELECT pc.InstanceID,
                            COALESCE(i.InstanceDisplayName, i.Instance) AS InstanceDisplayName,
                            c.object_name,
@@ -396,12 +416,16 @@ public static class PerformanceEndpointMappings
                     JOIN dbo.Instances i ON pc.InstanceID = i.InstanceID
                     JOIN dbo.Counters c ON pc.CounterID = c.CounterID
                     WHERE pc.InstanceID = @instanceId
-                      AND pc.SnapshotDate > DATEADD(hour, -@hours, GETUTCDATE())
+                      AND {timeFilter}
                     ORDER BY pc.SnapshotDate
-                    """,
+                    """;
+                data = await sql.QueryAsync(
+                    query,
                     cancellationToken,
                     ("@instanceId", instanceId.Value),
-                    ("@hours", effectiveHours));
+                    ("@hours", effectiveHours),
+                    ("@from", from.HasValue ? from.Value : DBNull.Value),
+                    ("@to", to.HasValue ? to.Value : DBNull.Value));
             }
             catch (Exception ex)
             {

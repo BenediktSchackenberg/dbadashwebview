@@ -23,6 +23,8 @@ export default function ExecStatsPage() {
   const [sortKey, setSortKey] = useState<SortKey>('total_worker_time');
   const [sortAsc, setSortAsc] = useState(false);
   const [hours, setHours] = useState(24);
+  const [objectFilter, setObjectFilter] = useState('');
+  const inputCls = 'bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-blue-500/50';
 
   useEffect(() => {
     api.instances().then(i => setInstances(Array.isArray(i) ? i : [])).catch(() => {});
@@ -44,14 +46,23 @@ export default function ExecStatsPage() {
     total_dur_ms: Math.round((d.total_elapsed_time ?? 0) / 1000),
   })), [data]);
 
+  const filtered = useMemo(() => {
+    const q = objectFilter.trim().toLowerCase();
+    if (!q) return enriched;
+    return enriched.filter((row) => {
+      const objectName = String((row as { objectName?: string | null }).objectName ?? row.object_name ?? '').toLowerCase();
+      return objectName.includes(q);
+    });
+  }, [enriched, objectFilter]);
+
   const sorted = useMemo(() => {
-    const s = [...enriched].sort((a, b) => {
+    const s = [...filtered].sort((a, b) => {
       const av = a[sortKey] ?? 0;
       const bv = b[sortKey] ?? 0;
       return sortAsc ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
     });
     return s;
-  }, [enriched, sortKey, sortAsc]);
+  }, [filtered, sortKey, sortAsc]);
 
   const top10 = useMemo(() =>
     [...enriched].sort((a, b) => b.total_cpu_ms - a.total_cpu_ms).slice(0, 10)
@@ -85,13 +96,32 @@ export default function ExecStatsPage() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <select value={hours} onChange={e => setHours(Number(e.target.value))} className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-gray-300">
+          <select value={hours} onChange={e => setHours(Number(e.target.value))} className={inputCls}>
             <option value={1}>1h</option><option value={6}>6h</option><option value={12}>12h</option><option value={24}>24h</option><option value={72}>3d</option><option value={168}>7d</option><option value={336}>14d</option>
           </select>
-          <select value={selectedInstance ?? ''} onChange={e => setSelectedInstance(e.target.value ? Number(e.target.value) : undefined)} className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-gray-300">
+          <select value={selectedInstance ?? ''} onChange={e => setSelectedInstance(e.target.value ? Number(e.target.value) : undefined)} className={inputCls}>
             <option value="">All Instances</option>
             {instances.map((inst) => <option key={inst.InstanceID} value={inst.InstanceID}>{inst.InstanceDisplayName || inst.Instance || inst.InstanceID}</option>)}
           </select>
+          <div className="relative">
+            <input
+              type="text"
+              value={objectFilter}
+              onChange={(e) => setObjectFilter(e.target.value)}
+              placeholder="Filter by object name..."
+              className={`${inputCls} pr-8 w-56`}
+            />
+            {objectFilter && (
+              <button
+                type="button"
+                onClick={() => setObjectFilter('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white text-xs"
+                aria-label="Clear object name filter"
+              >
+                ✕
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
