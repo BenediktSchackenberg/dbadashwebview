@@ -413,27 +413,41 @@ public static class PerformanceEndpointMappings
 
         endpoints.MapGet("/api/performance/query-store", async (int instanceId, SqlDataService sql, CancellationToken cancellationToken) =>
         {
-            var tables = new[] { "QueryStoreStats", "TopQueries" };
-            foreach (var table in tables)
+            // DBADash stores procedure/object-level execution stats in dbo.ObjectExecutionStats.
+            // There are no separate QueryStoreStats or TopQueries tables in the DBADash schema.
+            // We query ObjectExecutionStats grouped by object to surface the top CPU consumers,
+            // which is the closest equivalent to a Query Store top-queries view. (#55)
+            string note = string.Empty;
+            object data = Array.Empty<object>();
+            try
             {
-                try
-                {
-                    await using var connection = await sql.OpenConnectionAsync(cancellationToken);
-                    await using var command = new SqlCommand($"SELECT TOP 100 * FROM dbo.{table} WHERE InstanceID = @id ORDER BY 1 DESC", connection)
-                    {
-                        CommandTimeout = 60
-                    };
-                    command.Parameters.AddWithValue("@id", instanceId);
-
-                    var data = await EndpointResultMapper.ReadRowsAsync(command, cancellationToken, camelCase: true);
-                    return Results.Ok(new { data, note = string.Empty });
-                }
-                catch
-                {
-                }
+                const string query = """
+                    SELECT TOP 100
+                        os.InstanceID,
+                        COALESCE(i.InstanceDisplayName, i.Instance) AS instanceDisplayName,
+                        obj.ObjectName AS objectName,
+                        obj.SchemaName AS schemaName,
+                        SUM(os.execution_count)                          AS countExecutions,
+                        AVG(CAST(os.total_worker_time   AS FLOAT) / NULLIF(os.execution_count, 0) / 1000.0) AS avgCpuTime,
+                        AVG(CAST(os.total_elapsed_time  AS FLOAT) / NULLIF(os.execution_count, 0) / 1000.0) AS avgDuration,
+                        AVG(CAST(os.total_logical_reads AS FLOAT) / NULLIF(os.execution_count, 0))          AS avgLogicalIoReads,
+                        MAX(os.SnapshotDate) AS lastSeen
+                    FROM dbo.ObjectExecutionStats os
+                    JOIN dbo.Instances  i   ON os.InstanceID = i.InstanceID
+                    JOIN dbo.DBObjects  obj ON os.ObjectID   = obj.ObjectID
+                    WHERE os.InstanceID = @instanceId
+                      AND os.SnapshotDate > DATEADD(hour, -24, GETUTCDATE())
+                    GROUP BY os.InstanceID, i.InstanceDisplayName, i.Instance, obj.ObjectName, obj.SchemaName
+                    ORDER BY SUM(os.total_worker_time) DESC
+                    """;
+                data = await sql.QueryAsync(query, cancellationToken, ("@instanceId", instanceId));
+            }
+            catch (Exception ex)
+            {
+                note = $"Query Store data unavailable: {ex.Message}";
             }
 
-            return Results.Ok(new { data = Array.Empty<object>(), note = "Query Store tables not found" });
+            return Results.Ok(new { data, note });
         }).RequireAuthorization();
 
         return endpoints;
