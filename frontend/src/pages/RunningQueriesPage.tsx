@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState, useCallback } from 'react';
+import { Fragment, useEffect, useState, useCallback, useRef } from 'react';
 import { api } from '../api/api';
 import type { InstanceListRow, RunningQueryRow } from '../api/types';
 import { useAutoRefresh } from '../hooks/useAutoRefresh';
@@ -24,6 +24,16 @@ export default function RunningQueriesPage() {
 
   const data: RunningQueryRow[] = result?.data ?? [];
   const note: string = result?.note ?? '';
+  const didInitSelectedInstance = useRef(false);
+
+  useEffect(() => {
+    if (!didInitSelectedInstance.current) {
+      didInitSelectedInstance.current = true;
+      return;
+    }
+    setExpandedRows(new Set());
+    refresh();
+  }, [selectedInstance, refresh]);
 
   const toggleRow = (i: number) => {
     setExpandedRows(prev => {
@@ -61,7 +71,6 @@ export default function RunningQueriesPage() {
           <select
             value={selectedInstance ?? ''}
             onChange={e => {
-              setExpandedRows(new Set());
               setSelectedInstance(e.target.value ? Number(e.target.value) : undefined);
             }}
             className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
