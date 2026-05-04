@@ -28,7 +28,6 @@ export default function BlockingPage() {
   }, []);
 
   const fetchData = useCallback(() => {
-    if (!selectedInstance) { setLoading(false); return; }
     setLoading(true);
     api.performanceBlocking(selectedInstance)
       .then(r => { setData(r.data || []); setNote(r.note || ''); })
@@ -122,17 +121,6 @@ export default function BlockingPage() {
   );
 
   if (loading) return <LoadingSpinner />;
-  if (!selectedInstance) return (
-    <div className="flex flex-col items-center justify-center py-24 text-center">
-      <div className="w-16 h-16 rounded-2xl bg-slate-800/50 flex items-center justify-center mb-4">
-        <svg className="w-8 h-8 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 12h14M12 5l7 7-7 7" />
-        </svg>
-      </div>
-      <p className="text-gray-400 font-medium">Select an instance to load data</p>
-      <p className="text-gray-600 text-sm mt-1">Choose a server from the dropdown above</p>
-    </div>
-  );
   const tree = buildTree();
 
   return (
@@ -143,17 +131,15 @@ export default function BlockingPage() {
           <h1 className="text-2xl font-bold text-white">Blocking</h1>
         </div>
         <div className="flex items-center gap-2">
-          {selectedInstance && (
-            <button
-              onClick={fetchData}
-              disabled={loading}
-              title="Refresh"
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-slate-800/50 transition-all disabled:opacity-50"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
-            </button>
-          )}
+          <button
+            onClick={fetchData}
+            disabled={loading}
+            title="Refresh"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-slate-800/50 transition-all disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
           <select
             value={selectedInstance ?? ''}
             onChange={e => setSelectedInstance(e.target.value ? Number(e.target.value) : undefined)}
