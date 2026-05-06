@@ -6,7 +6,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   AlertTriangle, AlertCircle, Info, Search, X, Inbox, Server,
-  Clock, Briefcase, ChevronRight, ExternalLink, Filter
+  Clock, ChevronRight, ExternalLink
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { format, formatDistanceToNow } from 'date-fns';
@@ -15,6 +15,7 @@ import { format, formatDistanceToNow } from 'date-fns';
 
 type Severity = 'critical' | 'warning' | 'info';
 type AlertType = 'error' | 'job_failure';
+type AlertStatus = 'open' | 'closed';
 
 interface ParsedAlert {
   instanceId: number;
@@ -25,6 +26,7 @@ interface ParsedAlert {
   context: string;
   alertType: AlertType;
   severity: Severity;
+  status: AlertStatus;
 }
 
 function parseSeverity(a: any): Severity {
@@ -33,6 +35,28 @@ function parseSeverity(a: any): Severity {
   if (msg.includes('error') || msg.includes('fail') || msg.includes('timeout') || msg.includes('cannot')) return 'critical';
   if (msg.includes('warning') || msg.includes('retry')) return 'warning';
   return 'info';
+}
+
+function parseStatus(raw: any): AlertStatus {
+  const statusText = String(raw.Status ?? raw.AlertStatus ?? '').toLowerCase();
+
+  if (
+    raw.IsOpen === false ||
+    raw.IsActive === false ||
+    raw.ClosedDate ||
+    raw.ClearDate ||
+    raw.ClearedDate ||
+    raw.ResolvedDate ||
+    raw.EndDate ||
+    statusText.includes('closed') ||
+    statusText.includes('resolved') ||
+    statusText.includes('cleared') ||
+    statusText.includes('acknowledged')
+  ) {
+    return 'closed';
+  }
+
+  return 'open';
 }
 
 function parseAlert(raw: any): ParsedAlert {
@@ -46,6 +70,7 @@ function parseAlert(raw: any): ParsedAlert {
     context: raw.ErrorContext || '',
     alertType: raw.AlertType === 'job_failure' ? 'job_failure' : 'error',
     severity: parseSeverity(raw),
+    status: parseStatus(raw),
   };
 }
 
@@ -64,7 +89,7 @@ export default function AlertsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [sevFilter, setSevFilter] = useState<Severity | 'all'>('all');
-  const [typeFilter, setTypeFilter] = useState<AlertType | 'all'>('all');
+  const [statusFilter, setStatusFilter] = useState<AlertStatus | 'all'>('open');
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
 
   useEffect(() => {
@@ -79,19 +104,19 @@ export default function AlertsPage() {
 
   const q = search.toLowerCase();
   const filtered = useMemo(() => alerts.filter(a => {
+    if (statusFilter !== 'all' && a.status !== statusFilter) return false;
     if (sevFilter !== 'all' && a.severity !== sevFilter) return false;
-    if (typeFilter !== 'all' && a.alertType !== typeFilter) return false;
     if (q && !a.message.toLowerCase().includes(q) && !a.instanceName.toLowerCase().includes(q) && !a.context.toLowerCase().includes(q)) return false;
     return true;
-  }), [alerts, sevFilter, typeFilter, q]);
+  }), [alerts, statusFilter, sevFilter, q]);
 
   const counts = useMemo(() => ({
     total: alerts.length,
+    open: alerts.filter(a => a.status === 'open').length,
+    closed: alerts.filter(a => a.status === 'closed').length,
     critical: alerts.filter(a => a.severity === 'critical').length,
     warning: alerts.filter(a => a.severity === 'warning').length,
     info: alerts.filter(a => a.severity === 'info').length,
-    errors: alerts.filter(a => a.alertType === 'error').length,
-    jobs: alerts.filter(a => a.alertType === 'job_failure').length,
   }), [alerts]);
 
   const selected = selectedIdx !== null && selectedIdx < filtered.length ? filtered[selectedIdx] : null;
@@ -130,40 +155,52 @@ export default function AlertsPage() {
         </div>
       </div>
 
-      {/* KPI Strip */}
-      <div className="flex flex-wrap gap-3">
-        {([
-          { key: 'all' as const, label: 'Gesamt', count: counts.total, color: 'text-white', bg: 'bg-white/5' },
-          { key: 'critical' as const, label: 'Critical', count: counts.critical, color: SEV_CONFIG.critical.color, bg: SEV_CONFIG.critical.bg },
-          { key: 'warning' as const, label: 'Warning', count: counts.warning, color: SEV_CONFIG.warning.color, bg: SEV_CONFIG.warning.bg },
-          { key: 'info' as const, label: 'Info', count: counts.info, color: SEV_CONFIG.info.color, bg: SEV_CONFIG.info.bg },
-        ]).map(k => (
-          <button key={k.key}
-            onClick={() => setSevFilter(sevFilter === k.key ? 'all' : k.key)}
-            className={clsx(
-              'flex items-center gap-2 px-4 py-2 rounded-xl text-sm transition-all border',
-              sevFilter === k.key ? `${k.bg} border-current ${k.color}` : 'bg-white/5 border-white/5 text-gray-400 hover:bg-white/10'
-            )}>
-            <span className={clsx('text-lg font-bold', k.color)}>{k.count}</span>
-            <span>{k.label}</span>
-          </button>
-        ))}
-        <div className="border-l border-white/10 mx-1" />
-        {([
-          { key: 'all' as const, label: 'Alle Typen', icon: Filter },
-          { key: 'error' as const, label: 'Fehler', icon: AlertCircle },
-          { key: 'job_failure' as const, label: 'Jobs', icon: Briefcase },
-        ]).map(k => (
-          <button key={k.key}
-            onClick={() => setTypeFilter(typeFilter === k.key ? 'all' : k.key)}
-            className={clsx(
-              'flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs transition-all border',
-              typeFilter === k.key ? 'bg-white/10 border-white/20 text-white' : 'bg-white/5 border-white/5 text-gray-500 hover:bg-white/10'
-            )}>
-            <k.icon className="w-3.5 h-3.5" />
-            {k.label}
-          </button>
-        ))}
+      {/* Filter Strip */}
+      <div className="space-y-3">
+        <div className="flex flex-wrap gap-2 items-center">
+          {([
+            { key: 'open' as const, label: 'Open', count: counts.open },
+            { key: 'closed' as const, label: 'Closed', count: counts.closed },
+            { key: 'all' as const, label: 'All', count: counts.total },
+          ]).map(k => (
+            <button
+              key={k.key}
+              onClick={() => setStatusFilter(k.key)}
+              className={clsx(
+                'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition-all border',
+                statusFilter === k.key ? 'bg-blue-500/15 border-blue-500/30 text-blue-200' : 'bg-white/5 border-white/5 text-gray-400 hover:bg-white/10'
+              )}
+            >
+              <span className="font-semibold">{k.label}</span>
+              <span className="font-mono text-[11px]">{k.count}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          {([
+            { key: 'all' as const, label: 'Severity: All', count: counts.total, color: 'text-white', bg: 'bg-white/5' },
+            { key: 'critical' as const, label: 'Critical', count: counts.critical, color: SEV_CONFIG.critical.color, bg: SEV_CONFIG.critical.bg },
+            { key: 'warning' as const, label: 'Warning', count: counts.warning, color: SEV_CONFIG.warning.color, bg: SEV_CONFIG.warning.bg },
+            { key: 'info' as const, label: 'Info', count: counts.info, color: SEV_CONFIG.info.color, bg: SEV_CONFIG.info.bg },
+          ]).map(k => (
+            <button
+              key={k.key}
+              onClick={() => setSevFilter(sevFilter === k.key ? 'all' : k.key)}
+              className={clsx(
+                'flex items-center gap-2 px-4 py-2 rounded-xl text-sm transition-all border',
+                sevFilter === k.key ? `${k.bg} border-current ${k.color}` : 'bg-white/5 border-white/5 text-gray-400 hover:bg-white/10'
+              )}
+            >
+              <span className={clsx('text-lg font-bold', k.color)}>{k.count}</span>
+              <span>{k.label}</span>
+            </button>
+          ))}
+        </div>
+
+        <p className="text-xs text-gray-500">
+          Active filters: <span className="text-gray-300">Status = {statusFilter}</span> · <span className="text-gray-300">Severity = {sevFilter}</span>
+        </p>
       </div>
 
       {/* Search */}
@@ -246,8 +283,8 @@ export default function AlertsPage() {
             <div className="text-center py-12">
               <Search className="w-8 h-8 text-gray-600 mx-auto mb-3" />
               <p className="text-gray-400">Keine Alerts für diesen Filter</p>
-              <button onClick={() => { setSearch(''); setSevFilter('all'); setTypeFilter('all'); }}
-                className="text-sm text-blue-400 hover:text-blue-300 mt-2">Filter zurücksetzen</button>
+              <button onClick={() => { setSearch(''); setSevFilter('all'); setStatusFilter('open'); }}
+                className="text-sm text-blue-400 hover:text-blue-300 mt-2">Filter zurücksetzen (Open)</button>
             </div>
           )}
         </div>
