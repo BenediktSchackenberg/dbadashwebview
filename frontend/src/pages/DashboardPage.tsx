@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { useRefresh } from '../App';
 import SummaryPage from './SummaryPage';
 import DashboardPerfSummary from './DashboardPerfSummary';
 import AlertsPage from './AlertsPage';
@@ -18,6 +20,15 @@ type TabKey = typeof TABS[number]['key'];
 
 export default function DashboardPage() {
   const [tab, setTab] = useState<TabKey>('summary');
+  const location = useLocation();
+  const { refresh } = useRefresh();
+
+  useEffect(() => {
+    if (location.pathname === '/') {
+      setTab('summary');
+      refresh();
+    }
+  }, [location.pathname, refresh]);
 
   return (
     <div className="space-y-4">
