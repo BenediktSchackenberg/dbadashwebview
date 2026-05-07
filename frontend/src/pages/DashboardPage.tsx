@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useRefresh } from '../App';
@@ -22,12 +22,17 @@ export default function DashboardPage() {
   const [tab, setTab] = useState<TabKey>('summary');
   const location = useLocation();
   const { refresh } = useRefresh();
+  const prevPathRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (location.pathname === '/') {
+    // Only reset tab and refresh when navigating TO the dashboard from a
+    // different page. Skipping when prevPath is already '/' prevents the
+    // tab from resetting every render (regression fix for #63).
+    if (location.pathname === '/' && prevPathRef.current !== '/') {
       setTab('summary');
       refresh();
     }
+    prevPathRef.current = location.pathname;
   }, [location.pathname, refresh]);
 
   return (
