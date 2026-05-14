@@ -195,7 +195,7 @@ public static class InstanceEndpointMappings
             }
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/jobs/recent", async (SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/jobs/recent", async (int? instanceId, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             try
             {
@@ -206,8 +206,9 @@ public static class InstanceEndpointMappings
                     FROM dbo.JobHistory jh
                     JOIN dbo.Instances i ON jh.InstanceID = i.InstanceID
                     WHERE jh.step_id = 0
+                      AND (@instanceId IS NULL OR jh.InstanceID = @instanceId)
                     ORDER BY jh.RunDateTime DESC
-                    """, cancellationToken);
+                    """, cancellationToken, ("@instanceId", instanceId));
                 return Results.Ok(data);
             }
             catch (Exception ex)
@@ -216,7 +217,7 @@ public static class InstanceEndpointMappings
             }
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/jobs/failures", async (SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/jobs/failures", async (int? instanceId, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             try
             {
@@ -226,9 +227,11 @@ public static class InstanceEndpointMappings
                            jh.InstanceID, i.InstanceDisplayName
                     FROM dbo.JobHistory jh
                     JOIN dbo.Instances i ON jh.InstanceID = i.InstanceID
-                    WHERE jh.run_status = 0 AND jh.RunDateTime > DATEADD(hour, -24, GETUTCDATE())
+                    WHERE jh.run_status = 0
+                      AND jh.RunDateTime > DATEADD(hour, -24, GETUTCDATE())
+                      AND (@instanceId IS NULL OR jh.InstanceID = @instanceId)
                     ORDER BY jh.RunDateTime DESC
-                    """, cancellationToken);
+                    """, cancellationToken, ("@instanceId", instanceId));
                 return Results.Ok(data);
             }
             catch (Exception ex)
