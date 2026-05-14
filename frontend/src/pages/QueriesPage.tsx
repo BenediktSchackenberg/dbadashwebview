@@ -1,4 +1,4 @@
-import { Fragment, useState, useEffect } from 'react';
+import { Fragment, useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../api/api';
 import type { InstanceListRow, QueryAnalysisRow } from '../api/types';
 import { useRefresh } from '../App';
@@ -31,7 +31,7 @@ export default function QueriesPage() {
     }).catch(() => {}).finally(() => setLoading(false));
   }, [lastRefresh]);
 
-  useEffect(() => {
+  const fetchQueries = useCallback(() => {
     if (!selectedInstance) return;
     setLoading(true);
     api.instanceQueries(selectedInstance).then(d => {
@@ -47,7 +47,20 @@ export default function QueriesPage() {
       setQueries(mockQueries);
       setUseMock(true);
     }).finally(() => setLoading(false));
-  }, [selectedInstance, lastRefresh]);
+  }, [selectedInstance]);
+
+  useEffect(() => {
+    fetchQueries();
+  }, [lastRefresh]);
+
+  const didInitSelectedInstance = useRef(false);
+  useEffect(() => {
+    if (!didInitSelectedInstance.current) {
+      didInitSelectedInstance.current = true;
+      return;
+    }
+    fetchQueries();
+  }, [selectedInstance, fetchQueries]);
 
   if (loading && instances.length === 0) return <LoadingSpinner />;
 
