@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using DBADashWebView.Auth;
 using DBADashWebView.Data;
 using Microsoft.Data.SqlClient;
 
@@ -7,7 +9,7 @@ public static class MonitoringEndpointMappings
 {
     public static IEndpointRouteBuilder MapMonitoringEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapGet("/api/monitoring/job-timeline", async (int? instanceId, int? hours, SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/monitoring/job-timeline", async (int? instanceId, int? hours, ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             var effectiveHours = hours ?? 24;
             object data = Array.Empty<object>();
@@ -17,6 +19,9 @@ public static class MonitoringEndpointMappings
             {
                 return Results.Ok(new { data, note = "instanceId required" });
             }
+
+            var deny = await user.EnsureInstanceAccessAsync(instanceId.Value, sql, cancellationToken);
+            if (deny is not null) return deny;
 
             try
             {
@@ -50,7 +55,7 @@ public static class MonitoringEndpointMappings
             return Results.Ok(new { data, note });
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/monitoring/configuration", async (int? instanceId, SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/monitoring/configuration", async (int? instanceId, ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             object data = Array.Empty<object>();
             var note = string.Empty;
@@ -59,6 +64,9 @@ public static class MonitoringEndpointMappings
             {
                 return Results.Ok(new { data, note = "instanceId required" });
             }
+
+            var deny = await user.EnsureInstanceAccessAsync(instanceId.Value, sql, cancellationToken);
+            if (deny is not null) return deny;
 
             try
             {
@@ -96,7 +104,7 @@ public static class MonitoringEndpointMappings
             return Results.Ok(new { data, note });
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/monitoring/configuration/changes", async (int? instanceId, int? days, SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/monitoring/configuration/changes", async (int? instanceId, int? days, ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             var effectiveDays = days ?? 30;
             object data = Array.Empty<object>();
@@ -106,6 +114,9 @@ public static class MonitoringEndpointMappings
             {
                 return Results.Ok(new { data, note = "instanceId required" });
             }
+
+            var deny = await user.EnsureInstanceAccessAsync(instanceId.Value, sql, cancellationToken);
+            if (deny is not null) return deny;
 
             try
             {
@@ -142,20 +153,21 @@ public static class MonitoringEndpointMappings
             return Results.Ok(new { data, note });
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/monitoring/patching", async (SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/monitoring/patching", async (ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             try
             {
-                var data = await sql.QueryAsync("""
+                var (scopeSnippet, scopeParameters) = user.ScopedInstanceFilter("i.InstanceID");
+                var data = await sql.QueryAsync($"""
                     SELECT i.InstanceID AS instanceId,
                            COALESCE(i.InstanceDisplayName, i.Instance) AS instanceName,
                            i.ProductVersion AS productVersion,
                            i.ProductMajorVersion AS productMajorVersion,
                            i.Edition AS edition
                     FROM dbo.Instances i
-                    WHERE i.IsActive = 1
+                    WHERE i.IsActive = 1 {scopeSnippet}
                     ORDER BY i.ProductVersion
-                    """, cancellationToken);
+                    """, cancellationToken, scopeParameters);
                 return Results.Ok(new { data, note = string.Empty });
             }
             catch (Exception ex)
@@ -164,8 +176,10 @@ public static class MonitoringEndpointMappings
             }
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/monitoring/schema-changes", async (int instanceId, int days, SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/monitoring/schema-changes", async (int instanceId, int days, ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
+            var deny = await user.EnsureInstanceAccessAsync(instanceId, sql, cancellationToken);
+            if (deny is not null) return deny;
             var tables = new[] { "DDLHistory" };
             foreach (var table in tables)
             {
@@ -209,8 +223,10 @@ public static class MonitoringEndpointMappings
             return Results.Ok(new { data = Array.Empty<object>(), note = "No schema change tables found" });
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/monitoring/identity-columns", async (int instanceId, SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/monitoring/identity-columns", async (int instanceId, ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
+            var deny = await user.EnsureInstanceAccessAsync(instanceId, sql, cancellationToken);
+            if (deny is not null) return deny;
             try
             {
                 var data = await sql.QueryAsync("""
@@ -239,8 +255,10 @@ public static class MonitoringEndpointMappings
             }
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/monitoring/tempdb", async (int instanceId, SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/monitoring/tempdb", async (int instanceId, ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
+            var deny = await user.EnsureInstanceAccessAsync(instanceId, sql, cancellationToken);
+            if (deny is not null) return deny;
             var queries =
                 new[]
                 {
@@ -274,8 +292,10 @@ public static class MonitoringEndpointMappings
             return Results.Ok(new { data = Array.Empty<object>(), note = "TempDB data not available" });
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/monitoring/db-space", async (int instanceId, SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/monitoring/db-space", async (int instanceId, ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
+            var deny = await user.EnsureInstanceAccessAsync(instanceId, sql, cancellationToken);
+            if (deny is not null) return deny;
             var queries =
                 new[]
                 {

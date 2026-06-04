@@ -13,6 +13,7 @@ public static class ReportEndpointMappings
         {
             try
             {
+                var allowedIds = await user.AllowedInstanceIdsAsync(sql, cancellationToken);
                 var data = await QueryWithFallbackAsync(
                     sql,
                     cancellationToken,
@@ -41,7 +42,7 @@ public static class ReportEndpointMappings
                     ORDER BY i.ProductMajorVersion DESC, COALESCE(i.InstanceDisplayName, i.Instance)
                     """);
 
-                return Results.Ok(data);
+                return Results.Ok(data.FilterByInstanceIds(allowedIds));
             }
             catch (Exception ex)
             {
@@ -53,6 +54,7 @@ public static class ReportEndpointMappings
         {
             try
             {
+                var allowedIds = await user.AllowedInstanceIdsAsync(sql, cancellationToken);
                 var data = await QueryWithFallbackAsync(
                     sql,
                     cancellationToken,
@@ -89,7 +91,7 @@ public static class ReportEndpointMappings
                     ORDER BY AVG(CAST(c.SQLProcessCPU AS float)) ASC
                     """);
 
-                return Results.Ok(data);
+                return Results.Ok(data.FilterByInstanceIds(allowedIds));
             }
             catch (Exception ex)
             {
@@ -103,6 +105,7 @@ public static class ReportEndpointMappings
 
             try
             {
+                var allowedIds = await user.AllowedInstanceIdsAsync(sql, cancellationToken);
                 var cpuData = await QueryWithFallbackAsync(
                     sql,
                     cancellationToken,
@@ -170,7 +173,7 @@ public static class ReportEndpointMappings
                     return row;
                 }).ToList();
 
-                return Results.Ok(result);
+                return Results.Ok(result.FilterByInstanceIds(allowedIds));
             }
             catch (Exception ex)
             {
@@ -182,6 +185,7 @@ public static class ReportEndpointMappings
         {
             try
             {
+                var allowedIds = await user.AllowedInstanceIdsAsync(sql, cancellationToken);
                 await using var connection = await sql.OpenConnectionAsync(cancellationToken);
 
                 await using var backupCommand = new SqlCommand(
@@ -217,6 +221,7 @@ public static class ReportEndpointMappings
                     CommandTimeout = 120
                 };
                 var backupRows = await EndpointResultMapper.ReadRowsAsync(backupCommand, cancellationToken);
+                backupRows = backupRows.FilterByInstanceIds(allowedIds);
 
                 await using var cpuCommand = new SqlCommand(
                     """
@@ -230,6 +235,7 @@ public static class ReportEndpointMappings
                     CommandTimeout = 60
                 };
                 var cpuRows = await EndpointResultMapper.ReadRowsAsync(cpuCommand, cancellationToken);
+                cpuRows = cpuRows.FilterByInstanceIds(allowedIds);
 
                 var cpuByInstance = cpuRows.Select(row => new
                 {
@@ -293,6 +299,7 @@ public static class ReportEndpointMappings
         {
             try
             {
+                var allowedIds = await user.AllowedInstanceIdsAsync(sql, cancellationToken);
                 List<Dictionary<string, object?>> instances;
                 try
                 {
@@ -492,7 +499,7 @@ public static class ReportEndpointMappings
                     return row;
                 }).ToList();
 
-                return Results.Ok(new { instances = result, databases = databaseDetails });
+                return Results.Ok(new { instances = result.FilterByInstanceIds(allowedIds), databases = databaseDetails.FilterByInstanceIds(allowedIds) });
             }
             catch (Exception ex)
             {

@@ -23,6 +23,8 @@ export interface LoginResponse {
   displayName?: string | null;
   role: AuthRole;
   source: AuthSource;
+  allowedTags?: string[];
+  allowedGroupIds?: number[];
 }
 
 export interface DashboardStats {
@@ -439,6 +441,8 @@ export interface LocalUser {
   active: boolean;
   createdAtUtc: string;
   lastLoginAtUtc?: string | null;
+  allowedTags?: string[];
+  allowedGroupIds?: number[];
 }
 
 export interface CreateLocalUserRequest {
@@ -447,6 +451,8 @@ export interface CreateLocalUserRequest {
   password: string;
   role: AuthRole;
   active?: boolean;
+  allowedTags?: string[];
+  allowedGroupIds?: number[];
 }
 
 export interface UpdateLocalUserRequest {
@@ -454,6 +460,8 @@ export interface UpdateLocalUserRequest {
   role: AuthRole;
   active: boolean;
   password?: string;
+  allowedTags?: string[];
+  allowedGroupIds?: number[];
 }
 
 export interface AdConfig {
