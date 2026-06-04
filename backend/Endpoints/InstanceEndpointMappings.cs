@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using DBADashWebView.Data;
 
 namespace DBADashWebView.Endpoints;
@@ -6,11 +7,12 @@ public static class InstanceEndpointMappings
 {
     public static IEndpointRouteBuilder MapInstanceEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapGet("/api/instances", async (SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/instances", async (ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             try
             {
-                var instances = await sql.QueryAsync("""
+                var (scopeSnippet, scopeParameters) = user.ScopedInstanceFilter("i.InstanceID");
+                var instances = await sql.QueryAsync($"""
                     SELECT i.InstanceID, i.Instance, i.ConnectionID, i.IsActive, i.Edition,
                            i.ProductVersion, i.ProductMajorVersion, i.cpu_count, i.physical_memory_kb, i.sqlserver_start_time,
                            i.InstanceDisplayName, i.ShowInSummary, cd.LastCollected
@@ -21,8 +23,9 @@ public static class InstanceEndpointMappings
                     ) cd
                     WHERE i.IsActive = 1
                       AND cd.LastCollected > DATEADD(hour, -24, GETUTCDATE())
+                      {scopeSnippet}
                     ORDER BY i.InstanceDisplayName
-                    """, cancellationToken);
+                    """, cancellationToken, scopeParameters);
                 return Results.Ok(instances);
             }
             catch (Exception ex)
@@ -31,8 +34,10 @@ public static class InstanceEndpointMappings
             }
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/instances/{id:int}", async (int id, SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/instances/{id:int}", async (int id, ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
+            var deny = await user.EnsureInstanceAccessAsync(id, sql, cancellationToken);
+            if (deny is not null) return deny;
             try
             {
                 var instances = await sql.QueryAsync("""
@@ -71,8 +76,10 @@ public static class InstanceEndpointMappings
             }
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/instances/{id:int}/cpu", async (int id, int? hours, SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/instances/{id:int}/cpu", async (int id, int? hours, ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
+            var deny = await user.EnsureInstanceAccessAsync(id, sql, cancellationToken);
+            if (deny is not null) return deny;
             var effectiveHours = Math.Min(hours ?? 24, 336);
             try
             {
@@ -92,8 +99,10 @@ public static class InstanceEndpointMappings
             }
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/instances/{id:int}/waits", async (int id, int? hours, SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/instances/{id:int}/waits", async (int id, int? hours, ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
+            var deny = await user.EnsureInstanceAccessAsync(id, sql, cancellationToken);
+            if (deny is not null) return deny;
             var effectiveHours = Math.Min(hours ?? 24, 336);
             try
             {
@@ -116,8 +125,10 @@ public static class InstanceEndpointMappings
             }
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/instances/{id:int}/drives", async (int id, SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/instances/{id:int}/drives", async (int id, ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
+            var deny = await user.EnsureInstanceAccessAsync(id, sql, cancellationToken);
+            if (deny is not null) return deny;
             try
             {
                 var data = await sql.QueryAsync("""
@@ -133,8 +144,10 @@ public static class InstanceEndpointMappings
             }
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/instances/{id:int}/databases", async (int id, SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/instances/{id:int}/databases", async (int id, ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
+            var deny = await user.EnsureInstanceAccessAsync(id, sql, cancellationToken);
+            if (deny is not null) return deny;
             try
             {
                 var data = await sql.QueryAsync("""
@@ -155,8 +168,10 @@ public static class InstanceEndpointMappings
             }
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/instances/{id:int}/backups", async (int id, SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/instances/{id:int}/backups", async (int id, ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
+            var deny = await user.EnsureInstanceAccessAsync(id, sql, cancellationToken);
+            if (deny is not null) return deny;
             try
             {
                 var data = await sql.QueryAsync("""
@@ -176,8 +191,10 @@ public static class InstanceEndpointMappings
             }
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/instances/{id:int}/jobs", async (int id, SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/instances/{id:int}/jobs", async (int id, ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
+            var deny = await user.EnsureInstanceAccessAsync(id, sql, cancellationToken);
+            if (deny is not null) return deny;
             try
             {
                 var data = await sql.QueryAsync("""
@@ -195,11 +212,14 @@ public static class InstanceEndpointMappings
             }
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/jobs/recent", async (int? instanceId, SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/jobs/recent", async (int? instanceId, ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             try
             {
-                var data = await sql.QueryAsync("""
+                var (scopeSnippet, scopeParameters) = user.ScopedInstanceFilter("jh.InstanceID");
+                var parameters = new List<(string, object?)> { ("@instanceId", instanceId) };
+                parameters.AddRange(scopeParameters);
+                var data = await sql.QueryAsync($"""
                     SELECT TOP 100 jh.job_id, jh.step_id, jh.step_name, jh.run_status,
                            jh.RunDateTime, jh.RunDurationSec, jh.message,
                            jh.InstanceID, i.InstanceDisplayName
@@ -207,8 +227,9 @@ public static class InstanceEndpointMappings
                     JOIN dbo.Instances i ON jh.InstanceID = i.InstanceID
                     WHERE jh.step_id = 0
                       AND (@instanceId IS NULL OR jh.InstanceID = @instanceId)
+                      {scopeSnippet}
                     ORDER BY jh.RunDateTime DESC
-                    """, cancellationToken, ("@instanceId", instanceId));
+                    """, cancellationToken, parameters.ToArray());
                 return Results.Ok(data);
             }
             catch (Exception ex)
@@ -217,11 +238,14 @@ public static class InstanceEndpointMappings
             }
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/jobs/failures", async (int? instanceId, SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/jobs/failures", async (int? instanceId, ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             try
             {
-                var data = await sql.QueryAsync("""
+                var (scopeSnippet, scopeParameters) = user.ScopedInstanceFilter("jh.InstanceID");
+                var parameters = new List<(string, object?)> { ("@instanceId", instanceId) };
+                parameters.AddRange(scopeParameters);
+                var data = await sql.QueryAsync($"""
                     SELECT TOP 100 jh.job_id, jh.step_id, jh.step_name, jh.run_status,
                            jh.RunDateTime, jh.RunDurationSec, jh.message,
                            jh.InstanceID, i.InstanceDisplayName
@@ -230,8 +254,9 @@ public static class InstanceEndpointMappings
                     WHERE jh.run_status = 0
                       AND jh.RunDateTime > DATEADD(hour, -24, GETUTCDATE())
                       AND (@instanceId IS NULL OR jh.InstanceID = @instanceId)
+                      {scopeSnippet}
                     ORDER BY jh.RunDateTime DESC
-                    """, cancellationToken, ("@instanceId", instanceId));
+                    """, cancellationToken, parameters.ToArray());
                 return Results.Ok(data);
             }
             catch (Exception ex)
@@ -240,24 +265,27 @@ public static class InstanceEndpointMappings
             }
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/alerts/recent", async (SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/alerts/recent", async (ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             try
             {
-                var errors = await sql.QueryAsync("""
+                var (errorsScope, errorsScopeParams) = user.ScopedInstanceFilter("e.InstanceID");
+                var errors = await sql.QueryAsync($"""
                     SELECT TOP 100 e.InstanceID,
                            COALESCE(i.InstanceDisplayName, i.Instance, CAST(e.InstanceID AS VARCHAR)) AS InstanceName,
                            e.ErrorDate, e.ErrorMessage, e.ErrorContext,
                            'error' AS AlertType
                     FROM dbo.CollectionErrorLog e
                     LEFT JOIN dbo.Instances i ON e.InstanceID = i.InstanceID
+                    WHERE 1=1 {errorsScope}
                     ORDER BY e.ErrorDate DESC
-                    """, cancellationToken);
+                    """, cancellationToken, errorsScopeParams);
 
                 List<Dictionary<string, object?>> failedJobs = [];
                 try
                 {
-                    failedJobs = await sql.QueryAsync("""
+                    var (jobsScope, jobsScopeParams) = user.ScopedInstanceFilter("jh.InstanceID");
+                    failedJobs = await sql.QueryAsync($"""
                         SELECT TOP 50 jh.InstanceID,
                                COALESCE(i.InstanceDisplayName, i.Instance) AS InstanceName,
                                jh.RunDateTime AS ErrorDate,
@@ -267,8 +295,9 @@ public static class InstanceEndpointMappings
                         FROM dbo.JobHistory jh
                         JOIN dbo.Instances i ON jh.InstanceID = i.InstanceID
                         WHERE jh.run_status = 0 AND jh.RunDateTime > DATEADD(hour, -48, GETUTCDATE())
+                          {jobsScope}
                         ORDER BY jh.RunDateTime DESC
-                        """, cancellationToken);
+                        """, cancellationToken, jobsScopeParams);
                 }
                 catch
                 {

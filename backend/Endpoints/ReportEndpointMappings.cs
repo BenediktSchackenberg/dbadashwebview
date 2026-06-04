@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using DBADashWebView.Auth;
 using DBADashWebView.Data;
 using Microsoft.Data.SqlClient;
@@ -8,7 +9,7 @@ public static class ReportEndpointMappings
 {
     public static IEndpointRouteBuilder MapReportEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapGet("/api/reports/licenses", async (SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/reports/licenses", async (ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             try
             {
@@ -48,7 +49,7 @@ public static class ReportEndpointMappings
             }
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/reports/underutilized", async (SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/reports/underutilized", async (ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             try
             {
@@ -96,7 +97,7 @@ public static class ReportEndpointMappings
             }
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/reports/fleet-stats", async (int? hours, SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/reports/fleet-stats", async (int? hours, ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             var effectiveHours = Math.Min(hours ?? 24, 336);
 
@@ -177,7 +178,7 @@ public static class ReportEndpointMappings
             }
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/backups/management", async (SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/backups/management", async (ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             try
             {
@@ -288,7 +289,7 @@ public static class ReportEndpointMappings
             }
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/reports/backup-ampel", async (SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/reports/backup-ampel", async (ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             try
             {
@@ -499,8 +500,13 @@ public static class ReportEndpointMappings
             }
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/debug/summary/{id:int}", async (int id, SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/debug/summary/{id:int}", async (int id, ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
+            var deny = await user.EnsureInstanceAccessAsync(id, sql, cancellationToken);
+            if (deny is not null)
+            {
+                return deny;
+            }
             try
             {
                 var raw = await sql.QueryAsync(
