@@ -27,12 +27,18 @@ public static class AuthSettingsEndpointMappings
             var adResult = await adAuth.TryAuthenticateAsync(request.Username, request.Password, cancellationToken);
             if (adResult is not null)
             {
+                // AD users are not yet scoped per tag/group in the local store.
+                // Empty scope = unrestricted, which keeps current behaviour.
+                IReadOnlyList<string> adTags = [];
+                IReadOnlyList<int> adGroupIds = [];
                 return Results.Ok(new LoginResponse(
-                    tokenService.CreateToken(adResult.Username, adResult.DisplayName, adResult.Role),
+                    tokenService.CreateToken(adResult.Username, adResult.DisplayName, adResult.Role, adTags, adGroupIds),
                     adResult.Username,
                     adResult.DisplayName,
                     adResult.Role,
-                    "ad"));
+                    "ad",
+                    adTags,
+                    adGroupIds));
             }
 
             var allowLocalFallback = !adEnabled || await adAuth.AllowsLocalFallbackAsync(cancellationToken);
@@ -42,11 +48,18 @@ public static class AuthSettingsEndpointMappings
             if (localUser is not null)
             {
                 return Results.Ok(new LoginResponse(
-                    tokenService.CreateToken(localUser.Username, localUser.DisplayName, localUser.Role),
+                    tokenService.CreateToken(
+                        localUser.Username,
+                        localUser.DisplayName,
+                        localUser.Role,
+                        localUser.AllowedTags,
+                        localUser.AllowedGroupIds),
                     localUser.Username,
                     localUser.DisplayName,
                     localUser.Role,
-                    "local"));
+                    "local",
+                    localUser.AllowedTags,
+                    localUser.AllowedGroupIds));
             }
 
             var localStatus = await localUsers.GetStatusAsync(cancellationToken);

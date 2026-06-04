@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using DBADashWebView.Auth;
 using DBADashWebView.Data;
 
 namespace DBADashWebView.Endpoints;
@@ -17,11 +19,13 @@ public static class DashboardEndpointMappings
 
     public static IEndpointRouteBuilder MapDashboardEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapGet("/api/dashboard/summary", async (SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/dashboard/summary", async (ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             try
             {
-                return Results.Ok(await sql.SpAsync("dbo.Summary_Get", cancellationToken));
+                var rows = await sql.SpAsync("dbo.Summary_Get", cancellationToken);
+                var allowedIds = await user.AllowedInstanceIdsAsync(sql, cancellationToken);
+                return Results.Ok(rows.FilterByInstanceIds(allowedIds));
             }
             catch (Exception ex)
             {
@@ -29,7 +33,7 @@ public static class DashboardEndpointMappings
             }
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/dashboard/stats", async (SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/dashboard/stats", async (ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             try
             {
@@ -53,6 +57,8 @@ public static class DashboardEndpointMappings
                 }
 
                 var summary = await sql.SpAsync("dbo.Summary_Get", cancellationToken);
+                var allowedIds = await user.AllowedInstanceIdsAsync(sql, cancellationToken);
+                summary = summary.FilterByInstanceIds(allowedIds);
                 var activeSummary = activeIds.Count > 0
                     ? summary.Where(row => row.TryGetValue("InstanceID", out var value) && value is not null && activeIds.Contains(Convert.ToInt32(value))).ToList()
                     : summary;
@@ -201,6 +207,7 @@ public static class DashboardEndpointMappings
                         FROM dbo.CollectionErrorLog
                         ORDER BY ErrorDate DESC
                         """, cancellationToken);
+                    recentAlerts = recentAlerts.FilterByInstanceIds(allowedIds);
                 }
                 catch
                 {
@@ -217,6 +224,7 @@ public static class DashboardEndpointMappings
                         WHERE jh.run_status = 0 AND jh.RunDateTime > DATEADD(hour, -24, GETUTCDATE())
                         ORDER BY jh.RunDateTime DESC
                         """, cancellationToken);
+                    failedJobs = failedJobs.FilterByInstanceIds(allowedIds);
                 }
                 catch
                 {
@@ -242,7 +250,7 @@ public static class DashboardEndpointMappings
             }
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/dashboard/performance-summary", async (SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/dashboard/performance-summary", async (ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             try
             {
@@ -252,6 +260,9 @@ public static class DashboardEndpointMappings
                     WHERE IsActive = 1
                     ORDER BY COALESCE(InstanceDisplayName, Instance)
                     """, cancellationToken);
+
+                var perfAllowedIds = await user.AllowedInstanceIdsAsync(sql, cancellationToken);
+                instances = instances.FilterByInstanceIds(perfAllowedIds);
 
                 var cpuData = new Dictionary<int, (double avg, int max, int maxTotal)>();
                 try
@@ -361,7 +372,7 @@ public static class DashboardEndpointMappings
             }
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/dashboard/monitor", async (SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/dashboard/monitor", async (ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             try
             {
@@ -387,6 +398,10 @@ public static class DashboardEndpointMappings
                     WHERE i.IsActive = 1
                     ORDER BY COALESCE(i.InstanceDisplayName, i.Instance)
                     """, cancellationToken);
+
+                var monitorAllowedIds = await user.AllowedInstanceIdsAsync(sql, cancellationToken);
+                instances = instances.FilterByInstanceIds(monitorAllowedIds);
+                summary = summary.FilterByInstanceIds(monitorAllowedIds);
 
                 var cpuMap = new Dictionary<int, (double sqlCpu, double systemCpu)>();
                 var cpuRows = await sql.QueryAsync("""

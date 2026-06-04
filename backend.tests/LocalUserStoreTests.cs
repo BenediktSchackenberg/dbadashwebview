@@ -80,6 +80,65 @@ public sealed class LocalUserStoreTests : IDisposable
             new UpdateLocalUserRequest(admin.DisplayName, AppRoles.Viewer, false, null)));
     }
 
+    [Fact]
+    public async Task CreateUserAsync_PersistsAllowedTagsAndGroupIds()
+    {
+        var store = CreateStore(new Dictionary<string, string?>
+        {
+            ["LocalAuth:Enabled"] = "true",
+            ["LocalAuth:UserStorePath"] = Path.Combine(_tempDirectory, "users.json")
+        });
+
+        var created = await store.CreateUserAsync(new CreateLocalUserRequest(
+            "scoped-user",
+            "Scoped User",
+            "S3cret!",
+            AppRoles.Operator,
+            true,
+            new[] { "prod", "eu-west" },
+            new[] { 1, 2 }));
+
+        Assert.Equal(new[] { "eu-west", "prod" }, created.AllowedTags.OrderBy(t => t).ToArray());
+        Assert.Equal(new[] { 1, 2 }, created.AllowedGroupIds.OrderBy(g => g).ToArray());
+
+        var reloaded = (await store.GetUsersAsync()).Single(u => u.Username == "scoped-user");
+        Assert.Equal(created.AllowedTags.OrderBy(t => t), reloaded.AllowedTags.OrderBy(t => t));
+        Assert.Equal(created.AllowedGroupIds.OrderBy(g => g), reloaded.AllowedGroupIds.OrderBy(g => g));
+    }
+
+    [Fact]
+    public async Task UpdateUserAsync_UpdatesScope()
+    {
+        var store = CreateStore(new Dictionary<string, string?>
+        {
+            ["LocalAuth:Enabled"] = "true",
+            ["LocalAuth:UserStorePath"] = Path.Combine(_tempDirectory, "users.json")
+        });
+
+        var created = await store.CreateUserAsync(new CreateLocalUserRequest(
+            "scoped-user",
+            "Scoped User",
+            "S3cret!",
+            AppRoles.Operator,
+            true));
+
+        Assert.Empty(created.AllowedTags);
+        Assert.Empty(created.AllowedGroupIds);
+
+        var updated = await store.UpdateUserAsync(
+            created.Id,
+            new UpdateLocalUserRequest(
+                created.DisplayName,
+                created.Role,
+                created.Active,
+                null,
+                new[] { "prod" },
+                new[] { 7 }));
+
+        Assert.Equal(new[] { "prod" }, updated.AllowedTags);
+        Assert.Equal(new[] { 7 }, updated.AllowedGroupIds);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDirectory))

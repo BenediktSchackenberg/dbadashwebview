@@ -1,4 +1,6 @@
 using System.Data;
+using System.Security.Claims;
+using DBADashWebView.Auth;
 using DBADashWebView.Data;
 using Microsoft.Data.SqlClient;
 
@@ -8,8 +10,10 @@ public static class PerformanceEndpointMappings
 {
     public static IEndpointRouteBuilder MapPerformanceEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapGet("/api/instances/{id:int}/queries", async (int id, SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/instances/{id:int}/queries", async (int id, ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
+            var deny = await user.EnsureInstanceAccessAsync(id, sql, cancellationToken);
+            if (deny is not null) return deny;
             _ = id;
             try
             {
@@ -34,10 +38,11 @@ public static class PerformanceEndpointMappings
             }
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/performance/running-queries", async (int? instanceId, SqlDataService sql, ILogger<Program> logger, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/performance/running-queries", async (int? instanceId, ClaimsPrincipal user, SqlDataService sql, ILogger<Program> logger, CancellationToken cancellationToken) =>
         {
             try
             {
+                var (scopeSnippet, scopeParameters) = user.ScopedInstanceFilter("rq.InstanceID");
                 var filter = instanceId.HasValue ? "AND rq.InstanceID = @instanceId" : string.Empty;
                 var query = $"""
                     SELECT TOP 200 rq.InstanceID,
@@ -63,10 +68,12 @@ public static class PerformanceEndpointMappings
                     FROM dbo.RunningQueries rq
                     JOIN dbo.Instances i ON rq.InstanceID = i.InstanceID
                     LEFT JOIN dbo.Databases d ON rq.database_id = d.database_id AND rq.InstanceID = d.InstanceID
-                    WHERE rq.SnapshotDateUTC > DATEADD(hour, -1, GETUTCDATE()) {filter}
+                    WHERE rq.SnapshotDateUTC > DATEADD(hour, -1, GETUTCDATE()) {filter} {scopeSnippet}
                     ORDER BY rq.SnapshotDateUTC DESC
                     """;
-                var data = await sql.QueryAsync(query, cancellationToken, ("@instanceId", instanceId.HasValue ? instanceId.Value : DBNull.Value));
+                var parameters = new List<(string, object?)> { ("@instanceId", instanceId.HasValue ? instanceId.Value : DBNull.Value) };
+                parameters.AddRange(scopeParameters);
+                var data = await sql.QueryAsync(query, cancellationToken, parameters.ToArray());
                 return Results.Ok(new { data, note = string.Empty });
             }
             catch (Exception ex)
@@ -76,10 +83,11 @@ public static class PerformanceEndpointMappings
             }
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/performance/blocking", async (int? instanceId, SqlDataService sql, ILogger<Program> logger, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/performance/blocking", async (int? instanceId, ClaimsPrincipal user, SqlDataService sql, ILogger<Program> logger, CancellationToken cancellationToken) =>
         {
             try
             {
+                var (scopeSnippet, scopeParameters) = user.ScopedInstanceFilter("rq.InstanceID");
                 var filter = instanceId.HasValue ? "AND rq.InstanceID = @instanceId" : string.Empty;
                 var query = $"""
                     SELECT rq.InstanceID,
@@ -106,10 +114,12 @@ public static class PerformanceEndpointMappings
                                WHERE blocking_session_id > 0
                                  AND SnapshotDateUTC > DATEADD(hour, -1, GETUTCDATE())
                            ))
-                      {filter}
+                      {filter} {scopeSnippet}
                     ORDER BY rq.SnapshotDateUTC DESC
                     """;
-                var data = await sql.QueryAsync(query, cancellationToken, ("@instanceId", instanceId.HasValue ? instanceId.Value : DBNull.Value));
+                var parameters = new List<(string, object?)> { ("@instanceId", instanceId.HasValue ? instanceId.Value : DBNull.Value) };
+                parameters.AddRange(scopeParameters);
+                var data = await sql.QueryAsync(query, cancellationToken, parameters.ToArray());
                 return Results.Ok(new { data, note = string.Empty });
             }
             catch (Exception ex)
@@ -119,11 +129,12 @@ public static class PerformanceEndpointMappings
             }
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/performance/slow-queries", async (int? instanceId, int? hours, DateTimeOffset? from, DateTimeOffset? to, SqlDataService sql, ILogger<Program> logger, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/performance/slow-queries", async (int? instanceId, int? hours, DateTimeOffset? from, DateTimeOffset? to, ClaimsPrincipal user, SqlDataService sql, ILogger<Program> logger, CancellationToken cancellationToken) =>
         {
             var effectiveHours = hours ?? 24;
             try
             {
+                var (scopeSnippet, scopeParameters) = user.ScopedInstanceFilter("sq.InstanceID");
                 var filter = instanceId.HasValue ? "AND sq.InstanceID = @instanceId" : string.Empty;
                 var timeFilter = from.HasValue && to.HasValue
                     ? "sq.timestamp BETWEEN @from AND @to"
@@ -147,16 +158,21 @@ public static class PerformanceEndpointMappings
                     FROM dbo.SlowQueries sq
                     JOIN dbo.Instances i ON sq.InstanceID = i.InstanceID
                     LEFT JOIN dbo.Databases d ON sq.DatabaseID = d.DatabaseID
-                    WHERE {timeFilter} {filter}
+                    WHERE {timeFilter} {filter} {scopeSnippet}
                     ORDER BY sq.duration DESC
                     """;
-                var data = await sql.QueryAsync(
-                    query,
-                    cancellationToken,
+                var parameters = new List<(string, object?)>
+                {
                     ("@instanceId", instanceId.HasValue ? instanceId.Value : DBNull.Value),
                     ("@hours", effectiveHours),
                     ("@from", from.HasValue ? from.Value : DBNull.Value),
-                    ("@to", to.HasValue ? to.Value : DBNull.Value));
+                    ("@to", to.HasValue ? to.Value : DBNull.Value)
+                };
+                parameters.AddRange(scopeParameters);
+                var data = await sql.QueryAsync(
+                    query,
+                    cancellationToken,
+                    parameters.ToArray());
                 return Results.Ok(new { data, note = string.Empty });
             }
             catch (Exception ex)
@@ -166,7 +182,7 @@ public static class PerformanceEndpointMappings
             }
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/performance/memory", async (int? instanceId, int? hours, SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/performance/memory", async (int? instanceId, int? hours, ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             var effectiveHours = Math.Min(hours ?? 24, 336);
             object clerks = Array.Empty<object>();
@@ -176,6 +192,7 @@ public static class PerformanceEndpointMappings
 
             try
             {
+                var (scopeSnippet, scopeParameters) = user.ScopedInstanceFilter("mu.InstanceID");
                 var filter = instanceId.HasValue ? "AND mu.InstanceID = @instanceId" : string.Empty;
                 var query = $"""
                     SELECT TOP 200 mu.InstanceID,
@@ -187,14 +204,19 @@ public static class PerformanceEndpointMappings
                     FROM dbo.MemoryUsage mu
                     JOIN dbo.Instances i ON mu.InstanceID = i.InstanceID
                     JOIN dbo.MemoryClerkType mct ON mu.MemoryClerkTypeID = mct.MemoryClerkTypeID
-                    WHERE mu.SnapshotDate > DATEADD(hour, -@hours, GETUTCDATE()) {filter}
+                    WHERE mu.SnapshotDate > DATEADD(hour, -@hours, GETUTCDATE()) {filter} {scopeSnippet}
                     ORDER BY mu.pages_kb DESC
                     """;
+                var parameters = new List<(string, object?)>
+                {
+                    ("@instanceId", instanceId.HasValue ? instanceId.Value : DBNull.Value),
+                    ("@hours", effectiveHours)
+                };
+                parameters.AddRange(scopeParameters);
                 clerks = await sql.QueryAsync(
                     query,
                     cancellationToken,
-                    ("@instanceId", instanceId.HasValue ? instanceId.Value : DBNull.Value),
-                    ("@hours", effectiveHours));
+                    parameters.ToArray());
             }
             catch (Exception ex)
             {
@@ -203,6 +225,7 @@ public static class PerformanceEndpointMappings
 
             try
             {
+                var (scopeSnippet, scopeParameters) = user.ScopedInstanceFilter("pc.InstanceID");
                 var filter = instanceId.HasValue ? "AND pc.InstanceID = @instanceId" : string.Empty;
                 var query = $"""
                     SELECT TOP 500 pc.InstanceID,
@@ -214,14 +237,19 @@ public static class PerformanceEndpointMappings
                     JOIN dbo.Instances i ON pc.InstanceID = i.InstanceID
                     JOIN dbo.Counters c ON pc.CounterID = c.CounterID
                     WHERE c.object_name LIKE '%Memory%'
-                      AND pc.SnapshotDate > DATEADD(hour, -@hours, GETUTCDATE()) {filter}
+                      AND pc.SnapshotDate > DATEADD(hour, -@hours, GETUTCDATE()) {filter} {scopeSnippet}
                     ORDER BY pc.SnapshotDate DESC
                     """;
+                var parameters = new List<(string, object?)>
+                {
+                    ("@instanceId", instanceId.HasValue ? instanceId.Value : DBNull.Value),
+                    ("@hours", effectiveHours)
+                };
+                parameters.AddRange(scopeParameters);
                 counters = await sql.QueryAsync(
                     query,
                     cancellationToken,
-                    ("@instanceId", instanceId.HasValue ? instanceId.Value : DBNull.Value),
-                    ("@hours", effectiveHours));
+                    parameters.ToArray());
             }
             catch (Exception ex)
             {
@@ -231,7 +259,7 @@ public static class PerformanceEndpointMappings
             return Results.Ok(new { clerks, counters, clerkNote, counterNote });
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/performance/io", async (int? instanceId, int? hours, SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/performance/io", async (int? instanceId, int? hours, ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             var effectiveHours = Math.Min(hours ?? 24, 336);
             object fileStats = Array.Empty<object>();
@@ -241,6 +269,7 @@ public static class PerformanceEndpointMappings
 
             try
             {
+                var (scopeSnippet, scopeParameters) = user.ScopedInstanceFilter("ios.InstanceID");
                 var filter = instanceId.HasValue ? "AND ios.InstanceID = @instanceId" : string.Empty;
                 var query = $"""
                     SELECT TOP 200 ios.InstanceID,
@@ -258,14 +287,19 @@ public static class PerformanceEndpointMappings
                     JOIN dbo.Instances i ON ios.InstanceID = i.InstanceID
                     JOIN dbo.DBFiles df ON ios.FileID = df.FileID
                     JOIN dbo.Databases d ON df.DatabaseID = d.DatabaseID
-                    WHERE ios.SnapshotDate > DATEADD(hour, -@hours, GETUTCDATE()) {filter}
+                    WHERE ios.SnapshotDate > DATEADD(hour, -@hours, GETUTCDATE()) {filter} {scopeSnippet}
                     ORDER BY (ios.io_stall_read_ms + ios.io_stall_write_ms) DESC
                     """;
+                var parameters = new List<(string, object?)>
+                {
+                    ("@instanceId", instanceId.HasValue ? instanceId.Value : DBNull.Value),
+                    ("@hours", effectiveHours)
+                };
+                parameters.AddRange(scopeParameters);
                 fileStats = await sql.QueryAsync(
                     query,
                     cancellationToken,
-                    ("@instanceId", instanceId.HasValue ? instanceId.Value : DBNull.Value),
-                    ("@hours", effectiveHours));
+                    parameters.ToArray());
             }
             catch (Exception ex)
             {
@@ -274,20 +308,26 @@ public static class PerformanceEndpointMappings
 
             try
             {
+                var (scopeSnippet, scopeParameters) = user.ScopedInstanceFilter("dp.InstanceID");
                 var filter = instanceId.HasValue ? "AND dp.InstanceID = @instanceId" : string.Empty;
                 var query = $"""
                     SELECT TOP 200 dp.*,
                            COALESCE(i.InstanceDisplayName, i.Instance) AS InstanceDisplayName
                     FROM dbo.DriveSnapshot dp
                     JOIN dbo.Instances i ON dp.InstanceID = i.InstanceID
-                    WHERE dp.SnapshotDate > DATEADD(hour, -@hours, GETUTCDATE()) {filter}
+                    WHERE dp.SnapshotDate > DATEADD(hour, -@hours, GETUTCDATE()) {filter} {scopeSnippet}
                     ORDER BY dp.SnapshotDate DESC
                     """;
+                var parameters = new List<(string, object?)>
+                {
+                    ("@instanceId", instanceId.HasValue ? instanceId.Value : DBNull.Value),
+                    ("@hours", effectiveHours)
+                };
+                parameters.AddRange(scopeParameters);
                 drivePerf = await sql.QueryAsync(
                     query,
                     cancellationToken,
-                    ("@instanceId", instanceId.HasValue ? instanceId.Value : DBNull.Value),
-                    ("@hours", effectiveHours));
+                    parameters.ToArray());
             }
             catch (Exception ex)
             {
@@ -297,7 +337,7 @@ public static class PerformanceEndpointMappings
             return Results.Ok(new { fileStats, drivePerf, fileNote, driveNote });
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/performance/exec-stats", async (int? instanceId, int? hours, DateTimeOffset? from, DateTimeOffset? to, SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/performance/exec-stats", async (int? instanceId, int? hours, DateTimeOffset? from, DateTimeOffset? to, ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             var effectiveHours = hours ?? 24;
             object data = Array.Empty<object>();
@@ -305,6 +345,7 @@ public static class PerformanceEndpointMappings
 
             try
             {
+                var (scopeSnippet, scopeParameters) = user.ScopedInstanceFilter("os.InstanceID");
                 var filter = instanceId.HasValue ? "AND os.InstanceID = @instanceId" : string.Empty;
                 var timeFilter = from.HasValue && to.HasValue
                     ? "os.SnapshotDate BETWEEN @from AND @to"
@@ -324,16 +365,21 @@ public static class PerformanceEndpointMappings
                     FROM dbo.ObjectExecutionStats os
                     JOIN dbo.Instances i ON os.InstanceID = i.InstanceID
                     JOIN dbo.DBObjects dbo_obj ON os.ObjectID = dbo_obj.ObjectID
-                    WHERE {timeFilter} {filter}
+                    WHERE {timeFilter} {filter} {scopeSnippet}
                     ORDER BY os.total_worker_time DESC
                     """;
-                data = await sql.QueryAsync(
-                    query,
-                    cancellationToken,
+                var parameters = new List<(string, object?)>
+                {
                     ("@hours", effectiveHours),
                     ("@from", from.HasValue ? from.Value : DBNull.Value),
                     ("@to", to.HasValue ? to.Value : DBNull.Value),
-                    ("@instanceId", instanceId.HasValue ? instanceId.Value : DBNull.Value));
+                    ("@instanceId", instanceId.HasValue ? instanceId.Value : DBNull.Value)
+                };
+                parameters.AddRange(scopeParameters);
+                data = await sql.QueryAsync(
+                    query,
+                    cancellationToken,
+                    parameters.ToArray());
             }
             catch (Exception ex)
             {
@@ -343,7 +389,7 @@ public static class PerformanceEndpointMappings
             return Results.Ok(new { data, note });
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/performance/waits-timeline", async (int? instanceId, int? hours, DateTimeOffset? from, DateTimeOffset? to, SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/performance/waits-timeline", async (int? instanceId, int? hours, DateTimeOffset? from, DateTimeOffset? to, ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             var effectiveHours = hours ?? 24;
             object data = Array.Empty<object>();
@@ -353,6 +399,9 @@ public static class PerformanceEndpointMappings
             {
                 return Results.Ok(new { data, note = "instanceId required" });
             }
+
+            var deny = await user.EnsureInstanceAccessAsync(instanceId.Value, sql, cancellationToken);
+            if (deny is not null) return deny;
 
             try
             {
@@ -388,7 +437,7 @@ public static class PerformanceEndpointMappings
             return Results.Ok(new { data, note });
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/performance/counters", async (int? instanceId, int? hours, DateTimeOffset? from, DateTimeOffset? to, SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/performance/counters", async (int? instanceId, int? hours, DateTimeOffset? from, DateTimeOffset? to, ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             var effectiveHours = hours ?? 24;
             object data = Array.Empty<object>();
@@ -398,6 +447,9 @@ public static class PerformanceEndpointMappings
             {
                 return Results.Ok(new { data, note = "instanceId required" });
             }
+
+            var deny = await user.EnsureInstanceAccessAsync(instanceId.Value, sql, cancellationToken);
+            if (deny is not null) return deny;
 
             try
             {
@@ -435,8 +487,10 @@ public static class PerformanceEndpointMappings
             return Results.Ok(new { data, note });
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/performance/query-store", async (int instanceId, SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/performance/query-store", async (int instanceId, ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
+            var deny = await user.EnsureInstanceAccessAsync(instanceId, sql, cancellationToken);
+            if (deny is not null) return deny;
             // DBADash stores procedure/object-level execution stats in dbo.ObjectExecutionStats.
             // There are no separate QueryStoreStats or TopQueries tables in the DBADash schema.
             // We query ObjectExecutionStats grouped by object to surface the top CPU consumers,

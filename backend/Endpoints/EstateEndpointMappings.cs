@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using DBADashWebView.Auth;
 using DBADashWebView.Data;
 using Microsoft.Data.SqlClient;
 
@@ -7,10 +9,11 @@ public static class EstateEndpointMappings
 {
     public static IEndpointRouteBuilder MapEstateEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapGet("/api/backups/estate", async (SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/backups/estate", async (ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             try
             {
+                var allowedIds = await user.AllowedInstanceIdsAsync(sql, cancellationToken);
                 await using var connection = await sql.OpenConnectionAsync(cancellationToken);
                 await using var command = new SqlCommand(
                     """
@@ -46,7 +49,7 @@ public static class EstateEndpointMappings
                 };
 
                 var data = await EndpointResultMapper.ReadRowsAsync(command, cancellationToken, camelCase: true);
-                return Results.Ok(data);
+                return Results.Ok(data.FilterByInstanceIds(allowedIds, instanceIdKey: "instanceID"));
             }
             catch (Exception ex)
             {
@@ -54,18 +57,20 @@ public static class EstateEndpointMappings
             }
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/drives", async (SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/drives", async (ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             try
             {
+                var (scopeSnippet, scopeParameters) = user.ScopedInstanceFilter("d.InstanceID");
                 var data = await sql.QueryAsync(
-                    """
+                    $"""
                     SELECT d.*, i.InstanceDisplayName
                     FROM dbo.Drives d
                     JOIN dbo.Instances i ON d.InstanceID = i.InstanceID
-                    WHERE d.IsActive = 1
+                    WHERE d.IsActive = 1 {scopeSnippet}
                     """,
-                    cancellationToken);
+                    cancellationToken,
+                    scopeParameters);
                 return Results.Ok(data);
             }
             catch (Exception ex)
@@ -74,23 +79,25 @@ public static class EstateEndpointMappings
             }
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/tree", async (SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/tree", async (ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             try
             {
+                var (scopeSnippet, scopeParameters) = user.ScopedInstanceFilter("i.InstanceID");
                 var rows = await sql.QueryAsync(
-                    """
+                    $"""
                     SELECT i.InstanceID, COALESCE(i.InstanceDisplayName, i.Instance) AS InstanceName,
                            i.ProductVersion, i.ProductMajorVersion,
                            d.DatabaseID, d.name AS DatabaseName,
                            CASE WHEN d.database_id <= 4 THEN 1 ELSE 0 END AS IsSystem
                     FROM dbo.Instances i
                     LEFT JOIN dbo.Databases d ON i.InstanceID = d.InstanceID AND d.IsActive = 1
-                    WHERE i.IsActive = 1
+                    WHERE i.IsActive = 1 {scopeSnippet}
                     ORDER BY COALESCE(i.InstanceDisplayName, i.Instance),
                              CASE WHEN d.database_id <= 4 THEN 0 ELSE 1 END, d.name
                     """,
-                    cancellationToken);
+                    cancellationToken,
+                    scopeParameters);
 
                 var instances = new Dictionary<int, Dictionary<string, object?>>();
                 var databasesByInstance = new Dictionary<int, List<object>>();

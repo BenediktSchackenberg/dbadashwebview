@@ -7,7 +7,9 @@ public sealed record LoginResponse(
     string Username,
     string? DisplayName,
     string Role,
-    string Source);
+    string Source,
+    IReadOnlyList<string> AllowedTags,
+    IReadOnlyList<int> AllowedGroupIds);
 
 public sealed record AuthStatusResponse(
     bool LocalAuthEnabled,
@@ -27,20 +29,26 @@ public sealed record LocalUserResponse(
     string Role,
     bool Active,
     DateTimeOffset CreatedAtUtc,
-    DateTimeOffset? LastLoginAtUtc);
+    DateTimeOffset? LastLoginAtUtc,
+    IReadOnlyList<string> AllowedTags,
+    IReadOnlyList<int> AllowedGroupIds);
 
 public sealed record CreateLocalUserRequest(
     string Username,
     string? DisplayName,
     string Password,
     string Role,
-    bool Active = true);
+    bool Active = true,
+    IReadOnlyList<string>? AllowedTags = null,
+    IReadOnlyList<int>? AllowedGroupIds = null);
 
 public sealed record UpdateLocalUserRequest(
     string? DisplayName,
     string Role,
     bool Active,
-    string? Password);
+    string? Password,
+    IReadOnlyList<string>? AllowedTags = null,
+    IReadOnlyList<int>? AllowedGroupIds = null);
 
 public sealed record AdConfigRequest(
     bool Enabled,

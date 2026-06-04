@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using DBADashWebView.Data;
 using Microsoft.Data.SqlClient;
 
@@ -7,15 +8,17 @@ public static class AvailabilityEndpointMappings
 {
     public static IEndpointRouteBuilder MapAvailabilityEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapGet("/api/availability-groups", async (SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/availability-groups", async (ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             try
             {
-                var data = await sql.QueryAsync("""
+                var (scopeSnippet, scopeParameters) = user.ScopedInstanceFilter("ag.InstanceID");
+                var data = await sql.QueryAsync($"""
                     SELECT ag.*, i.InstanceDisplayName
                     FROM dbo.AvailabilityGroups ag
                     JOIN dbo.Instances i ON ag.InstanceID = i.InstanceID
-                    """, cancellationToken);
+                    WHERE 1=1 {scopeSnippet}
+                    """, cancellationToken, scopeParameters);
                 return Results.Ok(data);
             }
             catch
@@ -24,8 +27,10 @@ public static class AvailabilityEndpointMappings
             }
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/instances/{id:int}/hadr", async (int id, SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/instances/{id:int}/hadr", async (int id, ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
+            var deny = await user.EnsureInstanceAccessAsync(id, sql, cancellationToken);
+            if (deny is not null) return deny;
             try
             {
                 var ags = await sql.QueryAsync("""
@@ -78,13 +83,14 @@ public static class AvailabilityEndpointMappings
             }
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/hadr/overview", async (SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/hadr/overview", async (ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             try
             {
+                var (scopeSnippet, scopeParameters) = user.ScopedInstanceFilter("ag.InstanceID");
                 await using var connection = await sql.OpenConnectionAsync(cancellationToken);
 
-                await using var agCommand = new SqlCommand("""
+                await using var agCommand = new SqlCommand($"""
                     SELECT ag.group_id, ag.name AS AGName, ag.InstanceID,
                            COALESCE(i.InstanceDisplayName, i.Instance) AS InstanceName,
                            ag.automated_backup_preference_desc, ag.basic_features,
@@ -92,12 +98,16 @@ public static class AvailabilityEndpointMappings
                            i.ProductMajorVersion, i.Edition, i.cpu_count, i.physical_memory_kb
                     FROM dbo.AvailabilityGroups ag
                     JOIN dbo.Instances i ON ag.InstanceID = i.InstanceID
-                    WHERE i.IsActive = 1
+                    WHERE i.IsActive = 1 {scopeSnippet}
                     ORDER BY ag.name
                     """, connection)
                 {
                     CommandTimeout = 60
                 };
+                foreach (var (name, value) in scopeParameters)
+                {
+                    agCommand.Parameters.AddWithValue(name, value ?? DBNull.Value);
+                }
                 var ags = await ReadRowsAsync(agCommand, cancellationToken);
 
                 await using var replicaCommand = new SqlCommand("""

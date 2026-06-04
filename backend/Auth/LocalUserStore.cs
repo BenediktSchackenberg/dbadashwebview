@@ -54,7 +54,9 @@ public sealed class LocalUserStore
                 DisplayName = string.IsNullOrWhiteSpace(options.BootstrapAdminDisplayName) ? null : options.BootstrapAdminDisplayName.Trim(),
                 Role = AppRoles.Admin,
                 Active = true,
-                CreatedAtUtc = DateTimeOffset.UtcNow
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+                AllowedTags = [],
+                AllowedGroupIds = []
             };
             admin.PasswordHash = _passwordHasher.HashPassword(admin, options.BootstrapAdminPassword);
 
@@ -154,7 +156,9 @@ public sealed class LocalUserStore
                 DisplayName = string.IsNullOrWhiteSpace(request.DisplayName) ? null : request.DisplayName.Trim(),
                 Role = AppRoles.Normalize(request.Role),
                 Active = request.Active,
-                CreatedAtUtc = DateTimeOffset.UtcNow
+                CreatedAtUtc = DateTimeOffset.UtcNow,
+                AllowedTags = NormalizeTags(request.AllowedTags),
+                AllowedGroupIds = NormalizeGroupIds(request.AllowedGroupIds)
             };
             user.PasswordHash = _passwordHasher.HashPassword(user, request.Password);
 
@@ -192,6 +196,8 @@ public sealed class LocalUserStore
             user.DisplayName = string.IsNullOrWhiteSpace(request.DisplayName) ? null : request.DisplayName.Trim();
             user.Role = targetRole;
             user.Active = request.Active;
+            user.AllowedTags = NormalizeTags(request.AllowedTags);
+            user.AllowedGroupIds = NormalizeGroupIds(request.AllowedGroupIds);
 
             if (!string.IsNullOrWhiteSpace(request.Password))
             {
@@ -255,6 +261,31 @@ public sealed class LocalUserStore
     private static string NormalizeUsername(string username) =>
         username.Trim().ToUpperInvariant();
 
+    private static List<string> NormalizeTags(IReadOnlyList<string>? tags)
+    {
+        if (tags is null || tags.Count == 0)
+        {
+            return [];
+        }
+
+        return tags
+            .Where(tag => !string.IsNullOrWhiteSpace(tag))
+            .Select(tag => tag.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(tag => tag, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static List<int> NormalizeGroupIds(IReadOnlyList<int>? groupIds)
+    {
+        if (groupIds is null || groupIds.Count == 0)
+        {
+            return [];
+        }
+
+        return groupIds.Distinct().OrderBy(id => id).ToList();
+    }
+
     private static LocalUserResponse ToResponse(StoredLocalUser user) =>
         new(
             user.Id,
@@ -263,7 +294,9 @@ public sealed class LocalUserStore
             user.Role,
             user.Active,
             user.CreatedAtUtc,
-            user.LastLoginAtUtc);
+            user.LastLoginAtUtc,
+            user.AllowedTags?.ToArray() ?? [],
+            user.AllowedGroupIds?.ToArray() ?? []);
 
     private sealed class StoredLocalUserDocument
     {
@@ -281,5 +314,7 @@ public sealed class LocalUserStore
         public string PasswordHash { get; set; } = string.Empty;
         public DateTimeOffset CreatedAtUtc { get; set; }
         public DateTimeOffset? LastLoginAtUtc { get; set; }
+        public List<string> AllowedTags { get; set; } = [];
+        public List<int> AllowedGroupIds { get; set; } = [];
     }
 }

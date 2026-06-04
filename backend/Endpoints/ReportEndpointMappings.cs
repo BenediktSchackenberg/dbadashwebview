@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using DBADashWebView.Auth;
 using DBADashWebView.Data;
 using Microsoft.Data.SqlClient;
@@ -8,10 +9,11 @@ public static class ReportEndpointMappings
 {
     public static IEndpointRouteBuilder MapReportEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapGet("/api/reports/licenses", async (SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/reports/licenses", async (ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             try
             {
+                var allowedIds = await user.AllowedInstanceIdsAsync(sql, cancellationToken);
                 var data = await QueryWithFallbackAsync(
                     sql,
                     cancellationToken,
@@ -40,7 +42,7 @@ public static class ReportEndpointMappings
                     ORDER BY i.ProductMajorVersion DESC, COALESCE(i.InstanceDisplayName, i.Instance)
                     """);
 
-                return Results.Ok(data);
+                return Results.Ok(data.FilterByInstanceIds(allowedIds));
             }
             catch (Exception ex)
             {
@@ -48,10 +50,11 @@ public static class ReportEndpointMappings
             }
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/reports/underutilized", async (SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/reports/underutilized", async (ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             try
             {
+                var allowedIds = await user.AllowedInstanceIdsAsync(sql, cancellationToken);
                 var data = await QueryWithFallbackAsync(
                     sql,
                     cancellationToken,
@@ -88,7 +91,7 @@ public static class ReportEndpointMappings
                     ORDER BY AVG(CAST(c.SQLProcessCPU AS float)) ASC
                     """);
 
-                return Results.Ok(data);
+                return Results.Ok(data.FilterByInstanceIds(allowedIds));
             }
             catch (Exception ex)
             {
@@ -96,12 +99,13 @@ public static class ReportEndpointMappings
             }
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/reports/fleet-stats", async (int? hours, SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/reports/fleet-stats", async (int? hours, ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             var effectiveHours = Math.Min(hours ?? 24, 336);
 
             try
             {
+                var allowedIds = await user.AllowedInstanceIdsAsync(sql, cancellationToken);
                 var cpuData = await QueryWithFallbackAsync(
                     sql,
                     cancellationToken,
@@ -169,7 +173,7 @@ public static class ReportEndpointMappings
                     return row;
                 }).ToList();
 
-                return Results.Ok(result);
+                return Results.Ok(result.FilterByInstanceIds(allowedIds));
             }
             catch (Exception ex)
             {
@@ -177,10 +181,11 @@ public static class ReportEndpointMappings
             }
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/backups/management", async (SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/backups/management", async (ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             try
             {
+                var allowedIds = await user.AllowedInstanceIdsAsync(sql, cancellationToken);
                 await using var connection = await sql.OpenConnectionAsync(cancellationToken);
 
                 await using var backupCommand = new SqlCommand(
@@ -216,6 +221,7 @@ public static class ReportEndpointMappings
                     CommandTimeout = 120
                 };
                 var backupRows = await EndpointResultMapper.ReadRowsAsync(backupCommand, cancellationToken);
+                backupRows = backupRows.FilterByInstanceIds(allowedIds);
 
                 await using var cpuCommand = new SqlCommand(
                     """
@@ -229,6 +235,7 @@ public static class ReportEndpointMappings
                     CommandTimeout = 60
                 };
                 var cpuRows = await EndpointResultMapper.ReadRowsAsync(cpuCommand, cancellationToken);
+                cpuRows = cpuRows.FilterByInstanceIds(allowedIds);
 
                 var cpuByInstance = cpuRows.Select(row => new
                 {
@@ -288,10 +295,11 @@ public static class ReportEndpointMappings
             }
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/reports/backup-ampel", async (SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/reports/backup-ampel", async (ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             try
             {
+                var allowedIds = await user.AllowedInstanceIdsAsync(sql, cancellationToken);
                 List<Dictionary<string, object?>> instances;
                 try
                 {
@@ -491,7 +499,7 @@ public static class ReportEndpointMappings
                     return row;
                 }).ToList();
 
-                return Results.Ok(new { instances = result, databases = databaseDetails });
+                return Results.Ok(new { instances = result.FilterByInstanceIds(allowedIds), databases = databaseDetails.FilterByInstanceIds(allowedIds) });
             }
             catch (Exception ex)
             {
@@ -499,8 +507,13 @@ public static class ReportEndpointMappings
             }
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/debug/summary/{id:int}", async (int id, SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/debug/summary/{id:int}", async (int id, ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
+            var deny = await user.EnsureInstanceAccessAsync(id, sql, cancellationToken);
+            if (deny is not null)
+            {
+                return deny;
+            }
             try
             {
                 var raw = await sql.QueryAsync(

@@ -30,6 +30,19 @@ const defaultAdConfig: AdConfig = {
 
 const roleOptions: AuthRole[] = ['Admin', 'Operator', 'Viewer'];
 
+function parseScopeList(text: string): string[] {
+  return text
+    .split(',')
+    .map(value => value.trim())
+    .filter(value => value.length > 0);
+}
+
+function parseScopeNumberList(text: string): number[] {
+  return parseScopeList(text)
+    .map(value => Number(value))
+    .filter(value => Number.isInteger(value) && value > 0);
+}
+
 export default function ConfigUsersPage() {
   const [authTab, setAuthTab] = useState<'local' | 'ldap'>('local');
   const [authStatus, setAuthStatus] = useState<AuthStatusResponse | null>(null);
@@ -43,6 +56,8 @@ export default function ConfigUsersPage() {
     password: '',
     role: 'Viewer' as AuthRole,
     active: true,
+    allowedTagsText: '',
+    allowedGroupIdsText: ''
   });
   const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -106,9 +121,11 @@ export default function ConfigUsersPage() {
         password: newUser.password,
         role: newUser.role,
         active: newUser.active,
+        allowedTags: parseScopeList(newUser.allowedTagsText),
+        allowedGroupIds: parseScopeNumberList(newUser.allowedGroupIdsText),
       });
       setUsers(current => [...current, { ...created, password: '' }].sort((a, b) => a.username.localeCompare(b.username)));
-      setNewUser({ username: '', displayName: '', password: '', role: 'Viewer', active: true });
+      setNewUser({ username: '', displayName: '', password: '', role: 'Viewer', active: true, allowedTagsText: '', allowedGroupIdsText: '' });
       setShowAdd(false);
       showToast('success', `Created local user ${created.username}.`);
     } catch (err) {
@@ -124,6 +141,8 @@ export default function ConfigUsersPage() {
         role: user.role,
         active: user.active,
         password: user.password || undefined,
+        allowedTags: user.allowedTags ?? [],
+        allowedGroupIds: user.allowedGroupIds ?? [],
       };
       const updated = await api.updateLocalUser(user.id, payload);
       updateUser(user.id, { ...updated, password: '' });
@@ -235,6 +254,24 @@ export default function ConfigUsersPage() {
                 />
                 User is active
               </label>
+              <div>
+                <label className="mb-1 block text-xs uppercase tracking-wide text-gray-400">Allowed tags (comma separated, empty = full fleet)</label>
+                <input
+                  placeholder="prod, eu-west"
+                  value={newUser.allowedTagsText}
+                  onChange={event => setNewUser(current => ({ ...current, allowedTagsText: event.target.value }))}
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs uppercase tracking-wide text-gray-400">Allowed group ids (comma separated)</label>
+                <input
+                  placeholder="1, 3"
+                  value={newUser.allowedGroupIdsText}
+                  onChange={event => setNewUser(current => ({ ...current, allowedGroupIdsText: event.target.value }))}
+                  className={inputCls}
+                />
+              </div>
               <button
                 onClick={handleCreateUser}
                 className="w-full rounded-lg bg-blue-500 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-600"
@@ -286,6 +323,8 @@ export default function ConfigUsersPage() {
                       <th className="pb-3 font-semibold text-gray-300">Role</th>
                       <th className="pb-3 font-semibold text-gray-300">Status</th>
                       <th className="pb-3 font-semibold text-gray-300">Last Login</th>
+                      <th className="pb-3 font-semibold text-gray-300">Tags</th>
+                      <th className="pb-3 font-semibold text-gray-300">Groups</th>
                       <th className="pb-3 font-semibold text-gray-300">Reset Password</th>
                       <th className="pb-3 text-right font-semibold text-gray-300">Actions</th>
                     </tr>
@@ -327,6 +366,22 @@ export default function ConfigUsersPage() {
                         </td>
                         <td className="py-3">
                           <input
+                            value={(user.allowedTags ?? []).join(', ')}
+                            onChange={event => updateUser(user.id, { allowedTags: parseScopeList(event.target.value) })}
+                            className={`${inputCls} min-w-[160px] py-2`}
+                            placeholder="empty = all"
+                          />
+                        </td>
+                        <td className="py-3">
+                          <input
+                            value={(user.allowedGroupIds ?? []).join(', ')}
+                            onChange={event => updateUser(user.id, { allowedGroupIds: parseScopeNumberList(event.target.value) })}
+                            className={`${inputCls} min-w-[120px] py-2`}
+                            placeholder="empty = all"
+                          />
+                        </td>
+                        <td className="py-3">
+                          <input
                             type="password"
                             value={user.password}
                             onChange={event => updateUser(user.id, { password: event.target.value })}
@@ -348,7 +403,7 @@ export default function ConfigUsersPage() {
                     ))}
                     {users.length === 0 && (
                       <tr>
-                        <td colSpan={7} className="py-8 text-center text-gray-500">
+                        <td colSpan={9} className="py-8 text-center text-gray-500">
                           No local users configured yet.
                         </td>
                       </tr>
