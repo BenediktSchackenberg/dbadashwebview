@@ -265,11 +265,24 @@ public static class InstanceEndpointMappings
             }
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/alerts/recent", async (ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/alerts/recent", async (int? instanceId, ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             try
             {
+                if (instanceId is int requestedInstanceId)
+                {
+                    var deny = await user.EnsureInstanceAccessAsync(requestedInstanceId, sql, cancellationToken);
+                    if (deny is not null)
+                    {
+                        return deny;
+                    }
+                }
+
                 var (errorsScope, errorsScopeParams) = user.ScopedInstanceFilter("e.InstanceID");
+                var instanceFilter = instanceId.HasValue ? " AND e.InstanceID = @instanceId" : string.Empty;
+                var errorParams = instanceId.HasValue
+                    ? errorsScopeParams.Append(("@instanceId", (object?)instanceId.Value)).ToArray()
+                    : errorsScopeParams;
                 var errors = await sql.QueryAsync($"""
                     SELECT TOP 100 e.InstanceID,
                            COALESCE(i.InstanceDisplayName, i.Instance, CAST(e.InstanceID AS VARCHAR)) AS InstanceName,
@@ -277,14 +290,18 @@ public static class InstanceEndpointMappings
                            'error' AS AlertType
                     FROM dbo.CollectionErrorLog e
                     LEFT JOIN dbo.Instances i ON e.InstanceID = i.InstanceID
-                    WHERE 1=1 {errorsScope}
+                    WHERE 1=1 {errorsScope}{instanceFilter}
                     ORDER BY e.ErrorDate DESC
-                    """, cancellationToken, errorsScopeParams);
+                    """, cancellationToken, errorParams);
 
                 List<Dictionary<string, object?>> failedJobs = [];
                 try
                 {
                     var (jobsScope, jobsScopeParams) = user.ScopedInstanceFilter("jh.InstanceID");
+                    var jobsInstanceFilter = instanceId.HasValue ? " AND jh.InstanceID = @instanceId" : string.Empty;
+                    var jobParams = instanceId.HasValue
+                        ? jobsScopeParams.Append(("@instanceId", (object?)instanceId.Value)).ToArray()
+                        : jobsScopeParams;
                     failedJobs = await sql.QueryAsync($"""
                         SELECT TOP 50 jh.InstanceID,
                                COALESCE(i.InstanceDisplayName, i.Instance) AS InstanceName,
@@ -295,9 +312,9 @@ public static class InstanceEndpointMappings
                         FROM dbo.JobHistory jh
                         JOIN dbo.Instances i ON jh.InstanceID = i.InstanceID
                         WHERE jh.run_status = 0 AND jh.RunDateTime > DATEADD(hour, -48, GETUTCDATE())
-                          {jobsScope}
+                          {jobsScope}{jobsInstanceFilter}
                         ORDER BY jh.RunDateTime DESC
-                        """, cancellationToken, jobsScopeParams);
+                        """, cancellationToken, jobParams);
                 }
                 catch
                 {
