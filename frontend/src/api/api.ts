@@ -136,7 +136,12 @@ export const api = {
   instanceJobs: (id: number) => request<InstanceJobRow[]>(`/api/instances/${id}/jobs`),
   jobsRecent: (instanceId?: number) => request<InstanceJobRow[]>(`/api/jobs/recent${instanceId ? `?instanceId=${instanceId}` : ''}`),
   jobsFailures: (instanceId?: number) => request<ApiRow[]>(`/api/jobs/failures${instanceId ? `?instanceId=${instanceId}` : ''}`),
-  alertsRecent: () => request<ApiRow[]>('/api/alerts/recent'),
+  alertsRecent: (instanceId?: number) =>
+    request<ApiRow[]>(
+      typeof instanceId === 'number'
+        ? `/api/alerts/recent?instanceId=${instanceId}`
+        : '/api/alerts/recent',
+    ),
   availabilityGroups: () => request<AvailabilityGroupSummaryRow[]>('/api/availability-groups'),
   instanceHadr: (id: number) => request<InstanceHadrResponse>(`/api/instances/${id}/hadr`),
   hadrOverview: () => request<HadrOverviewResponse>('/api/hadr/overview'),

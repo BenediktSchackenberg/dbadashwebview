@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../api/api';
+import { api, type InstanceListRow } from '../api/api';
 import { useRefresh } from '../App';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -86,19 +86,40 @@ export default function AlertsPage() {
   const { lastRefresh } = useRefresh();
   const navigate = useNavigate();
   const [raw, setRaw] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [sevFilter, setSevFilter] = useState<Severity | 'all'>('all');
   const [statusFilter, setStatusFilter] = useState<AlertStatus | 'all'>('open');
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
 
+  // Instance selector — '' = nothing chosen yet (initial state, no fetch)
+  // 'all' = fetch across the whole fleet (explicit opt-in, may be slow)
+  // numeric id (as string) = single instance
+  const [instanceChoice, setInstanceChoice] = useState<string>('');
+  const [instances, setInstances] = useState<InstanceListRow[]>([]);
+  const [instancesLoading, setInstancesLoading] = useState(true);
+
   useEffect(() => {
+    setInstancesLoading(true);
+    api.instances()
+      .then(rows => setInstances(Array.isArray(rows) ? rows : []))
+      .catch(() => setInstances([]))
+      .finally(() => setInstancesLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (instanceChoice === '') {
+      // Nothing chosen yet — don't hammer the backend on page load
+      setRaw([]);
+      return;
+    }
     setLoading(true);
-    api.alertsRecent()
+    const instanceId = instanceChoice === 'all' ? undefined : Number(instanceChoice);
+    api.alertsRecent(instanceId)
       .then(d => setRaw(Array.isArray(d) ? d : []))
       .catch(() => setRaw([]))
       .finally(() => setLoading(false));
-  }, [lastRefresh]);
+  }, [lastRefresh, instanceChoice]);
 
   const alerts = useMemo(() => raw.map(parseAlert).sort((a, b) => b.date.getTime() - a.date.getTime()), [raw]);
 
@@ -130,12 +151,61 @@ export default function AlertsPage() {
     return Array.from(m.entries()).sort((a, b) => b[1] - a[1]);
   }, [filtered]);
 
+  const instanceSelector = (
+    <div className="flex items-center gap-2 flex-wrap">
+      <label htmlFor="alerts-instance-select" className="text-xs text-gray-400 flex items-center gap-1.5">
+        <Server className="w-3.5 h-3.5" />
+        Instance
+      </label>
+      <select
+        id="alerts-instance-select"
+        value={instanceChoice}
+        onChange={e => { setInstanceChoice(e.target.value); setSelectedIdx(null); }}
+        disabled={instancesLoading}
+        className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500/50 disabled:opacity-50"
+      >
+        <option value="">— select an instance —</option>
+        <option value="all">All instances (slow)</option>
+        {instances.map(i => (
+          <option key={i.InstanceID} value={String(i.InstanceID)}>
+            {i.InstanceDisplayName || i.Instance}
+          </option>
+        ))}
+      </select>
+      {instanceChoice === 'all' && (
+        <span className="text-[11px] text-yellow-400/80 inline-flex items-center gap-1">
+          <AlertTriangle className="w-3 h-3" />
+          Loading alerts across all instances may take several seconds.
+        </span>
+      )}
+    </div>
+  );
+
+  if (instanceChoice === '') {
+    return (
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Alerts & Errors</h1>
+          <p className="text-xs text-gray-500 mt-1">Pick a server to load its alerts — or choose <span className="text-gray-300">All instances</span> for the full fleet (slower).</p>
+        </div>
+        <div className="glass rounded-2xl p-6">{instanceSelector}</div>
+        <div className="glass rounded-2xl p-16 flex flex-col items-center gap-3">
+          <Server className="w-12 h-12 text-gray-600" />
+          <p className="text-sm text-gray-400">Select an instance above to load alerts.</p>
+        </div>
+      </motion.div>
+    );
+  }
+
   if (loading) return <LoadingSpinner />;
 
   if (alerts.length === 0) {
     return (
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-        <h1 className="text-2xl font-bold text-white">Alerts & Errors</h1>
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <h1 className="text-2xl font-bold text-white">Alerts & Errors</h1>
+          {instanceSelector}
+        </div>
         <div className="glass rounded-2xl p-16 flex flex-col items-center gap-4">
           <Inbox className="w-16 h-16 text-gray-600" />
           <p className="text-lg font-medium text-gray-400">Keine Alerts — alles im grünen Bereich!</p>
@@ -153,6 +223,7 @@ export default function AlertsPage() {
           <h1 className="text-2xl font-bold text-white">Alerts & Errors</h1>
           <p className="text-xs text-gray-500 mt-1">Collection-Fehler und fehlgeschlagene Jobs · neueste zuerst · Auto-Refresh 30s</p>
         </div>
+        {instanceSelector}
       </div>
 
       {/* Filter Strip */}
