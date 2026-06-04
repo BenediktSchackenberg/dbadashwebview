@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api, type InstanceListRow } from '../api/api';
+import { api } from '../api/api';
+import type { InstanceListRow } from '../api/types';
 import { useRefresh } from '../App';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { motion, AnimatePresence } from 'framer-motion';
