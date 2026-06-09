@@ -308,13 +308,22 @@ public static class PerformanceEndpointMappings
 
             try
             {
-                var (scopeSnippet, scopeParameters) = user.ScopedInstanceFilter("dp.InstanceID");
-                var filter = instanceId.HasValue ? "AND dp.InstanceID = @instanceId" : string.Empty;
+                var (scopeSnippet, scopeParameters) = user.ScopedInstanceFilter("dr.InstanceID");
+                var filter = instanceId.HasValue ? "AND dr.InstanceID = @instanceId" : string.Empty;
+                // DriveSnapshot has no InstanceID column — join via Drives to resolve the instance.
                 var query = $"""
-                    SELECT TOP 200 dp.*,
+                    SELECT TOP 200 dr.InstanceID,
+                           dr.DriveID,
+                           dr.Name AS DriveName,
+                           dr.Label AS DriveLabel,
+                           dp.SnapshotDate,
+                           dp.Capacity,
+                           dp.FreeSpace,
+                           dp.UsedSpace,
                            COALESCE(i.InstanceDisplayName, i.Instance) AS InstanceDisplayName
                     FROM dbo.DriveSnapshot dp
-                    JOIN dbo.Instances i ON dp.InstanceID = i.InstanceID
+                    JOIN dbo.Drives dr ON dp.DriveID = dr.DriveID
+                    JOIN dbo.Instances i ON dr.InstanceID = i.InstanceID
                     WHERE dp.SnapshotDate > DATEADD(hour, -@hours, GETUTCDATE()) {filter} {scopeSnippet}
                     ORDER BY dp.SnapshotDate DESC
                     """;
