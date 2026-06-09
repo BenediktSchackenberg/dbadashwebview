@@ -662,7 +662,7 @@ function EstateView() {
         <div className="glass rounded-xl p-8 text-center">
           <Search className="w-8 h-8 text-gray-600 mx-auto mb-3" />
           <p className="text-gray-400">No results for &ldquo;{search}&rdquo;</p>
-          <button onClick={() => setSearch('')} className="text-sm text-blue-400 hover:text-blue-300 mt-2">Filter zurücksetzen</button>
+          <button onClick={() => setSearch('')} className="text-sm text-blue-400 hover:text-blue-300 mt-2">Reset filters</button>
         </div>
       )}
       {filteredClusters.map((cluster, clusterIdx) => (
