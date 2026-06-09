@@ -595,7 +595,7 @@ export default function BackupAmpelPage() {
 
         {filtered.length === 0 && (
           <p className="text-center text-gray-500 py-8">
-            {instances.length > 0 ? 'Keine Instanzen passen zum Filter' : 'Keine Daten verfuegbar'}
+            {instances.length > 0 ? 'No instances match this filter' : 'No data available'}
           </p>
         )}
       </div>

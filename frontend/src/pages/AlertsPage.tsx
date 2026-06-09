@@ -209,8 +209,8 @@ export default function AlertsPage() {
         </div>
         <div className="glass rounded-2xl p-16 flex flex-col items-center gap-4">
           <Inbox className="w-16 h-16 text-gray-600" />
-          <p className="text-lg font-medium text-gray-400">Keine Alerts — alles im grünen Bereich!</p>
-          <p className="text-sm text-gray-500">Collection-Fehler und fehlgeschlagene Jobs erscheinen hier</p>
+          <p className="text-lg font-medium text-gray-400">No alerts — everything looks healthy!</p>
+          <p className="text-sm text-gray-500">Collection errors and failed jobs will appear here</p>
         </div>
       </motion.div>
     );
@@ -222,7 +222,7 @@ export default function AlertsPage() {
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white">Alerts & Errors</h1>
-          <p className="text-xs text-gray-500 mt-1">Collection-Fehler und fehlgeschlagene Jobs · neueste zuerst · Auto-Refresh 30s</p>
+          <p className="text-xs text-gray-500 mt-1">Collection errors and failed jobs · newest first · auto-refresh 30s</p>
         </div>
         {instanceSelector}
       </div>
@@ -281,7 +281,7 @@ export default function AlertsPage() {
         <input
           value={search}
           onChange={e => { setSearch(e.target.value); setSelectedIdx(null); }}
-          placeholder="Suche nach Server, Fehlermeldung, Kontext..."
+          placeholder="Search server, error message, context..."
           className="w-full pl-10 pr-10 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50"
         />
         {search && (
@@ -354,9 +354,9 @@ export default function AlertsPage() {
           {filtered.length === 0 && (
             <div className="text-center py-12">
               <Search className="w-8 h-8 text-gray-600 mx-auto mb-3" />
-              <p className="text-gray-400">Keine Alerts für diesen Filter</p>
+              <p className="text-gray-400">No alerts match this filter</p>
               <button onClick={() => { setSearch(''); setSevFilter('all'); setStatusFilter('open'); }}
-                className="text-sm text-blue-400 hover:text-blue-300 mt-2">Filter zurücksetzen (Open)</button>
+                className="text-sm text-blue-400 hover:text-blue-300 mt-2">Reset filters (Open)</button>
             </div>
           )}
         </div>
@@ -395,9 +395,9 @@ export default function AlertsPage() {
                       </button>
                     </div>
                     <div>
-                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Zeitpunkt</p>
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Time</p>
                       <p className="text-sm text-gray-300">
-                        {selected.date.getTime() > 0 ? format(selected.date, 'dd.MM.yyyy HH:mm:ss') : '—'}
+                        {selected.date.getTime() > 0 ? format(selected.date, 'yyyy-MM-dd HH:mm:ss') : '—'}
                       </p>
                       <p className="text-[10px] text-gray-500">
                         {selected.date.getTime() > 0 ? formatDistanceToNow(selected.date, { addSuffix: true }) : ''}
@@ -405,12 +405,12 @@ export default function AlertsPage() {
                     </div>
                     {selected.context && (
                       <div>
-                        <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Kontext</p>
+                        <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Context</p>
                         <p className="text-sm text-gray-300 font-mono bg-white/5 rounded-lg p-2 break-all">{selected.context}</p>
                       </div>
                     )}
                     <div>
-                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Fehlermeldung</p>
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Error message</p>
                       <div className="text-sm text-gray-300 bg-white/5 rounded-lg p-3 max-h-48 overflow-y-auto font-mono text-xs leading-relaxed break-all whitespace-pre-wrap">
                         {selected.message}
                       </div>
@@ -421,7 +421,7 @@ export default function AlertsPage() {
             })() : (
               <div className="text-center py-10">
                 <AlertCircle className="w-8 h-8 text-gray-600 mx-auto mb-3" />
-                <p className="text-sm text-gray-500">Alert auswählen für Details</p>
+                <p className="text-sm text-gray-500">Select an alert to see details</p>
               </div>
             )}
           </div>
