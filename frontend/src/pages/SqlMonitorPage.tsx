@@ -71,7 +71,7 @@ function InstanceCard({ inst, onClick }: { inst: MonitorInstance; onClick: () =>
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       onClick={onClick}
-      className={`${sc.bg} border ${sc.border} rounded-lg p-3 cursor-pointer hover:bg-white/10 transition-all group min-w-[220px]`}
+      className={`${sc.bg} border ${sc.border} rounded-lg p-3 cursor-pointer hover:bg-white/10 transition-all group`}
     >
       {/* Header */}
       <div className="flex items-start justify-between mb-2">
@@ -217,7 +217,7 @@ export default function SqlMonitorPage() {
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400" /></div>;
 
   return (
-    <div className="flex gap-6 min-h-[calc(100vh-120px)]">
+    <div className="flex flex-col lg:flex-row lg:gap-6 gap-4 min-h-[calc(100vh-120px)]">
       {/* Main content */}
       <div className="flex-1 space-y-4 min-w-0">
         {/* Header */}
@@ -229,11 +229,11 @@ export default function SqlMonitorPage() {
               <p className="text-xs text-gray-500">{instances.length} Instances · {ok} healthy · {warn} warning · {crit} critical</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 md:gap-3">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
               <input type="text" placeholder="Search servers..." value={search} onChange={e => setSearch(e.target.value)}
-                className="bg-white/5 border border-white/10 rounded-lg pl-9 pr-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50 w-48"
+                className="bg-white/5 border border-white/10 rounded-lg pl-9 pr-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50 w-36 sm:w-48"
               />
               {search && <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2"><X className="w-3.5 h-3.5 text-gray-500" /></button>}
             </div>
@@ -277,7 +277,7 @@ export default function SqlMonitorPage() {
                 exit={{ height: 0, opacity: 0 }}
                 className="overflow-hidden"
               >
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 px-4 pb-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 px-4 pb-4">
                   {filtered.map(inst => (
                     <InstanceCard key={inst.instanceId} inst={inst} onClick={() => navigate(`/instances/${inst.instanceId}`)} />
                   ))}
@@ -291,9 +291,9 @@ export default function SqlMonitorPage() {
         </div>
       </div>
 
-      {/* Alert sidebar (right panel) */}
-      <div className="w-64 flex-shrink-0 hidden lg:block">
-        <div className="glass rounded-xl border border-white/5 p-4 sticky top-4">
+      {/* Alert sidebar (right panel on lg+, full-width on mobile) */}
+      <div className="w-full lg:w-64 flex-shrink-0">
+        <div className="glass rounded-xl border border-white/5 p-4 lg:sticky lg:top-4">
           <h2 className="text-sm font-semibold text-white mb-3">Alerts</h2>
           <div className="space-y-1">
             {alertTypes.map(at => (

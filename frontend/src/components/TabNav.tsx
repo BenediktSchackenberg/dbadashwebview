@@ -8,13 +8,13 @@ interface Tab {
 
 export default function TabNav({ tabs, active, onChange }: { tabs: Tab[]; active: string; onChange: (key: string) => void }) {
   return (
-    <div className="tabnav-container flex gap-1 p-1 rounded-lg w-fit">
+    <div className="tabnav-container flex gap-1 p-1 rounded-lg max-w-full overflow-x-auto whitespace-nowrap scrollbar-thin">
       {tabs.map(tab => (
         <button
           key={tab.key}
           onClick={() => onChange(tab.key)}
           className={clsx(
-            'px-4 py-2 text-sm font-medium rounded-md transition-all',
+            'px-4 py-2 text-sm font-medium rounded-md transition-all flex-shrink-0',
             active === tab.key
               ? 'bg-blue-500/20 text-blue-400 shadow-sm'
               : 'tabnav-inactive text-gray-400 hover:text-gray-200'

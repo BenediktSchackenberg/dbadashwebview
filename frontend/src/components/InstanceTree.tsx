@@ -26,7 +26,13 @@ const instanceCategories = [
   { key: 'reports', icon: BarChart3, label: 'Reports', path: (id: number) => `/instances/${id}/reports` },
 ];
 
-export default function InstanceTree({ onLogout }: { onLogout: () => void }) {
+interface InstanceTreeProps {
+  onLogout: () => void;
+  onNavigate?: () => void;
+  variant?: 'sidebar' | 'drawer';
+}
+
+export default function InstanceTree({ onLogout, onNavigate, variant = 'sidebar' }: InstanceTreeProps) {
   const [instances, setInstances] = useState<TreeInstanceNode[]>([]);
   const [expandedVersions, setExpandedVersions] = useState<Set<string>>(() => {
     try {
@@ -111,8 +117,14 @@ export default function InstanceTree({ onLogout }: { onLogout: () => void }) {
     return false;
   };
 
+  const handleNavClick = () => {
+    if (onNavigate) onNavigate();
+  };
+
+  const widthClass = variant === 'drawer' ? 'w-[85vw] max-w-xs' : 'w-72';
+
   return (
-    <div className="w-72 bg-slate-900/95 border-r border-white/10 flex flex-col h-full shrink-0">
+    <div className={`${widthClass} bg-slate-900/95 border-r border-white/10 flex flex-col h-full shrink-0`}>
       {/* Header */}
       <div className="p-4 flex items-center gap-3 border-b border-white/10">
         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shrink-0">
@@ -122,7 +134,7 @@ export default function InstanceTree({ onLogout }: { onLogout: () => void }) {
       </div>
 
       <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'thin', scrollbarColor: '#475569 transparent' }}>
-        <NavMenu />
+        <NavMenu onNavigate={handleNavClick} />
 
         {/* SQL Servers grouped by version */}
         <div className="px-3 py-2">
@@ -197,6 +209,7 @@ export default function InstanceTree({ onLogout }: { onLogout: () => void }) {
                                           </button>
                                           {sysExpanded && systemDbs.map(db => (
                                             <Link key={db.databaseId} to={`/instances/${inst.instanceId}/databases/${db.databaseId}`}
+                                              onClick={handleNavClick}
                                               className={`flex items-center gap-2 py-0.5 pl-10 pr-2 rounded text-xs transition-all ${
                                                 isActive(`/instances/${inst.instanceId}/databases/${db.databaseId}`)
                                                   ? 'bg-blue-500/15 text-blue-400' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
@@ -209,6 +222,7 @@ export default function InstanceTree({ onLogout }: { onLogout: () => void }) {
                                       )}
                                       {userDbs.map(db => (
                                         <Link key={db.databaseId} to={`/instances/${inst.instanceId}/databases/${db.databaseId}`}
+                                          onClick={handleNavClick}
                                           className={`flex items-center gap-2 py-0.5 pl-4 pr-2 rounded text-xs transition-all ${
                                             isActive(`/instances/${inst.instanceId}/databases/${db.databaseId}`)
                                               ? 'bg-blue-500/15 text-blue-400' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
@@ -226,6 +240,7 @@ export default function InstanceTree({ onLogout }: { onLogout: () => void }) {
                             const path = cat.path(inst.instanceId);
                             return (
                               <Link key={cat.key} to={path}
+                                onClick={handleNavClick}
                                 className={`flex items-center gap-2 py-1 pl-4 pr-2 rounded text-sm transition-all ${
                                   isActive(path)
                                     ? 'bg-blue-500/15 text-blue-400 border-l-2 border-blue-400'
