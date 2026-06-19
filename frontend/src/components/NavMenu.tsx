@@ -148,7 +148,7 @@ function isPathActive(currentPath: string, targetPath: string) {
   return currentPath === targetPath || currentPath.startsWith(`${targetPath}/`);
 }
 
-export default function NavMenu() {
+export default function NavMenu({ onNavigate }: { onNavigate?: () => void } = {}) {
   const location = useLocation();
   const isAdmin = hasRole(['Admin']);
 
@@ -221,6 +221,7 @@ export default function NavMenu() {
                       <Link
                         key={item.path}
                         to={item.path}
+                        onClick={onNavigate}
                         className={`flex items-center gap-2 py-1 px-2 rounded text-sm transition-all border-l-2 ${
                           active
                             ? 'bg-blue-500/15 text-blue-400 border-blue-400'

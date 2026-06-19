@@ -249,7 +249,7 @@ export default function AlertsPage() {
           ))}
         </div>
 
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-2 md:gap-3">
           {([
             { key: 'all' as const, label: 'Severity: All', count: counts.total, color: 'text-white', bg: 'bg-white/5' },
             { key: 'critical' as const, label: 'Critical', count: counts.critical, color: SEV_CONFIG.critical.color, bg: SEV_CONFIG.critical.bg },
@@ -260,11 +260,11 @@ export default function AlertsPage() {
               key={k.key}
               onClick={() => setSevFilter(sevFilter === k.key ? 'all' : k.key)}
               className={clsx(
-                'flex items-center gap-2 px-4 py-2 rounded-xl text-sm transition-all border',
+                'flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-xl text-sm transition-all border',
                 sevFilter === k.key ? `${k.bg} border-current ${k.color}` : 'bg-white/5 border-white/5 text-gray-400 hover:bg-white/10'
               )}
             >
-              <span className={clsx('text-lg font-bold', k.color)}>{k.count}</span>
+              <span className={clsx('text-base md:text-lg font-bold', k.color)}>{k.count}</span>
               <span>{k.label}</span>
             </button>
           ))}
@@ -292,9 +292,9 @@ export default function AlertsPage() {
       </div>
 
       {/* Main Grid: Alert List + Detail */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-5">
         {/* Alert List */}
-        <div className="lg:col-span-2 space-y-1 max-h-[72vh] overflow-y-auto pr-1 scrollbar-thin">
+        <div className="lg:col-span-2 space-y-1 lg:max-h-[72vh] lg:overflow-y-auto pr-0 lg:pr-1 scrollbar-thin">
           <AnimatePresence initial={false}>
             {filtered.map((a, i) => {
               const cfg = SEV_CONFIG[a.severity];
@@ -364,7 +364,7 @@ export default function AlertsPage() {
         {/* Detail Panel */}
         <div className="space-y-4">
           {/* Selected Alert Detail */}
-          <div className="glass rounded-2xl p-6 sticky top-4">
+          <div className="glass rounded-2xl p-4 md:p-6 lg:sticky lg:top-4">
             {selected ? (() => {
               const cfg = SEV_CONFIG[selected.severity];
               const Icon = cfg.icon;

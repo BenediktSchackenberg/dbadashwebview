@@ -193,24 +193,24 @@ export default function InstanceDetailPage() {
     <div className="space-y-6">
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
-        className="glass rounded-2xl p-6 gradient-border">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20 flex items-center justify-center border border-blue-500/20">
+        className="glass rounded-2xl p-4 md:p-6 gradient-border">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-4 min-w-0">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20 flex items-center justify-center border border-blue-500/20 shrink-0">
               <Server className="w-7 h-7 text-blue-400" />
             </div>
-            <div>
-              <h1 className="text-2xl font-bold text-white tracking-tight">
+            <div className="min-w-0">
+              <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight truncate">
                 {inst.InstanceDisplayName || inst.ConnectionID}
               </h1>
-              <div className="flex items-center gap-2 mt-1">
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
                 <span className="text-sm text-gray-400">{inst.Edition}</span>
                 <span className="text-gray-600">·</span>
                 <span className="text-sm font-mono text-gray-500">{inst.ProductVersion}</span>
               </div>
             </div>
           </div>
-          <div className="text-right text-xs text-gray-500 space-y-1">
+          <div className="text-right text-xs text-gray-500 space-y-1 shrink-0">
             {inst.LastCollected && (
               <p className="flex items-center gap-1 justify-end">
                 <Activity className="w-3 h-3 text-emerald-400" />
@@ -227,7 +227,7 @@ export default function InstanceDetailPage() {
         </div>
 
         {/* Inline stats */}
-        <div className="grid grid-cols-4 gap-4 mt-5 pt-5 border-t border-white/5">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-5 pt-5 border-t border-white/5">
           <div>
             <p className="text-[11px] text-gray-500 uppercase tracking-wider">CPUs</p>
             <p className="text-lg font-semibold text-white mt-0.5">{inst.cpu_count ?? '—'}</p>
@@ -277,7 +277,7 @@ export default function InstanceDetailPage() {
             <div className="space-y-6">
               {/* CPU KPIs */}
               {cpuStats && (
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   {[
                     { label: 'Current CPU', value: `${cpuStats.current}%`, color: cpuStats.current > 50 ? 'text-red-400' : cpuStats.current > 25 ? 'text-yellow-400' : 'text-emerald-400' },
                     { label: 'Avg (24h)', value: `${cpuStats.avg}%`, color: cpuStats.avg > 50 ? 'text-red-400' : cpuStats.avg > 25 ? 'text-yellow-400' : 'text-emerald-400' },
@@ -293,8 +293,8 @@ export default function InstanceDetailPage() {
               )}
 
               {/* CPU Chart */}
-              <div className="glass rounded-2xl p-6">
-                <div className="flex items-center justify-between mb-4">
+              <div className="glass rounded-2xl p-4 md:p-6">
+                <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
                   <h3 className="text-sm font-semibold text-white flex items-center gap-2">
                     <Cpu className="w-4 h-4 text-blue-400" /> CPU Usage ({hoursLabel(hours)})
                   </h3>
@@ -329,7 +329,7 @@ export default function InstanceDetailPage() {
               </div>
 
               {/* Waits */}
-              <div className="glass rounded-2xl p-6">
+              <div className="glass rounded-2xl p-4 md:p-6">
                 <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
                   <BarChart3 className="w-4 h-4 text-amber-400" /> Top Wait Types (1h)
                 </h3>
@@ -350,13 +350,14 @@ export default function InstanceDetailPage() {
           {/* ── Backups ──────────────────────────────────────────────────── */}
           {tab === 'backups' && (
             <div className="glass rounded-2xl overflow-hidden">
-              <div className="px-6 py-4 border-b border-white/5">
+              <div className="px-4 md:px-6 py-4 border-b border-white/5">
                 <h3 className="text-sm font-semibold text-white flex items-center gap-2">
                   <Shield className="w-4 h-4 text-blue-400" /> Backup Status per Database
                 </h3>
                 <p className="text-xs text-gray-500 mt-1">AG Secondary databases show "via Primary" — backups run on the preferred replica</p>
               </div>
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[640px]">
                 <thead>
                   <tr className="border-b border-white/10">
                     <th className="px-5 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Database</th>
@@ -422,6 +423,7 @@ export default function InstanceDetailPage() {
                   {backupsByDb.length === 0 && <tr><td colSpan={5} className="px-5 py-12 text-center text-gray-500">No backup data</td></tr>}
                 </tbody>
               </table>
+              </div>
             </div>
           )}
 
@@ -438,7 +440,8 @@ export default function InstanceDetailPage() {
                 onChange={(k) => setJobFilter(k as 'all' | 'failed' | 'success')}
               />
               <div className="glass rounded-2xl overflow-hidden">
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[720px]">
                   <thead>
                     <tr className="border-b border-white/10">
                       <th className="px-5 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider w-24">Status</th>
@@ -470,6 +473,7 @@ export default function InstanceDetailPage() {
                     {filteredJobs.length === 0 && <tr><td colSpan={5} className="px-5 py-12 text-center text-gray-500">No jobs</td></tr>}
                   </tbody>
                 </table>
+                </div>
               </div>
             </div>
           )}
@@ -477,7 +481,8 @@ export default function InstanceDetailPage() {
           {/* ── Databases ────────────────────────────────────────────────── */}
           {tab === 'databases' && (
             <div className="glass rounded-2xl overflow-hidden">
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[760px]">
                 <thead>
                   <tr className="border-b border-white/10">
                     <th className="px-5 py-3 text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Name</th>
@@ -537,6 +542,7 @@ export default function InstanceDetailPage() {
                   {databases.length === 0 && <tr><td colSpan={6} className="px-5 py-12 text-center text-gray-500">No databases</td></tr>}
                 </tbody>
               </table>
+              </div>
             </div>
           )}
 

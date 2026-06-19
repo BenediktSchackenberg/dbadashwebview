@@ -1,7 +1,7 @@
 import { Suspense, createContext, lazy, useContext, useEffect, useMemo, useState } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Moon, RefreshCw, Sun } from 'lucide-react';
+import { Menu, Moon, RefreshCw, Sun } from 'lucide-react';
 import { api, clearToken, isAuthenticated } from './api/api';
 import { hasRole } from './auth/session';
 import type { AuthRole } from './auth/session';
@@ -95,6 +95,7 @@ function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const { lastRefresh, refresh } = useRefresh();
   const { dark, toggle: toggleTheme } = useTheme();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [searchData, setSearchData] = useState<{ instances: SearchInstanceRow[]; databases: []; jobs: SearchJobRow[] }>({
     instances: [],
     databases: [],
@@ -145,16 +146,78 @@ function Layout({ children }: { children: React.ReactNode }) {
     navigate('/login');
   };
 
+  // Close drawer on route change
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [location.pathname]);
+
+  // Close drawer on Esc
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMobileNavOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [mobileNavOpen]);
+
   return (
     <div className="flex h-screen overflow-hidden">
       <SearchDialog instances={searchData.instances} databases={searchData.databases} jobs={searchData.jobs} />
 
-      <InstanceTree onLogout={handleLogout} />
+      {/* Desktop sidebar */}
+      <div className="hidden md:flex shrink-0">
+        <InstanceTree onLogout={handleLogout} />
+      </div>
+
+      {/* Mobile drawer */}
+      <AnimatePresence>
+        {mobileNavOpen && (
+          <>
+            <motion.div
+              key="drawer-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              onClick={() => setMobileNavOpen(false)}
+              className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden"
+              aria-hidden="true"
+            />
+            <motion.div
+              key="drawer-panel"
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'tween', duration: 0.2, ease: 'easeOut' }}
+              className="fixed inset-y-0 left-0 z-50 flex md:hidden"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Navigation"
+            >
+              <InstanceTree
+                onLogout={handleLogout}
+                onNavigate={() => setMobileNavOpen(false)}
+                variant="drawer"
+              />
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       <div className="flex flex-1 flex-col overflow-hidden">
-        <header className="glass-strong z-10 flex h-14 shrink-0 items-center justify-between border-b border-white/10 px-6">
-          <Breadcrumbs />
-          <div className="flex items-center gap-2">
+        <header className="glass-strong z-10 flex h-14 shrink-0 items-center justify-between border-b border-white/10 px-3 md:px-6">
+          <div className="flex items-center gap-2 min-w-0">
+            <button
+              onClick={() => setMobileNavOpen(true)}
+              className="-ml-1 rounded-lg p-2 text-gray-300 transition-all hover:bg-white/5 hover:text-white md:hidden"
+              aria-label="Open navigation"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            <Breadcrumbs />
+          </div>
+          <div className="flex items-center gap-1.5 md:gap-2">
             <button
               onClick={triggerSearch}
               className="hidden items-center gap-2 rounded-lg bg-white/5 px-3 py-1.5 text-xs text-gray-500 transition-all hover:bg-white/10 sm:flex"
@@ -169,7 +232,7 @@ function Layout({ children }: { children: React.ReactNode }) {
             >
               {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
-            <div className="flex items-center gap-2 text-xs text-gray-500">
+            <div className="hidden sm:flex items-center gap-2 text-xs text-gray-500">
               {lastRefresh.toLocaleTimeString()}
             </div>
             <button
@@ -181,7 +244,7 @@ function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto p-3 md:p-6">
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}
