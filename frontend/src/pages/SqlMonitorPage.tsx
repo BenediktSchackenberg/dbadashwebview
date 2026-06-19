@@ -117,7 +117,7 @@ function InstanceCard({ inst, onClick }: { inst: MonitorInstance; onClick: () =>
       ) : inst.isOnline ? (
         <div className="flex items-center gap-1.5 text-[11px] text-green-400/70">
           <ShieldCheck className="w-3 h-3" />
-          {inst.startTime ? `Healthy since ${new Date(inst.startTime).toLocaleDateString('de-DE', { day: '2-digit', month: 'short' })}` : 'Healthy'}
+          {inst.startTime ? `Healthy since ${new Date(inst.startTime).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}` : 'Healthy'}
         </div>
       ) : (
         <div className="flex items-center gap-1.5 text-[11px] text-gray-500">

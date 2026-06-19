@@ -55,9 +55,9 @@ interface FullAgeBucketRow {
 }
 
 const STATUS_CONFIG: Record<AmpelStatus, { label: string; color: string; bg: string; border: string; text: string; icon: typeof Shield }> = {
-  GREEN: { label: 'Gruen', color: '#22c55e', bg: 'bg-green-500/10', border: 'border-green-500/30', text: 'text-green-400', icon: ShieldCheck },
-  YELLOW: { label: 'Gelb', color: '#eab308', bg: 'bg-yellow-500/10', border: 'border-yellow-500/30', text: 'text-yellow-400', icon: Shield },
-  RED: { label: 'Rot', color: '#ef4444', bg: 'bg-red-500/10', border: 'border-red-500/30', text: 'text-red-400', icon: ShieldAlert },
+  GREEN: { label: 'Green', color: '#22c55e', bg: 'bg-green-500/10', border: 'border-green-500/30', text: 'text-green-400', icon: ShieldCheck },
+  YELLOW: { label: 'Yellow', color: '#eab308', bg: 'bg-yellow-500/10', border: 'border-yellow-500/30', text: 'text-yellow-400', icon: Shield },
+  RED: { label: 'Red', color: '#ef4444', bg: 'bg-red-500/10', border: 'border-red-500/30', text: 'text-red-400', icon: ShieldAlert },
 };
 
 function computeAmpel(row: BackupAmpelInstanceRow): InstanceAmpel {
@@ -104,7 +104,7 @@ function computeAmpel(row: BackupAmpelInstanceRow): InstanceAmpel {
 }
 
 function formatAge(hours: number | null): string {
-  if (hours === null) return 'nie';
+  if (hours === null) return 'never';
   if (hours < 1) return `${Math.round(hours * 60)} min`;
   if (hours < 48) return `${hours.toFixed(1)}h`;
   return `${Math.round(hours / 24)}d`;
@@ -175,9 +175,9 @@ export default function BackupAmpelPage() {
   const ampelPie = useMemo<AmpelPieRow[]>(
     () => {
       const rows: AmpelPieRow[] = [
-        { name: 'Gruen', status: 'GREEN', value: statusCounts.GREEN, color: '#22c55e' },
-        { name: 'Gelb', status: 'YELLOW', value: statusCounts.YELLOW, color: '#eab308' },
-        { name: 'Rot', status: 'RED', value: statusCounts.RED, color: '#ef4444' },
+        { name: 'Green', status: 'GREEN', value: statusCounts.GREEN, color: '#22c55e' },
+        { name: 'Yellow', status: 'YELLOW', value: statusCounts.YELLOW, color: '#eab308' },
+        { name: 'Red', status: 'RED', value: statusCounts.RED, color: '#ef4444' },
       ];
       return rows.filter((row) => row.value > 0);
     },
@@ -220,7 +220,7 @@ export default function BackupAmpelPage() {
       { name: '12-24h', max: 24, count: 0, color: '#86efac' },
       { name: '24-48h', max: 48, count: 0, color: '#eab308' },
       { name: '48h-7d', max: 168, count: 0, color: '#f97316' },
-      { name: '>7d / nie', max: Number.POSITIVE_INFINITY, count: 0, color: '#ef4444' },
+      { name: '>7d / never', max: Number.POSITIVE_INFINITY, count: 0, color: '#ef4444' },
     ];
 
     instances.forEach((row) => {
@@ -317,7 +317,7 @@ export default function BackupAmpelPage() {
         <div className="flex items-center gap-3">
           <FleetIcon className={`w-7 h-7 ${fleetConfig.text}`} />
           <div>
-            <h1 className="text-2xl font-bold text-white">Backup Ampel Report</h1>
+            <h1 className="text-2xl font-bold text-white">Backup Status Report</h1>
             <p className="text-xs text-gray-500">AlwaysOn and backup health across the entire fleet</p>
           </div>
           <StatusBadge status={fleetStatus} />
@@ -328,7 +328,7 @@ export default function BackupAmpelPage() {
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
             <input
               type="text"
-              placeholder="Instanz suchen..."
+              placeholder="Search instance..."
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               className="bg-white/5 border border-white/10 rounded-lg pl-9 pr-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50 w-48"
@@ -344,10 +344,10 @@ export default function BackupAmpelPage() {
 
       <div className="glass rounded-xl p-4 border border-white/5">
         <div className="flex items-center gap-6 text-xs text-gray-400 flex-wrap">
-          <span className="text-gray-500">Ampel rules:</span>
-          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-500" /> <strong className="text-green-400">Gruen</strong> Full &lt;=24h &amp; Log &lt;=1h</span>
-          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-yellow-500" /> <strong className="text-yellow-400">Gelb</strong> Full &lt;=48h &amp; Log &lt;=2h</span>
-          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500" /> <strong className="text-red-400">Rot</strong> Everything else / no backups</span>
+          <span className="text-gray-500">Status rules:</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-green-500" /> <strong className="text-green-400">Green</strong> Full &lt;=24h &amp; Log &lt;=1h</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-yellow-500" /> <strong className="text-yellow-400">Yellow</strong> Full &lt;=48h &amp; Log &lt;=2h</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500" /> <strong className="text-red-400">Red</strong> Everything else / no backups</span>
           <span className="text-gray-500 ml-auto">RPO = max(avg log interval, age of latest log backup)</span>
         </div>
       </div>
@@ -406,7 +406,7 @@ export default function BackupAmpelPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="glass rounded-xl p-6">
-          <h2 className="text-lg font-semibold text-white mb-4">Ampel Distribution</h2>
+          <h2 className="text-lg font-semibold text-white mb-4">Status Distribution</h2>
           <ResponsiveContainer width="100%" height={220}>
             <PieChart>
               <Pie
@@ -506,7 +506,7 @@ export default function BackupAmpelPage() {
                     {formatAge(row.fullAgeHours)}
                   </td>
                   <td className={`px-3 py-2.5 text-sm ${row.logAgeMin === null ? (row.oldLogBackupCount > 0 ? 'text-red-400' : 'text-gray-500') : row.logAgeMin > 120 ? 'text-red-400' : row.logAgeMin > 60 ? 'text-yellow-400' : 'text-green-400'}`}>
-                    {row.logAgeMin !== null ? `${row.logAgeMin} min` : (row.oldLogBackupCount > 0 ? 'nie' : 'N/A')}
+                    {row.logAgeMin !== null ? `${row.logAgeMin} min` : (row.oldLogBackupCount > 0 ? 'never' : 'N/A')}
                   </td>
                   <td className={`px-3 py-2.5 text-sm font-mono ${row.rpoMin == null ? 'text-gray-500' : row.rpoMin > 60 ? 'text-red-400' : row.rpoMin > 15 ? 'text-yellow-400' : 'text-green-400'}`}>
                     {row.rpoMin !== null ? (row.rpoMin >= 60 ? `${Math.round(row.rpoMin / 60)}h` : `${row.rpoMin}min`) : '-'}
@@ -572,13 +572,13 @@ export default function BackupAmpelPage() {
                           <td className="px-2 py-1.5 text-gray-400">{database.RecoveryModel || '-'}</td>
                           <td className="px-2 py-1.5">{database.IsEncrypted ? <span className="text-green-400">Yes</span> : <span className="text-gray-600">-</span>}</td>
                           <td className={`px-2 py-1.5 ${isSecondary ? 'text-gray-600' : fullAge === null ? 'text-red-400' : fullAge > 48 ? 'text-red-400' : fullAge > 24 ? 'text-yellow-400' : 'text-green-400'}`}>
-                            {isSecondary ? 'via Primary' : fullDate ? fullDate.toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'nie'}
+                            {isSecondary ? 'via Primary' : fullDate ? fullDate.toLocaleString('en-GB', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'never'}
                           </td>
                           <td className="px-2 py-1.5 text-gray-400">
-                            {isSecondary ? '-' : database.LastDiffDate ? new Date(database.LastDiffDate).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'}
+                            {isSecondary ? '-' : database.LastDiffDate ? new Date(database.LastDiffDate).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'}
                           </td>
                           <td className={`px-2 py-1.5 ${isSecondary ? 'text-gray-600' : logAge === null ? 'text-gray-600' : logAge > 120 ? 'text-red-400' : logAge > 60 ? 'text-yellow-400' : 'text-green-400'}`}>
-                            {isSecondary ? 'via Primary' : logDate ? logDate.toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'}
+                            {isSecondary ? 'via Primary' : logDate ? logDate.toLocaleString('en-GB', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'}
                           </td>
                           <td className="px-2 py-1.5 text-right text-gray-300">
                             {database.FullBackupSize ? `${(database.FullBackupSize / 1073741824).toFixed(1)} GB` : '-'}
