@@ -10,11 +10,11 @@
 
 [![Build](https://github.com/BenediktSchackenberg/dbadashwebview/actions/workflows/build.yml/badge.svg)](https://github.com/BenediktSchackenberg/dbadashwebview/actions/workflows/build.yml)
 [![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![.NET 8](https://img.shields.io/badge/.NET-8.0-purple.svg)](https://dotnet.microsoft.com/)
+[![.NET 10](https://img.shields.io/badge/.NET-10.0-purple.svg)](https://dotnet.microsoft.com/)
 [![React](https://img.shields.io/badge/React-19-61dafb.svg)](https://react.dev/)
 [![DBA Dash](https://img.shields.io/badge/Powered%20by-DBA%20Dash-green.svg)](https://dbadash.com)
 
-[Features](#-features) · [Screenshots](#-screenshots) · [Quick Start](#-quick-start) · [Deployment](#-iis-deployment) · [Configuration](#-configuration) · [API Reference](#-api-reference) · [Roadmap](#-roadmap) · [Contributing](#-contributing)
+[Features](#-features) · [Quick Start](#-quick-start) · [Deployment](#%EF%B8%8F-iis-deployment) · [Configuration](#%EF%B8%8F-configuration) · [API Reference](#-api-reference) · [Roadmap](#%EF%B8%8F-roadmap) · [Contributing](#-contributing)
 
 ---
 
@@ -156,30 +156,6 @@ Purpose-built reports for IT managers:
 
 ---
 
-## 📸 Screenshots
-
-> *Screenshots from a production environment with 200+ SQL Server instances.*
-
-![Summary Dashboard](docs/screenshots/summary.png)
-*Summary — status matrix with OK/Warning/Critical/N/A counts per health check*
-
-![SQL Monitor Dashboard](docs/screenshots/monitor.png)
-*SQL Monitor — card-based fleet overview with real-time health indicators*
-
-![Backup Ampel](docs/screenshots/backup-ampel.png)
-*Backup Ampel — traffic-light compliance report with AG-aware logic*
-
-![AlwaysOn AGs](docs/screenshots/availability-groups.png)
-*Availability Groups — cluster topology with sync state and lag monitoring*
-
-![Instance Detail](docs/screenshots/instance-detail.png)
-*Instance Detail — Performance tab with CPU chart and wait analysis*
-
-![Alerts](docs/screenshots/alerts.png)
-*Alerts — unified error feed with severity filtering and server breakdown*
-
----
-
 ## 🚀 Quick Start
 
 ### Prerequisites
@@ -187,7 +163,7 @@ Purpose-built reports for IT managers:
 | Requirement | Version |
 |-------------|---------|
 | [DBA Dash](https://github.com/trimble-oss/dba-dash) | Any (populated DBADashDB required) |
-| [.NET 8 Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) | 8.0+ (Hosting Bundle for IIS) |
+| [.NET 10 Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) | 10.0+ (Hosting Bundle for IIS) |
 | SQL Server | 2012+ |
 
 ### 1) Download and extract
@@ -312,7 +288,7 @@ dotnet test DBADashWebView.sln
 
 ### 1. Install the ASP.NET Core Hosting Bundle
 
-Download from [Microsoft](https://dotnet.microsoft.com/download/dotnet/8.0) → **Hosting Bundle** (not just Runtime).
+Download from [Microsoft](https://dotnet.microsoft.com/download/dotnet/10.0) → **Hosting Bundle** (not just Runtime).
 
 ```powershell
 iisreset  # Required after installing the Hosting Bundle
@@ -520,7 +496,7 @@ GET  /api/debug/summary/{id}               Raw Summary_Get output (troubleshooti
 ```
 ┌──────────────────┐       ┌──────────────────┐       ┌─────────────────┐
 │                  │       │                  │       │                 │
-│  Browser         │──────▶│  ASP.NET Core 8  │──────▶│   DBADashDB     │
+│  Browser         │──────▶│  ASP.NET Core 10 │──────▶│   DBADashDB     │
 │  (React SPA)     │  JWT  │  (Minimal API)   │  SQL  │   (SQL Server)  │
 │                  │       │                  │       │                 │
 └──────────────────┘       └──────────────────┘       └────────┬────────┘
@@ -538,7 +514,7 @@ GET  /api/debug/summary/{id}               Raw Summary_Get output (troubleshooti
 | Layer | Technology |
 |-------|-----------|
 | **Frontend** | React 19, TypeScript, Vite, Tailwind CSS 4, Recharts, Framer Motion, Lucide Icons |
-| **Backend** | ASP.NET Core 8 Minimal API, Microsoft.Data.SqlClient |
+| **Backend** | ASP.NET Core 10 Minimal API, Microsoft.Data.SqlClient |
 | **Auth** | JWT tokens + optional LDAP/Active Directory |
 | **Deployment** | IIS with ASP.NET Core Hosting Module |
 | **CI/CD** | GitHub Actions → ZIP artifact → GitHub Release |
