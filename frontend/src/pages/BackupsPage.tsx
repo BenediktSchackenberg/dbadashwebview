@@ -8,7 +8,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import EmptyState from '../components/EmptyState';
 
 function formatAge(dateStr: string | null): { text: string; color: string } {
-  if (!dateStr) return { text: 'nie', color: 'text-red-400' };
+  if (!dateStr) return { text: 'never', color: 'text-red-400' };
   const age = (Date.now() - new Date(dateStr).getTime()) / 3600000;
   if (age < 1) return { text: `${Math.round(age * 60)} min`, color: 'text-green-400' };
   if (age < 24) return { text: `${age.toFixed(1)}h`, color: 'text-green-400' };
