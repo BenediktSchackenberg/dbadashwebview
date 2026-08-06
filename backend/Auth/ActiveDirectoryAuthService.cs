@@ -1,5 +1,6 @@
 using System.DirectoryServices.Protocols;
 using System.Net;
+using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.DataProtection;
 
@@ -7,6 +8,9 @@ namespace DBADashWebView.Auth;
 
 public sealed class ActiveDirectoryAuthService
 {
+    private const string TransitiveEvaluationMatchingRule = "1.2.840.113556.1.4.1941";
+    private const int GroupSearchPageSize = 500;
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -89,57 +93,54 @@ public sealed class ActiveDirectoryAuthService
             using var searchConnection = CreateSearchConnection(configuration, userPrincipal, password);
             searchConnection.Bind();
 
+            var domainRootDn = string.Join(",", configuration.Domain.Split('.').Select(part => $"DC={part}"));
             var baseDn = string.IsNullOrWhiteSpace(configuration.BaseDn)
-                ? string.Join(",", configuration.Domain.Split('.').Select(part => $"DC={part}"))
+                ? domainRootDn
                 : configuration.BaseDn;
             var filter = $"(&(objectClass=user)(sAMAccountName={EscapeLdapFilter(username)}))";
             var searchRequest = new SearchRequest(baseDn, filter, SearchScope.Subtree, "displayName", "memberOf", "sAMAccountName");
             var searchResponse = (SearchResponse)searchConnection.SendRequest(searchRequest);
 
-            string? displayName = null;
-            var groups = new List<string>();
-            if (searchResponse.Entries.Count > 0)
+            if (searchResponse.Entries.Count == 0)
             {
-                var entry = searchResponse.Entries[0];
-                if (entry.Attributes.Contains("displayName"))
-                {
-                    displayName = entry.Attributes["displayName"][0]?.ToString();
-                }
-
-                if (entry.Attributes.Contains("memberOf"))
-                {
-                    foreach (var group in entry.Attributes["memberOf"])
-                    {
-                        var groupDn = group?.ToString() ?? string.Empty;
-                        var commonName = groupDn.Split(',')
-                            .FirstOrDefault(part => part.StartsWith("CN=", StringComparison.OrdinalIgnoreCase));
-                        if (commonName is not null)
-                        {
-                            groups.Add(commonName[3..]);
-                        }
-                    }
-                }
-            }
-
-            if (!string.IsNullOrWhiteSpace(configuration.RequiredGroup) &&
-                !groups.Any(group => group.Equals(configuration.RequiredGroup, StringComparison.OrdinalIgnoreCase)))
-            {
+                _logger.LogWarning("Active Directory user search returned no entry for user '{Username}'.", username);
                 return null;
             }
 
-            var role = AppRoles.Viewer;
-            if (!string.IsNullOrWhiteSpace(configuration.AdminGroup) &&
-                groups.Any(group => group.Equals(configuration.AdminGroup, StringComparison.OrdinalIgnoreCase)))
+            var entry = searchResponse.Entries[0];
+            var displayName = GetFirstAttributeValue(entry.Attributes, "displayName");
+            var attributeNames = GetAttributeNames(entry.Attributes);
+            _logger.LogDebug(
+                "Active Directory user lookup for '{Username}' returned attributes: {AttributeNames}.",
+                username,
+                string.Join(", ", attributeNames));
+
+            var groupResolution = ResolveGroups(searchConnection, domainRootDn, entry, cancellationToken);
+            var groups = groupResolution.Groups;
+            _logger.LogInformation(
+                "Resolved {GroupCount} Active Directory groups for user '{Username}' using {ResolutionMethod}.",
+                groups.Count,
+                username,
+                groupResolution.Method);
+
+            if (!string.IsNullOrWhiteSpace(configuration.RequiredGroup) &&
+                !MatchesConfiguredGroup(groups, configuration.RequiredGroup))
             {
-                role = AppRoles.Admin;
-            }
-            else if (!string.IsNullOrWhiteSpace(configuration.OperatorGroup) &&
-                     groups.Any(group => group.Equals(configuration.OperatorGroup, StringComparison.OrdinalIgnoreCase)))
-            {
-                role = AppRoles.Operator;
+                _logger.LogWarning(
+                    "Active Directory user '{Username}' does not satisfy required group '{RequiredGroup}'.",
+                    username,
+                    configuration.RequiredGroup);
+                return null;
             }
 
-            return new AdAuthenticationResult(username, displayName, role, groups);
+            var role = ResolveRole(groups, configuration.OperatorGroup, configuration.AdminGroup);
+            var groupNames = groups
+                .Select(group => group.Name)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(group => group, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            return new AdAuthenticationResult(username, displayName, role, groupNames);
         }
         catch (Exception ex)
         {
@@ -175,6 +176,306 @@ public sealed class ActiveDirectoryAuthService
         }
 
         return connection;
+    }
+
+    private GroupResolutionResult ResolveGroups(
+        LdapConnection connection,
+        string baseDn,
+        SearchResultEntry userEntry,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var groups = SearchTransitiveGroups(connection, baseDn, userEntry.DistinguishedName, cancellationToken);
+            if (groups.Count > 0)
+            {
+                return new GroupResolutionResult(groups, "transitive member search");
+            }
+        }
+        catch (Exception ex) when (ex is DirectoryOperationException or LdapException)
+        {
+            _logger.LogWarning(
+                ex,
+                "Transitive Active Directory group search failed for user DN '{UserDistinguishedName}'; falling back to memberOf.",
+                userEntry.DistinguishedName);
+        }
+
+        try
+        {
+            var groups = ReadMemberOfGroups(connection, userEntry, cancellationToken);
+            return new GroupResolutionResult(groups, "memberOf fallback");
+        }
+        catch (Exception ex) when (ex is DirectoryOperationException or LdapException)
+        {
+            _logger.LogWarning(
+                ex,
+                "Active Directory memberOf fallback failed for user DN '{UserDistinguishedName}'.",
+                userEntry.DistinguishedName);
+            return new GroupResolutionResult([], "unavailable group lookup");
+        }
+    }
+
+    private static IReadOnlyList<AdGroupIdentity> SearchTransitiveGroups(
+        LdapConnection connection,
+        string baseDn,
+        string userDistinguishedName,
+        CancellationToken cancellationToken)
+    {
+        var groups = new Dictionary<string, AdGroupIdentity>(StringComparer.OrdinalIgnoreCase);
+        byte[]? cookie = null;
+
+        do
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var request = new SearchRequest(
+                baseDn,
+                BuildTransitiveGroupFilter(userDistinguishedName),
+                SearchScope.Subtree,
+                "cn");
+            var pageControl = new PageResultRequestControl(GroupSearchPageSize)
+            {
+                Cookie = cookie ?? []
+            };
+            request.Controls.Add(pageControl);
+
+            var response = (SearchResponse)connection.SendRequest(request);
+            foreach (SearchResultEntry groupEntry in response.Entries)
+            {
+                var distinguishedName = groupEntry.DistinguishedName;
+                var name = GetFirstAttributeValue(groupEntry.Attributes, "cn")
+                    ?? GetGroupNameFromDistinguishedName(distinguishedName);
+                if (!string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(distinguishedName))
+                {
+                    groups.TryAdd(distinguishedName, new AdGroupIdentity(name, distinguishedName));
+                }
+            }
+
+            cookie = response.Controls
+                .OfType<PageResultResponseControl>()
+                .FirstOrDefault()
+                ?.Cookie;
+        }
+        while (cookie is { Length: > 0 });
+
+        return groups.Values
+            .OrderBy(group => group.Name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static IReadOnlyList<AdGroupIdentity> ReadMemberOfGroups(
+        LdapConnection connection,
+        SearchResultEntry userEntry,
+        CancellationToken cancellationToken)
+    {
+        var groups = new Dictionary<string, AdGroupIdentity>(StringComparer.OrdinalIgnoreCase);
+        var attributeNames = GetAttributeNames(userEntry.Attributes);
+        AddMemberOfGroups(groups, userEntry.Attributes, attributeNames);
+
+        int? nextRangeStart = attributeNames.Any(IsMemberOfAttributeName)
+            ? GetNextMemberOfRangeStart(attributeNames)
+            : 0;
+
+        while (nextRangeStart is int rangeStart)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var request = new SearchRequest(
+                userEntry.DistinguishedName,
+                "(objectClass=*)",
+                SearchScope.Base,
+                $"memberOf;range={rangeStart}-*");
+            var response = (SearchResponse)connection.SendRequest(request);
+            if (response.Entries.Count == 0)
+            {
+                break;
+            }
+
+            var attributes = response.Entries[0].Attributes;
+            attributeNames = GetAttributeNames(attributes);
+            AddMemberOfGroups(groups, attributes, attributeNames);
+
+            var followingRangeStart = GetNextMemberOfRangeStart(attributeNames);
+            if (followingRangeStart is null || followingRangeStart <= rangeStart)
+            {
+                break;
+            }
+
+            nextRangeStart = followingRangeStart;
+        }
+
+        return groups.Values
+            .OrderBy(group => group.Name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static void AddMemberOfGroups(
+        IDictionary<string, AdGroupIdentity> groups,
+        SearchResultAttributeCollection attributes,
+        IEnumerable<string> attributeNames)
+    {
+        foreach (var attributeName in attributeNames.Where(IsMemberOfAttributeName))
+        {
+            foreach (var value in attributes[attributeName])
+            {
+                var distinguishedName = value?.ToString();
+                if (string.IsNullOrWhiteSpace(distinguishedName))
+                {
+                    continue;
+                }
+
+                var name = GetGroupNameFromDistinguishedName(distinguishedName);
+                groups.TryAdd(distinguishedName, new AdGroupIdentity(name, distinguishedName));
+            }
+        }
+    }
+
+    private static string? GetFirstAttributeValue(SearchResultAttributeCollection attributes, string attributeName)
+    {
+        var returnedName = attributes.AttributeNames
+            .Cast<string>()
+            .FirstOrDefault(name => name.Equals(attributeName, StringComparison.OrdinalIgnoreCase));
+        return returnedName is not null && attributes[returnedName].Count > 0
+            ? attributes[returnedName][0]?.ToString()
+            : null;
+    }
+
+    private static string[] GetAttributeNames(SearchResultAttributeCollection attributes) =>
+        attributes.AttributeNames
+            .Cast<string>()
+            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+    internal static string BuildTransitiveGroupFilter(string userDistinguishedName) =>
+        $"(&(objectCategory=group)(member:{TransitiveEvaluationMatchingRule}:={EscapeLdapFilter(userDistinguishedName)}))";
+
+    internal static bool IsMemberOfAttributeName(string attributeName) =>
+        attributeName.Equals("memberOf", StringComparison.OrdinalIgnoreCase) ||
+        attributeName.StartsWith("memberOf;range=", StringComparison.OrdinalIgnoreCase);
+
+    internal static int? GetNextMemberOfRangeStart(IEnumerable<string> attributeNames)
+    {
+        const string prefix = "memberOf;range=";
+        int? nextRangeStart = null;
+
+        foreach (var attributeName in attributeNames)
+        {
+            if (attributeName.Equals("memberOf", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (!attributeName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var range = attributeName[prefix.Length..];
+            var separatorIndex = range.IndexOf('-');
+            if (separatorIndex < 0)
+            {
+                continue;
+            }
+
+            var highValue = range[(separatorIndex + 1)..];
+            if (highValue == "*")
+            {
+                return null;
+            }
+
+            if (int.TryParse(highValue, out var high))
+            {
+                nextRangeStart = Math.Max(nextRangeStart ?? 0, high + 1);
+            }
+        }
+
+        return nextRangeStart;
+    }
+
+    internal static string GetGroupNameFromDistinguishedName(string distinguishedName)
+    {
+        var rdnEnd = distinguishedName.Length;
+        for (var index = 0; index < distinguishedName.Length; index++)
+        {
+            if (distinguishedName[index] == '\\')
+            {
+                index++;
+                continue;
+            }
+
+            if (distinguishedName[index] == ',')
+            {
+                rdnEnd = index;
+                break;
+            }
+        }
+
+        var firstRdn = distinguishedName[..rdnEnd].Trim();
+        return firstRdn.StartsWith("CN=", StringComparison.OrdinalIgnoreCase)
+            ? UnescapeDistinguishedNameValue(firstRdn[3..])
+            : firstRdn;
+    }
+
+    private static string UnescapeDistinguishedNameValue(string value)
+    {
+        var result = new StringBuilder(value.Length);
+        var encodedBytes = new List<byte>();
+
+        void FlushEncodedBytes()
+        {
+            if (encodedBytes.Count == 0)
+            {
+                return;
+            }
+
+            result.Append(Encoding.UTF8.GetString(encodedBytes.ToArray()));
+            encodedBytes.Clear();
+        }
+
+        for (var index = 0; index < value.Length; index++)
+        {
+            if (value[index] != '\\' || index + 1 >= value.Length)
+            {
+                FlushEncodedBytes();
+                result.Append(value[index]);
+                continue;
+            }
+
+            if (index + 2 < value.Length &&
+                byte.TryParse(value.AsSpan(index + 1, 2), System.Globalization.NumberStyles.HexNumber, null, out var encodedByte))
+            {
+                encodedBytes.Add(encodedByte);
+                index += 2;
+                continue;
+            }
+
+            FlushEncodedBytes();
+            result.Append(value[++index]);
+        }
+
+        FlushEncodedBytes();
+        return result.ToString();
+    }
+
+    internal static bool MatchesConfiguredGroup(IEnumerable<AdGroupIdentity> groups, string configuredGroup)
+    {
+        var configured = configuredGroup.Trim();
+        return groups.Any(group =>
+            group.Name.Equals(configured, StringComparison.OrdinalIgnoreCase) ||
+            group.DistinguishedName.Equals(configured, StringComparison.OrdinalIgnoreCase));
+    }
+
+    internal static string ResolveRole(
+        IReadOnlyCollection<AdGroupIdentity> groups,
+        string operatorGroup,
+        string adminGroup)
+    {
+        if (!string.IsNullOrWhiteSpace(adminGroup) && MatchesConfiguredGroup(groups, adminGroup))
+        {
+            return AppRoles.Admin;
+        }
+
+        return !string.IsNullOrWhiteSpace(operatorGroup) && MatchesConfiguredGroup(groups, operatorGroup)
+            ? AppRoles.Operator
+            : AppRoles.Viewer;
     }
 
     private async Task<StoredAdConfiguration> LoadAsync(CancellationToken cancellationToken)
@@ -248,7 +549,7 @@ public sealed class ActiveDirectoryAuthService
             configuration.BindUser,
             !string.IsNullOrWhiteSpace(configuration.ProtectedBindPassword));
 
-    private static string EscapeLdapFilter(string value) =>
+    internal static string EscapeLdapFilter(string value) =>
         value
             .Replace(@"\", @"\5c", StringComparison.Ordinal)
             .Replace("*", @"\2a", StringComparison.Ordinal)
@@ -285,7 +586,13 @@ public sealed class ActiveDirectoryAuthService
         bool AllowLocalFallback,
         string BindUser,
         string BindPassword);
+
+    private sealed record GroupResolutionResult(
+        IReadOnlyList<AdGroupIdentity> Groups,
+        string Method);
 }
+
+internal sealed record AdGroupIdentity(string Name, string DistinguishedName);
 
 public sealed record AdAuthenticationResult(
     string Username,

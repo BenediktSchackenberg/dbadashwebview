@@ -360,13 +360,17 @@ Configure via **Settings -> Users -> Active Directory**, or directly edit `confi
 {
   "Enabled": true,
   "Server": "dc01.corp.local",
+  "Domain": "corp.local",
   "BaseDn": "DC=corp,DC=local",
   "BindUser": "CN=svc-dbadash,OU=Service,DC=corp,DC=local",
-  "OperatorGroup": "CN=DBA-Operators,OU=Groups,DC=corp,DC=local",
-  "AdminGroup": "CN=DBA-Admins,OU=Groups,DC=corp,DC=local",
+  "RequiredGroup": "DBADash-Users",
+  "OperatorGroup": "DBA-Operators",
+  "AdminGroup": "DBA-Admins",
   "AllowLocalFallback": true
 }
 ```
+
+Group mappings accept either the plain group name (recommended) or the full distinguished name. Nested Active Directory groups are resolved automatically.
 
 Bind passwords are stored protected on the server. Local users are stored in `config/local-users.json` with hashed passwords.
 

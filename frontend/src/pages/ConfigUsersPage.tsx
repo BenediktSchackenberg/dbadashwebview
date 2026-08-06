@@ -475,15 +475,15 @@ export default function ConfigUsersPage() {
                       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                         <div>
                           <label className={labelCls}>Required Group</label>
-                          <input value={adConfig.requiredGroup} onChange={event => setAdConfig(current => ({ ...current, requiredGroup: event.target.value }))} className={inputCls} />
+                          <input value={adConfig.requiredGroup} onChange={event => setAdConfig(current => ({ ...current, requiredGroup: event.target.value }))} className={inputCls} placeholder="e.g. DBADash-Users" />
                         </div>
                         <div>
                           <label className={labelCls}>Operator Group</label>
-                          <input value={adConfig.operatorGroup} onChange={event => setAdConfig(current => ({ ...current, operatorGroup: event.target.value }))} className={inputCls} />
+                          <input value={adConfig.operatorGroup} onChange={event => setAdConfig(current => ({ ...current, operatorGroup: event.target.value }))} className={inputCls} placeholder="e.g. DBA-Operators" />
                         </div>
                         <div>
                           <label className={labelCls}>Admin Group</label>
-                          <input value={adConfig.adminGroup} onChange={event => setAdConfig(current => ({ ...current, adminGroup: event.target.value }))} className={inputCls} />
+                          <input value={adConfig.adminGroup} onChange={event => setAdConfig(current => ({ ...current, adminGroup: event.target.value }))} className={inputCls} placeholder="e.g. DBA-Admins" />
                         </div>
                       </div>
                     </div>
