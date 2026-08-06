@@ -14,7 +14,7 @@
 [![React](https://img.shields.io/badge/React-19-61dafb.svg)](https://react.dev/)
 [![DBA Dash](https://img.shields.io/badge/Powered%20by-DBA%20Dash-green.svg)](https://dbadash.com)
 
-[Features](#-features) · [Quick Start](#-quick-start) · [Deployment](#%EF%B8%8F-iis-deployment) · [Configuration](#%EF%B8%8F-configuration) · [API Reference](#-api-reference) · [Roadmap](#%EF%B8%8F-roadmap) · [Contributing](#-contributing)
+[Features](#-features) · [Quick Start](#-quick-start) · [Deployment](#%EF%B8%8F-iis-deployment) · [Updating](#updating-an-existing-iis-deployment) · [Configuration](#%EF%B8%8F-configuration) · [API Reference](#-api-reference) · [Roadmap](#%EF%B8%8F-roadmap) · [Contributing](#-contributing)
 
 ---
 
@@ -168,7 +168,7 @@ Purpose-built reports for IT managers:
 
 ### 1) Download and extract
 
-Download the latest ZIP from [Releases](https://github.com/BenediktSchackenberg/dbadashwebview/releases) (or [GitHub Actions → Artifacts](https://github.com/BenediktSchackenberg/dbadashwebview/actions)) and extract it to your target folder.
+Download `dbadash-webview.zip` from the latest [GitHub Release](https://github.com/BenediktSchackenberg/dbadashwebview/releases) and extract it to your target folder. Release assets are the recommended deployment packages; [GitHub Actions artifacts](https://github.com/BenediktSchackenberg/dbadashwebview/actions) are temporary CI outputs intended for testing.
 
 ### 2) Configure `appsettings.json`
 
@@ -309,8 +309,10 @@ Set-ItemProperty "IIS:\AppPools\DBADashWebView" -Name "managedRuntimeVersion" -V
 New-Website -Name "DBADashWebView" -PhysicalPath "C:\inetpub\dbadash" `
             -ApplicationPool "DBADashWebView" -Port 8080
 
-# Grant read permissions
-icacls "C:\inetpub\dbadash" /grant "IIS AppPool\DBADashWebView:(OI)(CI)R" /T
+# Grant read/execute permission to the application and modify permission to runtime state
+icacls "C:\inetpub\dbadash" /grant "IIS AppPool\DBADashWebView:(OI)(CI)RX" /T
+New-Item -ItemType Directory -Path "C:\inetpub\dbadash\config" -Force | Out-Null
+icacls "C:\inetpub\dbadash\config" /grant "IIS AppPool\DBADashWebView:(OI)(CI)M" /T
 ```
 
 ### 3. Configure Connection String
@@ -335,6 +337,114 @@ Enable detailed logging:
 <!-- In web.config -->
 <aspNetCore stdoutLogEnabled="true" stdoutLogFile=".\logs\stdout" ... />
 ```
+
+---
+
+## Updating an Existing IIS Deployment
+
+DBA Dash WebView only reads from `DBADashDB`. Application updates don't run database migrations or change the DBA Dash schema, so an update is an application-file replacement and can be rolled back to an earlier release.
+
+Don't delete the existing site directory before preserving its state. The release ZIP contains new defaults for `appsettings.json` and `web.config`, while the deployment's `config/` directory contains runtime state such as:
+
+- `ad-config.json` — Active Directory settings and the protected bind password
+- `local-users.json` — local accounts and password hashes
+- `thresholds.json` — dashboard threshold settings
+
+If `LocalAuth.UserStorePath` points outside the deployment directory, back up that configured file separately.
+
+### 1. Download and stage the new release
+
+Use the ZIP attached to the desired [GitHub Release](https://github.com/BenediktSchackenberg/dbadashwebview/releases), not the source-code archives. Run the following update commands in the same elevated PowerShell session and extract the release to a temporary directory first:
+
+```powershell
+$releaseZip = "C:\Temp\dbadash-webview.zip"
+$stagingPath = "C:\Temp\dbadash-webview-new"
+
+Expand-Archive -Path $releaseZip -DestinationPath $stagingPath -Force
+```
+
+Release ZIPs produced by the current build workflow include `version.txt`. After deployment, this file identifies the installed release tag; CI artifacts built from a branch contain the source commit SHA instead. For an older deployment without `version.txt`, inspect `(Get-Item "C:\inetpub\dbadash\DBADashWebView.dll").VersionInfo.ProductVersion`; the value after `+` is the source commit SHA.
+
+### 2. Back up configuration and runtime state
+
+Run PowerShell as an administrator and store the backup outside the IIS site directory:
+
+```powershell
+$sitePath = "C:\inetpub\dbadash"
+$backupPath = "C:\dbadash-backups\$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+
+New-Item -ItemType Directory -Path $backupPath -Force | Out-Null
+Copy-Item "$sitePath\appsettings.json" $backupPath -Force
+Copy-Item "$sitePath\web.config" $backupPath -Force
+if (Test-Path "$sitePath\config") {
+    Copy-Item "$sitePath\config" $backupPath -Recurse -Force
+}
+if (Test-Path "$sitePath\version.txt") {
+    Copy-Item "$sitePath\version.txt" $backupPath -Force
+}
+```
+
+Keep the previous release ZIP until the update has been verified.
+
+### 3. Stop the application and replace its files
+
+IIS locks loaded DLLs, so stop the application pool before copying the new files:
+
+```powershell
+Import-Module WebAdministration
+Stop-WebAppPool -Name "DBADashWebView"
+
+Copy-Item "$stagingPath\*" $sitePath -Recurse -Force
+```
+
+Alternatively, placing an `app_offline.htm` file in the site root gracefully stops the application. Wait for the worker process to exit before replacing files, then remove `app_offline.htm` when the update is complete.
+
+### 4. Restore state and permissions
+
+Restore the deployment-specific files after copying the release:
+
+```powershell
+Copy-Item "$backupPath\appsettings.json" "$sitePath\appsettings.json" -Force
+Copy-Item "$backupPath\web.config" "$sitePath\web.config" -Force
+if (Test-Path "$backupPath\config") {
+    New-Item -ItemType Directory -Path "$sitePath\config" -Force | Out-Null
+    Copy-Item "$backupPath\config\*" "$sitePath\config" -Recurse -Force
+}
+
+icacls $sitePath /grant "IIS AppPool\DBADashWebView:(OI)(CI)RX" /T
+if (Test-Path "$sitePath\config") {
+    icacls "$sitePath\config" /grant "IIS AppPool\DBADashWebView:(OI)(CI)M" /T
+}
+```
+
+Compare the new `$stagingPath\appsettings.json` with the restored file and add any settings introduced by the new release while keeping your connection string, JWT secret, and local-auth configuration.
+
+The application needs modify permission on `config/` to save users, AD settings, and thresholds. If detailed stdout logging is enabled, grant modify permission on the configured logs directory as well.
+
+### 5. Start and verify
+
+```powershell
+Start-WebAppPool -Name "DBADashWebView"
+Invoke-RestMethod "http://localhost:8080/api/health"
+Get-Content "$sitePath\version.txt"
+```
+
+Then verify that:
+
+- local and AD sign-in work
+- existing local users are still present
+- dashboards load data
+- AD group mappings and saved thresholds still work
+
+An `iisreset` isn't required for a normal application update. Use it only when changing IIS or the ASP.NET Core Hosting Bundle.
+
+### Data Protection and AD bind passwords
+
+The bind password in `config/ad-config.json` is encrypted with ASP.NET Core Data Protection. For IIS deployments, the keyring is normally stored outside the site directory and tied to the app-pool identity, so replacing application files on the same server and app pool preserves it. If you move the deployment to another server, change the app-pool identity, or lose the keyring, re-enter and save the AD bind password after the update. See [Microsoft's IIS Data Protection guidance](https://learn.microsoft.com/aspnet/core/host-and-deploy/iis/advanced#data-protection) for persistent keyring options.
+
+### Rollback
+
+Stop the app pool, extract the previous release ZIP over the site, restore the same backup of `appsettings.json`, `web.config`, and `config/`, then start the app pool again. No database rollback is required.
 
 ---
 

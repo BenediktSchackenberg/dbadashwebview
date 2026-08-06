@@ -88,6 +88,12 @@ jobs:
           </configuration>
           '@ | Set-Content publish\web.config
 
+      - name: Add deployment version marker
+        if: github.event_name != 'pull_request'
+        run: |
+          $version = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}" } else { "${{ github.sha }}" }
+          Set-Content publish\version.txt -Value $version -NoNewline
+
       - name: Create ZIP artifact
         if: github.event_name != 'pull_request'
         run: Compress-Archive -Path publish\* -DestinationPath dbadash-webview.zip
