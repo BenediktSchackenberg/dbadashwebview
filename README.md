@@ -631,7 +631,7 @@ GET  /api/debug/summary/{id}               Raw Summary_Get output (troubleshooti
 | **Backend** | ASP.NET Core 10 Minimal API, Microsoft.Data.SqlClient |
 | **Auth** | JWT tokens + optional LDAP/Active Directory |
 | **Deployment** | IIS with ASP.NET Core Hosting Module |
-| **CI/CD** | GitHub Actions → ZIP artifact → GitHub Release |
+| **CI/CD** | GitHub Actions or local PowerShell build → ZIP artifact → GitHub Release |
 
 ### Page Count: 46
 
@@ -685,6 +685,28 @@ cp -r frontend/dist/* publish/wwwroot/
 ```
 
 The `publish/` folder is ready for IIS deployment.
+
+### Manual release package
+
+The PowerShell release script reproduces the test, build, and packaging steps without requiring a GitHub Actions runner:
+
+```powershell
+.\scripts\build-release.ps1
+```
+
+By default, the script runs the frontend unit and end-to-end tests, the backend tests, and both production builds. It creates the following files under `artifacts/<version>/`:
+
+- `dbadash-webview.zip` — the IIS deployment package
+- `dbadash-webview.zip.sha256` — the SHA-256 checksum
+- `release-metadata.json` — version, source commit, test status, and checksum
+
+For an exact release version, pass the tag name and upload the resulting ZIP and checksum to the matching GitHub Release:
+
+```powershell
+.\scripts\build-release.ps1 -Version v0.2.5
+```
+
+Without `-Version`, the script uses an exact tag at `HEAD`, or the full source commit SHA when `HEAD` isn't tagged. Existing output is preserved unless `-Force` is supplied. Use `-SkipE2E` only when browser tests can't run locally, and `-SkipTests` only for a diagnostic package that won't be published.
 
 ---
 

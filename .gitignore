@@ -27,3 +27,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Local release packages
+artifacts/
