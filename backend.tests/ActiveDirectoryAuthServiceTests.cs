@@ -1,3 +1,4 @@
+using System.Text;
 using DBADashWebView.Auth;
 using Xunit;
 
@@ -80,5 +81,41 @@ public sealed class ActiveDirectoryAuthServiceTests
             "DBA-Admins");
 
         Assert.Equal(AppRoles.Admin, role);
+    }
+
+    [Fact]
+    public void ConvertAttributeValue_DecodesUtf8ByteArray()
+    {
+        var value = Encoding.UTF8.GetBytes("DBA-Grüppe");
+
+        var decoded = ActiveDirectoryAuthService.ConvertAttributeValue(value);
+
+        Assert.Equal("DBA-Grüppe", decoded);
+        Assert.NotEqual("System.Byte[]", decoded);
+    }
+
+    [Fact]
+    public void ConvertAttributeValue_PreservesStringAndNullValues()
+    {
+        Assert.Equal("DBA-Admins", ActiveDirectoryAuthService.ConvertAttributeValue("DBA-Admins"));
+        Assert.Null(ActiveDirectoryAuthService.ConvertAttributeValue(null));
+    }
+
+    [Fact]
+    public void DecodedByteArrayGroup_MatchesRequiredGroupAndAdminRole()
+    {
+        var groupName = ActiveDirectoryAuthService.ConvertAttributeValue(
+            Encoding.UTF8.GetBytes("DBA-Admins"));
+        var groups = new[]
+        {
+            new AdGroupIdentity(
+                Assert.IsType<string>(groupName),
+                "CN=DBA-Admins,OU=Groups,DC=corp,DC=local")
+        };
+
+        Assert.True(ActiveDirectoryAuthService.MatchesConfiguredGroup(groups, "DBA-Admins"));
+        Assert.Equal(
+            AppRoles.Admin,
+            ActiveDirectoryAuthService.ResolveRole(groups, "DBA-Operators", "DBA-Admins"));
     }
 }

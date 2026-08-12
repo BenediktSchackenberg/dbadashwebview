@@ -242,8 +242,12 @@ public sealed class ActiveDirectoryAuthService
             foreach (SearchResultEntry groupEntry in response.Entries)
             {
                 var distinguishedName = groupEntry.DistinguishedName;
-                var name = GetFirstAttributeValue(groupEntry.Attributes, "cn")
-                    ?? GetGroupNameFromDistinguishedName(distinguishedName);
+                var name = GetFirstAttributeValue(groupEntry.Attributes, "cn");
+                if (string.IsNullOrWhiteSpace(name))
+                {
+                    name = GetGroupNameFromDistinguishedName(distinguishedName);
+                }
+
                 if (!string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(distinguishedName))
                 {
                     groups.TryAdd(distinguishedName, new AdGroupIdentity(name, distinguishedName));
@@ -316,7 +320,7 @@ public sealed class ActiveDirectoryAuthService
         {
             foreach (var value in attributes[attributeName])
             {
-                var distinguishedName = value?.ToString();
+                var distinguishedName = ConvertAttributeValue(value);
                 if (string.IsNullOrWhiteSpace(distinguishedName))
                 {
                     continue;
@@ -334,9 +338,17 @@ public sealed class ActiveDirectoryAuthService
             .Cast<string>()
             .FirstOrDefault(name => name.Equals(attributeName, StringComparison.OrdinalIgnoreCase));
         return returnedName is not null && attributes[returnedName].Count > 0
-            ? attributes[returnedName][0]?.ToString()
+            ? ConvertAttributeValue(attributes[returnedName][0])
             : null;
     }
+
+    internal static string? ConvertAttributeValue(object? value) => value switch
+    {
+        null => null,
+        string text => text,
+        byte[] bytes => Encoding.UTF8.GetString(bytes),
+        _ => value.ToString()
+    };
 
     private static string[] GetAttributeNames(SearchResultAttributeCollection attributes) =>
         attributes.AttributeNames
