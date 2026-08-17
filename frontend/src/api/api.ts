@@ -1,7 +1,10 @@
 import { clearAuthSession, getAuthSession, isAuthenticated, setAuthSession } from '../auth/session';
 import type {
+  AcknowledgeAlertsRequest,
+  ActiveAlertRow,
   AdConfig,
   AdLoginTestResult,
+  AlertLifecycleResponse,
   ApplicationVersionResponse,
   AvailabilityGroupSummaryRow,
   BackupAmpelResponse,
@@ -10,6 +13,8 @@ import type {
   ApiErrorShape,
   ApiRow,
   AuthStatusResponse,
+  ClosedAlertRow,
+  CloseAlertsRequest,
   CreateLocalUserRequest,
   DbSpaceRow,
   EstateBackupRow,
@@ -51,6 +56,7 @@ import type {
   ThresholdMap,
   TreeInstanceNode,
   UnderutilizedReportRow,
+  UpdateAlertNotesRequest,
   UpdateLocalUserRequest,
   WaitTimelineRow,
 } from './types';
@@ -229,4 +235,14 @@ export const api = {
     request<LocalUser>('/api/settings/users', { method: 'POST', body: JSON.stringify(payload) }),
   updateLocalUser: (id: string, payload: UpdateLocalUserRequest) =>
     request<LocalUser>(`/api/settings/users/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  alertsActive: (instanceId?: number) =>
+    request<AlertLifecycleResponse<ActiveAlertRow>>(`/api/alerts/active${instanceId ? `?instanceId=${instanceId}` : ''}`),
+  alertsClosed: (instanceId?: number, top = 500) =>
+    request<AlertLifecycleResponse<ClosedAlertRow>>(`/api/alerts/closed?top=${top}${instanceId ? `&instanceId=${instanceId}` : ''}`),
+  acknowledgeAlerts: (payload: AcknowledgeAlertsRequest) =>
+    request<{ success: boolean }>('/api/alerts/acknowledge', { method: 'POST', body: JSON.stringify(payload) }),
+  closeAlerts: (payload: CloseAlertsRequest) =>
+    request<{ success: boolean }>('/api/alerts/close', { method: 'POST', body: JSON.stringify(payload) }),
+  updateAlertNotes: (alertId: number, payload: UpdateAlertNotesRequest) =>
+    request<{ success: boolean }>(`/api/alerts/${alertId}/notes`, { method: 'PUT', body: JSON.stringify(payload) }),
 };
