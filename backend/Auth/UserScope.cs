@@ -63,7 +63,7 @@ public sealed class UserScope
     /// caller must pass the resulting parameters from
     /// <see cref="AppendParameters"/> to the command.
     ///
-    /// The predicate joins against <c>dbo.InstanceTag</c> / <c>dbo.Tag</c>
+    /// The predicate joins against <c>dbo.InstanceIDsTags</c> / <c>dbo.Tags</c>
     /// (standard DBA Dash tag schema) for tag scope. Group scope is not yet
     /// enforced at the SQL layer — the values are kept on the JWT so admins
     /// can opt-in once the consuming deployment standardises on a group
@@ -82,7 +82,7 @@ public sealed class UserScope
             .ToArray();
 
         var inList = string.Join(", ", paramNames);
-        return $"{instanceIdColumn} IN (SELECT it.InstanceID FROM dbo.InstanceTag it JOIN dbo.Tag t ON it.TagID = t.TagID WHERE t.TagName IN ({inList}))";
+        return $"{instanceIdColumn} IN (SELECT it.InstanceID FROM dbo.InstanceIDsTags it JOIN dbo.Tags t ON it.TagID = t.TagID WHERE t.TagName IN ({inList}))";
     }
 
     /// <summary>
@@ -140,7 +140,7 @@ public sealed class UserScope
         }
 
         var paramNames = string.Join(", ", AllowedTags.Select((_, index) => "@scope_tag_" + index));
-        var query = $"SELECT DISTINCT it.InstanceID FROM dbo.InstanceTag it JOIN dbo.Tag t ON it.TagID = t.TagID WHERE t.TagName IN ({paramNames})";
+        var query = $"SELECT DISTINCT it.InstanceID FROM dbo.InstanceIDsTags it JOIN dbo.Tags t ON it.TagID = t.TagID WHERE t.TagName IN ({paramNames})";
 
         var rows = await sql.QueryAsync(query, cancellationToken, ParameterTuples().ToArray());
         var ids = new HashSet<int>();
@@ -173,7 +173,7 @@ public sealed class UserScope
         parameters.AddRange(ParameterTuples());
 
         var paramNames = string.Join(", ", AllowedTags.Select((_, index) => "@scope_tag_" + index));
-        var query = $"SELECT TOP 1 1 FROM dbo.InstanceTag it JOIN dbo.Tag t ON it.TagID = t.TagID WHERE it.InstanceID = @instanceId AND t.TagName IN ({paramNames})";
+        var query = $"SELECT TOP 1 1 FROM dbo.InstanceIDsTags it JOIN dbo.Tags t ON it.TagID = t.TagID WHERE it.InstanceID = @instanceId AND t.TagName IN ({paramNames})";
 
         var rows = await sql.QueryAsync(query, cancellationToken, parameters.ToArray());
         return rows.Count > 0;
