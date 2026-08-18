@@ -113,7 +113,7 @@ export default function EstateDiskPage() {
               onModeChange={setInstanceMode}
             />
           )}
-          {driveNames.length > 1 && (
+          {driveNames.length > 0 && (
             <MultiSelectFilter
               label="Drives"
               options={driveNames}

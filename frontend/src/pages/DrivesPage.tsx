@@ -181,7 +181,7 @@ export default function DrivesPage() {
             />
           )}
           {/* Drive name filter */}
-          {driveNames.length > 1 && (
+          {driveNames.length > 0 && (
             <MultiSelectFilter
               label="Drives"
               options={driveNames}
