@@ -10,6 +10,7 @@ import type {
   InstanceDriveRow,
   InstanceJobRow,
   InstanceWaitRow,
+  ResourceGovernorResponse,
 } from '../api/types';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts';
 import StatusBadge from '../components/StatusBadge';
@@ -20,7 +21,7 @@ import EmptyState from '../components/EmptyState';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Server, Cpu, HardDrive, Database, Activity, Clock, Shield,
-  ChevronRight, Zap, BarChart3, Timer, AlertTriangle
+  ChevronRight, Zap, BarChart3, Timer, AlertTriangle, Gauge, Layers
 } from 'lucide-react';
 import TimeRangeSelector, { hoursLabel } from '../components/TimeRangeSelector';
 import { clsx } from 'clsx';
@@ -43,6 +44,23 @@ function formatBytes(b: number | null | undefined) {
 }
 
 const recoveryLabel = (rm: number) => rm === 1 ? 'Full' : rm === 2 ? 'Bulk-Logged' : rm === 3 ? 'Simple' : '—';
+
+function formatKb(kb: number | null | undefined) {
+  if (kb === null || kb === undefined) return '—';
+  if (kb > 1048576) return `${(kb / 1048576).toFixed(1)} GB`;
+  if (kb > 1024) return `${(kb / 1024).toFixed(0)} MB`;
+  return `${kb} KB`;
+}
+
+function pct(v: number | null | undefined, digits = 1) {
+  if (v === null || v === undefined || Number.isNaN(v)) return '—';
+  return `${(v * 100).toFixed(digits)}%`;
+}
+
+function perMin(v: number | null | undefined, digits = 1) {
+  if (v === null || v === undefined || Number.isNaN(v)) return '—';
+  return v.toFixed(digits);
+}
 
 const jobStatusLabel = (s: number) => {
   if (s === 0) return { label: 'Failed', color: 'text-red-400 bg-red-400/10', dot: 'bg-red-400' };
@@ -85,6 +103,9 @@ export default function InstanceDetailPage() {
   const [loading, setLoading] = useState(true);
   const [jobFilter, setJobFilter] = useState<'all' | 'failed' | 'success'>('all');
   const [hours, setHours] = useState(24);
+  const [resourceGovernor, setResourceGovernor] = useState<ResourceGovernorResponse | null>(null);
+  const [rgLoading, setRgLoading] = useState(false);
+  const [rgLoaded, setRgLoaded] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -111,6 +132,18 @@ export default function InstanceDetailPage() {
       }
     })();
   }, [instanceId, hours]);
+
+  useEffect(() => {
+    if (tab !== 'resource-governor' || rgLoaded) return;
+    setRgLoading(true);
+    api.instanceResourceGovernor(instanceId)
+      .then(setResourceGovernor)
+      .catch(() => setResourceGovernor(null))
+      .finally(() => {
+        setRgLoading(false);
+        setRgLoaded(true);
+      });
+  }, [tab, instanceId, rgLoaded]);
 
   // ── Derived data ───────────────────────────────────────────────────────
 
@@ -184,6 +217,7 @@ export default function InstanceDetailPage() {
     { key: 'jobs', label: 'Jobs', count: failedJobCount > 0 ? failedJobCount : jobs.length },
     { key: 'databases', label: 'Databases', count: databases.length },
     { key: 'drives', label: 'Drives', count: drives.length },
+    { key: 'resource-governor', label: 'Resource Governor' },
   ];
 
   if (loading) return <LoadingSpinner />;
@@ -581,6 +615,186 @@ export default function InstanceDetailPage() {
                 );
               })}
               {drives.length === 0 && <div className="col-span-full"><EmptyState message="No drive data" /></div>}
+            </div>
+          )}
+
+          {/* ── Resource Governor ───────────────────────────────────────── */}
+          {tab === 'resource-governor' && (
+            <div className="space-y-6">
+              {rgLoading && <LoadingSpinner />}
+
+              {!rgLoading && resourceGovernor?.note && (
+                <p className="text-xs text-yellow-400/80 italic">{resourceGovernor.note}</p>
+              )}
+
+              {!rgLoading && resourceGovernor?.config && (
+                <div className="glass rounded-2xl p-6">
+                  <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={clsx('w-10 h-10 rounded-xl flex items-center justify-center',
+                        resourceGovernor.config.isEnabled ? 'bg-emerald-500/15' : 'bg-gray-500/15')}>
+                        <Gauge className={clsx('w-5 h-5', resourceGovernor.config.isEnabled ? 'text-emerald-400' : 'text-gray-400')} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-white">
+                          Resource Governor {resourceGovernor.config.isEnabled ? 'Enabled' : 'Disabled'}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          Since {format(new Date(resourceGovernor.config.validFrom), 'yyyy-MM-dd HH:mm')}
+                        </p>
+                      </div>
+                    </div>
+                    {(resourceGovernor.config.reconfigurationPending || resourceGovernor.config.reconfigurationError) && (
+                      <div className="flex gap-2">
+                        {resourceGovernor.config.reconfigurationPending && (
+                          <span className="text-xs px-2 py-1 rounded-lg bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">Reconfiguration Pending</span>
+                        )}
+                        {resourceGovernor.config.reconfigurationError && (
+                          <span className="text-xs px-2 py-1 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20">Reconfiguration Error</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <p className="text-[11px] text-gray-500 uppercase tracking-wider">Classifier Function</p>
+                      <p className="text-white font-mono text-xs mt-0.5">{resourceGovernor.config.classifierFunction || '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-gray-500 uppercase tracking-wider">Max Outstanding I/O Per Volume</p>
+                      <p className="text-white mt-0.5">{resourceGovernor.config.maxOutstandingIoPerVolume}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {!rgLoading && !resourceGovernor?.config && !resourceGovernor?.note && (
+                <EmptyState message="No Resource Governor configuration collected for this instance." />
+              )}
+
+              {!rgLoading && resourceGovernor && resourceGovernor.configHistory.length > 1 && (
+                <div className="glass rounded-xl overflow-hidden">
+                  <div className="px-4 py-3 bg-slate-800/80 text-xs text-gray-400 uppercase tracking-wider">Configuration History</div>
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-xs text-gray-500 border-b border-white/5">
+                        <th className="px-4 py-2">Enabled</th>
+                        <th className="px-4 py-2">Classifier Function</th>
+                        <th className="px-4 py-2">Valid From</th>
+                        <th className="px-4 py-2">Valid To</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {resourceGovernor.configHistory.map((h, i) => (
+                        <tr key={i} className="hover:bg-white/5">
+                          <td className="px-4 py-2">{h.isEnabled ? 'Yes' : 'No'}</td>
+                          <td className="px-4 py-2 font-mono text-xs text-gray-300">{h.classifierFunction || '—'}</td>
+                          <td className="px-4 py-2 text-gray-400 text-xs">{format(new Date(h.validFrom), 'yyyy-MM-dd HH:mm')}</td>
+                          <td className="px-4 py-2 text-gray-400 text-xs">
+                            {h.validTo.startsWith('9999') ? <span className="text-emerald-400">Current</span> : format(new Date(h.validTo), 'yyyy-MM-dd HH:mm')}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {!rgLoading && resourceGovernor && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <Cpu className="w-4 h-4 text-blue-400" />
+                    <h3 className="text-sm font-semibold text-white">Resource Pools</h3>
+                    <span className="text-xs text-gray-500">last {hoursLabel(resourceGovernor.periodHours)}</span>
+                  </div>
+                  {resourceGovernor.pools.length === 0 ? (
+                    <EmptyState message="No active custom resource pools. Resource pool/workload group collection only runs once custom workload groups are defined." />
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
+                      {resourceGovernor.pools.map((p) => (
+                        <div key={p.poolId} className="glass rounded-2xl p-5">
+                          <div className="flex items-center justify-between mb-3">
+                            <p className="text-sm font-semibold text-white">{p.name}</p>
+                            <span className="text-xs text-gray-500">pool_id {p.poolId}</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3 text-xs">
+                            <div>
+                              <p className="text-gray-500 uppercase tracking-wider text-[10px]">CPU (period)</p>
+                              <p className="text-white mt-0.5">{pct(p.periodCpuPercent)}</p>
+                            </div>
+                            <div>
+                              <p className="text-gray-500 uppercase tracking-wider text-[10px]">Cap Utilization</p>
+                              <p className={clsx('mt-0.5', (p.cpuCapUtilizationPercent ?? 0) > 0.9 ? 'text-red-400' : (p.cpuCapUtilizationPercent ?? 0) > 0.7 ? 'text-yellow-400' : 'text-white')}>
+                                {pct(p.cpuCapUtilizationPercent)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-gray-500 uppercase tracking-wider text-[10px]">CPU Min/Max/Cap</p>
+                              <p className="text-white mt-0.5">{p.minCpuPercent}/{p.maxCpuPercent}/{p.capCpuPercent ?? '—'}%</p>
+                            </div>
+                            <div>
+                              <p className="text-gray-500 uppercase tracking-wider text-[10px]">Memory Min/Max</p>
+                              <p className="text-white mt-0.5">{p.minMemoryPercent}/{p.maxMemoryPercent}%</p>
+                            </div>
+                            <div>
+                              <p className="text-gray-500 uppercase tracking-wider text-[10px]">Used / Target Memory</p>
+                              <p className="text-white mt-0.5">{formatKb(p.usedMemoryKb)} / {formatKb(p.targetMemoryKb)}</p>
+                            </div>
+                            <div>
+                              <p className="text-gray-500 uppercase tracking-wider text-[10px]">OOM / Grant Timeouts</p>
+                              <p className={clsx('mt-0.5', p.outOfMemoryCountTotal > 0 || p.memGrantTimeoutCountTotal > 0 ? 'text-red-400' : 'text-white')}>
+                                {p.outOfMemoryCountTotal} / {p.memGrantTimeoutCountTotal}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2 mb-3">
+                    <Layers className="w-4 h-4 text-purple-400" />
+                    <h3 className="text-sm font-semibold text-white">Workload Groups</h3>
+                    <span className="text-xs text-gray-500">last {hoursLabel(resourceGovernor.periodHours)}</span>
+                  </div>
+                  {resourceGovernor.workloadGroups.length === 0 ? (
+                    <EmptyState message="No active custom workload groups." />
+                  ) : (
+                    <div className="glass rounded-xl overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-slate-800/80 text-left text-xs text-gray-400 uppercase tracking-wider">
+                            <th className="px-4 py-3">Group</th>
+                            <th className="px-4 py-3">Pool</th>
+                            <th className="px-4 py-3">Importance</th>
+                            <th className="px-4 py-3 text-right">Active</th>
+                            <th className="px-4 py-3 text-right">Queued</th>
+                            <th className="px-4 py-3 text-right">Blocked</th>
+                            <th className="px-4 py-3 text-right">CPU</th>
+                            <th className="px-4 py-3 text-right">Req/min</th>
+                            <th className="px-4 py-3 text-right">Lock Waits/min</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                          {resourceGovernor.workloadGroups.map((g) => (
+                            <tr key={g.groupId} className="hover:bg-white/5">
+                              <td className="px-4 py-2.5 text-white font-medium">{g.name}</td>
+                              <td className="px-4 py-2.5 text-gray-300">{g.poolName}</td>
+                              <td className="px-4 py-2.5 text-gray-300">{g.importance}</td>
+                              <td className="px-4 py-2.5 text-right text-gray-300">{g.activeRequestCount}</td>
+                              <td className="px-4 py-2.5 text-right text-gray-300">{g.queuedRequestCount}</td>
+                              <td className={clsx('px-4 py-2.5 text-right', g.blockedTaskCount > 0 ? 'text-red-400' : 'text-gray-300')}>{g.blockedTaskCount}</td>
+                              <td className="px-4 py-2.5 text-right text-gray-300">{pct(g.periodCpuPercent)}</td>
+                              <td className="px-4 py-2.5 text-right text-gray-300">{perMin(g.periodRequestsPerMin)}</td>
+                              <td className="px-4 py-2.5 text-right text-gray-300">{perMin(g.periodLockWaitsPerMin)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

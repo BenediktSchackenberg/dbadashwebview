@@ -334,6 +334,76 @@ export interface CorruptionRow {
   countOfRows?: number | null;
 }
 
+export interface ResourceGovernorConfig {
+  isEnabled: boolean;
+  classifierFunction?: string | null;
+  reconfigurationError: boolean;
+  reconfigurationPending: boolean;
+  maxOutstandingIoPerVolume: number;
+  validFrom: string;
+}
+
+export interface ResourceGovernorConfigHistoryEntry extends ResourceGovernorConfig {
+  validTo: string;
+}
+
+export interface ResourceGovernorPool {
+  poolId: number;
+  name: string;
+  minCpuPercent: number;
+  maxCpuPercent: number;
+  capCpuPercent?: number | null;
+  minMemoryPercent: number;
+  maxMemoryPercent: number;
+  periodCpuPercent?: number | null;
+  periodCpuSharePercent?: number | null;
+  cpuCapUtilizationPercent?: number | null;
+  cpuCapNearThresholdPercent?: number | null;
+  usedMemoryKb: number;
+  maxMemoryKb: number;
+  targetMemoryKb: number;
+  outOfMemoryCountTotal: number;
+  memGrantTimeoutCountTotal: number;
+  periodOutOfMemoryCountPerMin?: number | null;
+  periodMemGrantTimeoutCountPerMin?: number | null;
+  periodReadIoThrottledPerMin?: number | null;
+  periodWriteIoThrottledPerMin?: number | null;
+  snapshotDate: string;
+}
+
+export interface ResourceGovernorWorkloadGroup {
+  groupId: number;
+  name: string;
+  poolName: string;
+  importance: string;
+  requestMaxCpuTimeSec: number;
+  maxDop: number;
+  groupMaxRequests: number;
+  activeRequestCount: number;
+  queuedRequestCount: number;
+  blockedTaskCount: number;
+  periodCpuPercent?: number | null;
+  periodCpuSharePercent?: number | null;
+  periodRequestsPerMin?: number | null;
+  periodQueuedRequestCountPerMin?: number | null;
+  periodLockWaitsPerMin?: number | null;
+  periodLockWaitTimeMsPerSec?: number | null;
+  tempdbDataSpaceKb?: number | null;
+  peakTempdbDataSpaceKb?: number | null;
+  totalTempdbDataLimitViolationCount?: number | null;
+  periodTempdbDataLimitViolationsPerMin?: number | null;
+  snapshotDate: string;
+}
+
+export interface ResourceGovernorResponse {
+  config: ResourceGovernorConfig | null;
+  configHistory: ResourceGovernorConfigHistoryEntry[];
+  pools: ResourceGovernorPool[];
+  workloadGroups: ResourceGovernorWorkloadGroup[];
+  periodHours: number;
+  note?: string;
+}
+
 export interface EstateDriveRow extends ApiRow {
   DriveID?: number | null;
   InstanceID?: number | null;
