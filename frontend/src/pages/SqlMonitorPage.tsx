@@ -6,6 +6,7 @@ import {
   Shield, ChevronDown, ChevronRight, Search, X, Monitor, Database, Clock
 } from 'lucide-react';
 import { api } from '../api/api';
+import { alertCategoryByLabel } from '../utils/alertCategories';
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
 
@@ -59,7 +60,7 @@ function healthBar(instances: MonitorInstance[]): { ok: number; warn: number; cr
 
 /* ── Instance Card ─────────────────────────────────────────────────────── */
 
-function InstanceCard({ inst, onClick }: { inst: MonitorInstance; onClick: () => void }) {
+function InstanceCard({ inst, onClick, onAlertClick }: { inst: MonitorInstance; onClick: () => void; onAlertClick: (label: string) => void }) {
   const sc = statusColor(inst.isOnline ? inst.status : 1);
   const osType = inst.edition?.toLowerCase().includes('linux') ? 'Linux' : 'Windows';
   const dbType = inst.edition?.toLowerCase().includes('azure') ? 'Azure SQL' :
@@ -109,9 +110,14 @@ function InstanceCard({ inst, onClick }: { inst: MonitorInstance; onClick: () =>
       {inst.activeAlerts.length > 0 ? (
         <div className="flex flex-wrap gap-1">
           {inst.activeAlerts.map((a, i) => (
-            <span key={i} className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">
+            <button
+              key={i}
+              type="button"
+              onClick={e => { e.stopPropagation(); onAlertClick(a); }}
+              className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 hover:bg-yellow-500/20 hover:border-yellow-500/40 transition-colors cursor-pointer"
+            >
               <AlertTriangle className="w-2.5 h-2.5" /> {a}
-            </span>
+            </button>
           ))}
         </div>
       ) : inst.isOnline ? (
@@ -144,7 +150,7 @@ function HealthBarSegment({ instances }: { instances: MonitorInstance[] }) {
 
 /* ── Alert Sidebar Item ────────────────────────────────────────────────── */
 
-function AlertSidebarItem({ label, count, color }: { label: string; count: number; color: string }) {
+function AlertSidebarItem({ label, count, color, onClick }: { label: string; count: number; color: string; onClick: () => void }) {
   const iconMap: Record<string, typeof AlertTriangle> = {
     'Monitoring stopped': Monitor,
     'Backup': HardDrive,
@@ -158,7 +164,13 @@ function AlertSidebarItem({ label, count, color }: { label: string; count: numbe
   const hasActive = count > 0;
 
   return (
-    <div className={`flex items-center justify-between py-2 px-3 rounded-lg transition-colors ${hasActive ? 'bg-white/5 hover:bg-white/10 cursor-pointer' : ''}`}>
+    <div
+      role={hasActive ? 'button' : undefined}
+      tabIndex={hasActive ? 0 : undefined}
+      onClick={hasActive ? onClick : undefined}
+      onKeyDown={hasActive ? (e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }) : undefined}
+      className={`flex items-center justify-between py-2 px-3 rounded-lg transition-colors ${hasActive ? 'bg-white/5 hover:bg-white/10 cursor-pointer' : ''}`}
+    >
       <div className="flex items-center gap-2.5">
         <Icon className={`w-4 h-4 ${hasActive ? color : 'text-gray-600'}`} />
         <div>
@@ -184,6 +196,14 @@ export default function SqlMonitorPage() {
   const [search, setSearch] = useState('');
   const [expandAll, setExpandAll] = useState(true);
   const navigate = useNavigate();
+
+  const goToAlerts = (categoryLabel: string, instanceId?: number) => {
+    const category = alertCategoryByLabel(categoryLabel);
+    const params = new URLSearchParams();
+    if (instanceId != null) params.set('instance', String(instanceId));
+    if (category) params.set('type', category.slug);
+    navigate(`/alerts?${params.toString()}`);
+  };
 
   useEffect(() => {
     api.dashboardMonitor().then(res => {
@@ -279,7 +299,12 @@ export default function SqlMonitorPage() {
               >
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 px-4 pb-4">
                   {filtered.map(inst => (
-                    <InstanceCard key={inst.instanceId} inst={inst} onClick={() => navigate(`/instances/${inst.instanceId}`)} />
+                    <InstanceCard
+                      key={inst.instanceId}
+                      inst={inst}
+                      onClick={() => navigate(`/instances/${inst.instanceId}`)}
+                      onAlertClick={label => goToAlerts(label, inst.instanceId)}
+                    />
                   ))}
                 </div>
                 {filtered.length === 0 && (
@@ -302,6 +327,7 @@ export default function SqlMonitorPage() {
                 label={at.label}
                 count={alertCounts[at.label] || 0}
                 color={at.color}
+                onClick={() => goToAlerts(at.label)}
               />
             ))}
           </div>
