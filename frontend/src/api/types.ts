@@ -326,6 +326,16 @@ export interface EstateDriveRow extends ApiRow {
   InstanceDisplayName?: string | null;
 }
 
+export interface DriveGrowthPoint {
+  driveID: number;
+  dataPoints: number;
+  oldestSnapshotDate: string | null;
+  oldestFreeSpace: number | null;
+  latestSnapshotDate: string | null;
+  latestFreeSpace: number | null;
+  latestCapacity: number | null;
+}
+
 export interface LicenseReportRow extends ApiRow {
   InstanceID: number;
   InstanceName?: string | null;

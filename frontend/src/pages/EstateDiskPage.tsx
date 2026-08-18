@@ -4,7 +4,9 @@ import type { EstateDriveRow } from '../api/types';
 import { useRefresh } from '../App';
 import LoadingSpinner from '../components/LoadingSpinner';
 import CapacityBar from '../components/CapacityBar';
-import { AlertTriangle } from 'lucide-react';
+import MultiSelectFilter, { type FilterMode } from '../components/MultiSelectFilter';
+import { AlertTriangle, Filter } from 'lucide-react';
+import { clsx } from 'clsx';
 
 interface EstateDriveViewModel extends EstateDriveRow {
   capacity: number;
@@ -21,11 +23,26 @@ export default function EstateDiskPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('');
 
+  const [driveMode, setDriveMode] = useState<FilterMode>('include');
+  const [selectedDrives, setSelectedDrives] = useState<string[]>([]);
+  const [instanceMode, setInstanceMode] = useState<FilterMode>('include');
+  const [selectedInstances, setSelectedInstances] = useState<string[]>([]);
+
   useEffect(() => {
     api.drives().then(d => setDrives(Array.isArray(d) ? d : []))
       .catch(() => setDrives([]))
       .finally(() => setLoading(false));
   }, [lastRefresh]);
+
+  const driveNames = useMemo(() => {
+    const names = new Set(drives.map(d => d.Name).filter(Boolean) as string[]);
+    return [...names].sort();
+  }, [drives]);
+
+  const instanceNames = useMemo(() => {
+    const names = new Set(drives.map(d => d.InstanceDisplayName).filter(Boolean) as string[]);
+    return [...names].sort();
+  }, [drives]);
 
   const filtered = useMemo(() => {
     let items: EstateDriveViewModel[] = drives.map((d) => {
@@ -54,22 +71,79 @@ export default function EstateDiskPage() {
       );
     }
 
+    if (selectedDrives.length > 0) {
+      items = items.filter(d => {
+        const isSelected = selectedDrives.includes(d.Name || '');
+        return driveMode === 'include' ? isSelected : !isSelected;
+      });
+    }
+
+    if (selectedInstances.length > 0) {
+      items = items.filter(d => {
+        const isSelected = selectedInstances.includes(d.InstanceDisplayName || '');
+        return instanceMode === 'include' ? isSelected : !isSelected;
+      });
+    }
+
     return items.sort((a, b) => b.pct - a.pct);
-  }, [drives, filter]);
+  }, [drives, filter, selectedDrives, driveMode, selectedInstances, instanceMode]);
+
+  const hasActiveFilters = selectedDrives.length > 0 || selectedInstances.length > 0;
 
   if (loading) return <LoadingSpinner />;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-2xl font-bold text-white">Estate Disk Usage</h1>
-        <input
-          placeholder="Filter by instance or drive..."
-          value={filter}
-          onChange={e => setFilter(e.target.value)}
-          className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 w-64"
-        />
+        <div className="flex items-center gap-2 flex-wrap">
+          <input
+            placeholder="Filter by instance or drive..."
+            value={filter}
+            onChange={e => setFilter(e.target.value)}
+            className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 w-64"
+          />
+          {instanceNames.length > 0 && (
+            <MultiSelectFilter
+              label="Instances"
+              options={instanceNames}
+              selected={selectedInstances}
+              onChange={setSelectedInstances}
+              mode={instanceMode}
+              onModeChange={setInstanceMode}
+            />
+          )}
+          {driveNames.length > 1 && (
+            <MultiSelectFilter
+              label="Drives"
+              options={driveNames}
+              selected={selectedDrives}
+              onChange={setSelectedDrives}
+              mode={driveMode}
+              onModeChange={setDriveMode}
+            />
+          )}
+        </div>
       </div>
+
+      {hasActiveFilters && (
+        <div className="flex items-center gap-2 text-xs text-gray-400 flex-wrap">
+          <Filter className="w-3 h-3" />
+          <span>Filtering by:</span>
+          {selectedInstances.map(name => (
+            <span key={name} className={clsx('px-2 py-0.5 rounded-full', instanceMode === 'exclude' ? 'bg-red-400/10 text-red-400' : 'bg-blue-400/10 text-blue-400')}>
+              {instanceMode === 'exclude' ? 'not ' : ''}{name}
+              <button onClick={() => setSelectedInstances(prev => prev.filter(n => n !== name))} className="ml-1 hover:text-white">×</button>
+            </span>
+          ))}
+          {selectedDrives.map(name => (
+            <span key={name} className={clsx('px-2 py-0.5 rounded-full', driveMode === 'exclude' ? 'bg-red-400/10 text-red-400' : 'bg-purple-400/10 text-purple-400')}>
+              {driveMode === 'exclude' ? 'not ' : ''}{name}
+              <button onClick={() => setSelectedDrives(prev => prev.filter(n => n !== name))} className="ml-1 hover:text-white">×</button>
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className="glass rounded-xl p-6 gradient-border overflow-x-auto">
         <table className="w-full text-sm">
