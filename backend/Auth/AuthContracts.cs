@@ -88,3 +88,13 @@ public sealed record AdLoginTestResponse(
 public sealed record ThresholdValue(double Warning, double Critical);
 
 public sealed record ThresholdUpdateRequest(Dictionary<string, ThresholdValue> Thresholds);
+
+/// <summary>
+/// A threshold that overrides the global default for a single metric, scoped to
+/// either one instance (<c>ScopeType == "instance"</c>) or every instance carrying
+/// a given DBA Dash tag (<c>ScopeType == "tag"</c>). <see cref="ScopeId"/> is the
+/// InstanceID or TagID respectively.
+/// </summary>
+public sealed record ThresholdOverride(string MetricKey, string ScopeType, int ScopeId, double Warning, double Critical);
+
+public sealed record ThresholdOverridesUpdateRequest(List<ThresholdOverride> Overrides);

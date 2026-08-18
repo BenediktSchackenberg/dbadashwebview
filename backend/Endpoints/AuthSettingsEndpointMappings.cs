@@ -1,4 +1,6 @@
+using System.Security.Claims;
 using DBADashWebView.Auth;
+using DBADashWebView.Data;
 using DBADashWebView.Settings;
 
 namespace DBADashWebView.Endpoints;
@@ -143,8 +145,10 @@ public static class AuthSettingsEndpointMappings
         }).RequireAuthorization(AppPolicies.AdminOnly);
 
         endpoints.MapGet("/api/settings/thresholds", async (ThresholdSettingsStore thresholds, CancellationToken cancellationToken) =>
-            Results.Ok(new { thresholds = await thresholds.GetAsync(cancellationToken) }))
-            .RequireAuthorization();
+        {
+            var (global, overrides) = await thresholds.GetSettingsAsync(cancellationToken);
+            return Results.Ok(new { thresholds = global, overrides });
+        }).RequireAuthorization();
 
         endpoints.MapPost("/api/settings/thresholds", async (
             ThresholdUpdateRequest request,
@@ -154,6 +158,66 @@ public static class AuthSettingsEndpointMappings
             await thresholds.SaveAsync(request.Thresholds, cancellationToken);
             return Results.Ok(new { success = true });
         }).RequireAuthorization(AppPolicies.AdminOnly);
+
+        // Per-instance/per-tag threshold overrides: the global thresholds above stay
+        // the fallback, but a warning/critical pair here for a more specific scope
+        // (one instance, or every instance carrying a tag) wins over it.
+        endpoints.MapPost("/api/settings/thresholds/overrides", async (
+            ThresholdOverridesUpdateRequest request,
+            ThresholdSettingsStore thresholds,
+            CancellationToken cancellationToken) =>
+        {
+            await thresholds.SaveOverridesAsync(request.Overrides, cancellationToken);
+            return Results.Ok(new { success = true });
+        }).RequireAuthorization(AppPolicies.AdminOnly);
+
+        // Tag options for the override scope picker, and the tag/instance membership
+        // the dashboard needs to resolve tag-scoped overrides client-side. Any
+        // authenticated user can read this (not just admins) since color-coding on
+        // the dashboard depends on it for every role; only saving overrides is
+        // admin-gated above. Kept separate from a general "list tags" endpoint so
+        // this feature doesn't depend on one existing yet.
+        endpoints.MapGet("/api/settings/thresholds/tags", async (ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                var (scopeSnippet, scopeParameters) = user.ScopedInstanceFilter("IT.InstanceID");
+                var rows = await sql.QueryAsync(
+                    $"""
+                    SELECT T.TagID, T.TagName, T.TagValue, IT.InstanceID
+                    FROM dbo.Tags T
+                    JOIN dbo.InstanceIDsTags IT ON T.TagID = IT.TagID
+                    JOIN dbo.Instances I ON IT.InstanceID = I.InstanceID
+                    WHERE I.IsActive = 1
+                      {scopeSnippet}
+                    ORDER BY T.TagName, T.TagValue
+                    """,
+                    cancellationToken, scopeParameters);
+
+                var tags = rows
+                    .GroupBy(row => Convert.ToInt32(row["TagID"]))
+                    .Select(group =>
+                    {
+                        var first = group.First();
+                        var tagName = (string)first["TagName"]!;
+                        return new
+                        {
+                            tagId = group.Key,
+                            tagName,
+                            tagValue = first["TagValue"] as string,
+                            isSystem = tagName.StartsWith('{'),
+                            instanceIds = group.Select(row => Convert.ToInt32(row["InstanceID"])).Distinct().ToArray()
+                        };
+                    })
+                    .ToList();
+
+                return Results.Ok(new { data = tags });
+            }
+            catch (Exception ex)
+            {
+                return Results.Ok(new { error = ex.Message, data = Array.Empty<object>() });
+            }
+        }).RequireAuthorization();
 
         return endpoints;
     }

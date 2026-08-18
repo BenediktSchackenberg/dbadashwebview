@@ -495,6 +495,29 @@ export interface ThresholdValue {
 
 export type ThresholdMap = Record<string, ThresholdValue>;
 
+export type ThresholdScopeType = 'instance' | 'tag';
+
+export interface ThresholdOverride {
+  metricKey: string;
+  scopeType: ThresholdScopeType;
+  scopeId: number;
+  warning: number;
+  critical: number;
+}
+
+export interface ThresholdSettingsResponse {
+  thresholds: ThresholdMap;
+  overrides: ThresholdOverride[];
+}
+
+export interface ThresholdScopeTagOption {
+  tagId: number;
+  tagName: string;
+  tagValue: string | null;
+  isSystem: boolean;
+  instanceIds: number[];
+}
+
 export interface SearchInstanceRow extends ApiRow {
   InstanceID: number;
   InstanceDisplayName?: string;

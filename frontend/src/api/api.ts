@@ -47,6 +47,9 @@ import type {
   SlowQueryRow,
   TempDbFileRow,
   ThresholdMap,
+  ThresholdOverride,
+  ThresholdScopeTagOption,
+  ThresholdSettingsResponse,
   TreeInstanceNode,
   UnderutilizedReportRow,
   UpdateLocalUserRequest,
@@ -111,7 +114,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 export { isAuthenticated, setAuthSession };
-export type { ThresholdMap } from './types';
+export type { ThresholdMap, ThresholdOverride, ThresholdScopeTagOption, ThresholdSettingsResponse } from './types';
 
 export const api = {
   authStatus: () => request<AuthStatusResponse>('/api/auth/status'),
@@ -208,9 +211,13 @@ export const api = {
   reportsBackupAmpel: () => request<BackupAmpelResponse>('/api/reports/backup-ampel'),
   dashboardMonitor: () => request<DashboardMonitorResponse>('/api/dashboard/monitor'),
   getThresholds: () =>
-    request<{ thresholds: ThresholdMap }>('/api/settings/thresholds'),
+    request<ThresholdSettingsResponse>('/api/settings/thresholds'),
   saveThresholds: (thresholds: ThresholdMap) =>
     request<{ success: boolean }>('/api/settings/thresholds', { method: 'POST', body: JSON.stringify({ thresholds }) }),
+  saveThresholdOverrides: (overrides: ThresholdOverride[]) =>
+    request<{ success: boolean }>('/api/settings/thresholds/overrides', { method: 'POST', body: JSON.stringify({ overrides }) }),
+  getThresholdScopeTags: () =>
+    request<{ data: ThresholdScopeTagOption[] }>('/api/settings/thresholds/tags'),
   getAdConfig: async () => {
     const response = await request<AdConfig>('/api/settings/ad');
     return { ...response, bindPassword: '' };
