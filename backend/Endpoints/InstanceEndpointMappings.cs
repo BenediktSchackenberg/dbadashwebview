@@ -99,6 +99,40 @@ public static class InstanceEndpointMappings
             }
         }).RequireAuthorization();
 
+        // A REAL baseline - the average SQLProcessCPU for the same time-of-day
+        // bucket, computed from actual historical dbo.CPU rows older than the
+        // window currently being charted. (The "Baseline (last week)" toggle in
+        // the frontend used to be current-value + a sine wave with no real data
+        // behind it at all.)
+        endpoints.MapGet("/api/instances/{id:int}/cpu/baseline", async (int id, int? hours, int? lookbackDays, ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
+        {
+            var deny = await user.EnsureInstanceAccessAsync(id, sql, cancellationToken);
+            if (deny is not null) return deny;
+            var effectiveHours = Math.Clamp(hours ?? 24, 1, 336);
+            var effectiveLookbackDays = Math.Clamp(lookbackDays ?? 14, 1, 90);
+            const int bucketMinutes = 15;
+            try
+            {
+                var data = await sql.QueryAsync("""
+                    SELECT
+                        (DATEPART(hour, EventTime) * 60 + (DATEPART(minute, EventTime) / 15) * 15) AS MinuteOfDay,
+                        AVG(CAST(SQLProcessCPU AS FLOAT)) AS AvgCpu,
+                        COUNT(*) AS SampleCount
+                    FROM dbo.CPU
+                    WHERE InstanceID = @id
+                      AND EventTime >= DATEADD(day, -@lookbackDays, GETUTCDATE())
+                      AND EventTime < DATEADD(hour, -@hours, GETUTCDATE())
+                    GROUP BY DATEPART(hour, EventTime), (DATEPART(minute, EventTime) / 15)
+                    ORDER BY MinuteOfDay
+                    """, cancellationToken, ("@id", id), ("@lookbackDays", effectiveLookbackDays), ("@hours", effectiveHours));
+                return Results.Ok(new { data, bucketMinutes });
+            }
+            catch (Exception ex)
+            {
+                return Results.Ok(new { error = ex.Message, data = Array.Empty<object>(), bucketMinutes });
+            }
+        }).RequireAuthorization();
+
         endpoints.MapGet("/api/instances/{id:int}/waits", async (int id, int? hours, ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             var deny = await user.EnsureInstanceAccessAsync(id, sql, cancellationToken);

@@ -18,4 +18,5 @@ public static class AppRoles
 public static class AppPolicies
 {
     public const string AdminOnly = "AdminOnly";
+    public const string OperatorOrAdmin = "OperatorOrAdmin";
 }

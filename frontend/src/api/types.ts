@@ -98,6 +98,18 @@ export interface InstanceCpuRow extends ApiRow {
   TotalCPU?: number | null;
 }
 
+export interface InstanceCpuBaselinePoint extends ApiRow {
+  MinuteOfDay: number;
+  AvgCpu: number | null;
+  SampleCount: number;
+}
+
+export interface InstanceCpuBaselineResponse {
+  data: InstanceCpuBaselinePoint[];
+  bucketMinutes: number;
+  error?: string;
+}
+
 export interface InstanceWaitRow extends ApiRow {
   WaitTypeID?: number | null;
   WaitType?: string | null;
@@ -307,6 +319,19 @@ export interface EstateBackupRow extends ApiRow {
   fullBackupSize?: number | null;
   diffBackupDate?: string | null;
   logBackupDate?: string | null;
+}
+
+export interface CorruptionRow {
+  databaseId: number;
+  databaseName?: string | null;
+  instanceId: number;
+  instanceDisplayName?: string | null;
+  sourceTable: number;
+  source: string;
+  updateDate: string;
+  ackDate?: string | null;
+  isAcknowledged: boolean;
+  countOfRows?: number | null;
 }
 
 export interface EstateDriveRow extends ApiRow {
@@ -697,6 +722,21 @@ export interface QueryStoreRow extends ApiRow {
   avgDuration?: number | null;
   countExecutions?: number | null;
   avgLogicalIoReads?: number | null;
+}
+
+export interface PlanForcingLogRow extends ApiRow {
+  MessageGroupID: string;
+  InstanceID: number;
+  database_name: string;
+  log_date: string;
+  log_type: string;
+  user_name: string;
+  query_id: number;
+  plan_id: number;
+  object_name?: string | null;
+  query_sql_text?: string | null;
+  notes?: string | null;
+  status?: string | null;
 }
 
 export interface SchemaChangeRow extends ApiRow {

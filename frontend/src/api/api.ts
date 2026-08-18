@@ -9,6 +9,7 @@ import type {
   ApiErrorShape,
   ApiRow,
   AuthStatusResponse,
+  CorruptionRow,
   CreateLocalUserRequest,
   DbSpaceRow,
   EstateBackupRow,
@@ -22,6 +23,7 @@ import type {
   ExecStatsRow,
   IdentityColumnRow,
   InstanceBackupRow,
+  InstanceCpuBaselineResponse,
   InstanceCpuRow,
   InstanceDatabaseRow,
   InstanceDetailResponse,
@@ -41,6 +43,7 @@ import type {
   PerformanceCounterRow,
   PerformanceIOResponse,
   QueryAnalysisRow,
+  PlanForcingLogRow,
   QueryStoreRow,
   RunningQueryRow,
   SchemaChangeRow,
@@ -129,6 +132,8 @@ export const api = {
   instances: () => request<InstanceListRow[]>('/api/instances'),
   instance: (id: number) => request<InstanceDetailResponse>(`/api/instances/${id}`),
   instanceCpu: (id: number, hours = 24) => request<InstanceCpuRow[]>(`/api/instances/${id}/cpu?hours=${hours}`),
+  instanceCpuBaseline: (id: number, hours = 24, lookbackDays = 14) =>
+    request<InstanceCpuBaselineResponse>(`/api/instances/${id}/cpu/baseline?hours=${hours}&lookbackDays=${lookbackDays}`),
   instanceWaits: (id: number, hours = 24) => request<InstanceWaitRow[]>(`/api/instances/${id}/waits?hours=${hours}`),
   instanceDrives: (id: number) => request<InstanceDriveRow[]>(`/api/instances/${id}/drives`),
   instanceDatabases: (id: number) => request<InstanceDatabaseRow[]>(`/api/instances/${id}/databases`),
@@ -146,6 +151,10 @@ export const api = {
   instanceHadr: (id: number) => request<InstanceHadrResponse>(`/api/instances/${id}/hadr`),
   hadrOverview: () => request<HadrOverviewResponse>('/api/hadr/overview'),
   drives: () => request<EstateDriveRow[]>('/api/drives'),
+  corruption: (instanceId?: number) =>
+    request<{ data: CorruptionRow[] }>(`/api/corruption${instanceId ? `?instanceId=${instanceId}` : ''}`),
+  acknowledgeCorruption: (databaseId: number, clear: boolean) =>
+    request<{ success: boolean }>(`/api/corruption/${databaseId}/acknowledge`, { method: 'POST', body: JSON.stringify({ clear }) }),
   instanceQueries: (id: number) => request<QueryAnalysisRow[]>(`/api/instances/${id}/queries`),
   backupsEstate: () => request<EstateBackupRow[]>('/api/backups/estate'),
   backupsManagement: () => request<BackupManagementResponse>('/api/backups/management'),
@@ -193,6 +202,8 @@ export const api = {
     request<ApiDataResponse<SchemaChangeRow>>(`/api/monitoring/schema-changes?instanceId=${instanceId}&days=${days}`),
   performanceQueryStore: (instanceId: number) =>
     request<ApiDataResponse<QueryStoreRow>>(`/api/performance/query-store?instanceId=${instanceId}`),
+  performancePlanForcingLog: (instanceId: number) =>
+    request<ApiDataResponse<PlanForcingLogRow>>(`/api/performance/plan-forcing-log?instanceId=${instanceId}`),
   monitoringIdentityColumns: (instanceId: number) =>
     request<ApiDataResponse<IdentityColumnRow>>(`/api/monitoring/identity-columns?instanceId=${instanceId}`),
   monitoringTempDB: (instanceId: number) =>

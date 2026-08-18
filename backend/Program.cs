@@ -38,7 +38,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 builder.Services.AddAuthorizationBuilder()
-    .AddPolicy(AppPolicies.AdminOnly, policy => policy.RequireRole(AppRoles.Admin));
+    .AddPolicy(AppPolicies.AdminOnly, policy => policy.RequireRole(AppRoles.Admin))
+    .AddPolicy(AppPolicies.OperatorOrAdmin, policy => policy.RequireRole(AppRoles.Admin, AppRoles.Operator));
 
 builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
 {
@@ -97,6 +98,7 @@ app.MapPerformanceEndpoints();
 app.MapMonitoringEndpoints();
 app.MapEstateEndpoints();
 app.MapReportEndpoints();
+app.MapCorruptionEndpoints();
 
 app.MapFallbackToFile("index.html");
 
