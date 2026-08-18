@@ -69,7 +69,29 @@ public static class AvailabilityEndpointMappings
                     )
                     """, cancellationToken, ("@id", id));
 
-                return Results.Ok(new { ags, replicas, databases });
+                var mirroring = await sql.QueryAsync("""
+                    SELECT dm.DatabaseID, d.name AS DatabaseName,
+                           dm.mirroring_state_desc, dm.mirroring_role_desc, dm.mirroring_safety_level_desc,
+                           dm.mirroring_partner_name, dm.mirroring_partner_instance,
+                           dm.mirroring_witness_name, dm.mirroring_witness_state_desc,
+                           dm.mirroring_redo_queue, dm.mirroring_redo_queue_type,
+                           dmp.mirroring_state_desc AS PartnerStateDesc
+                    FROM dbo.DatabaseMirroring dm
+                    JOIN dbo.Databases d ON dm.DatabaseID = d.DatabaseID
+                    LEFT JOIN dbo.DatabaseMirroring dmp ON dmp.mirroring_guid = dm.mirroring_guid AND dmp.InstanceID <> dm.InstanceID
+                    WHERE dm.InstanceID = @id
+                    ORDER BY d.name
+                    """, cancellationToken, ("@id", id));
+
+                var logShipping = await sql.QueryAsync("""
+                    SELECT lr.DatabaseID, d.name AS DatabaseName, lr.restore_date, lr.backup_start_date, lr.last_file
+                    FROM dbo.LogRestores lr
+                    JOIN dbo.Databases d ON lr.DatabaseID = d.DatabaseID
+                    WHERE lr.InstanceID = @id
+                    ORDER BY d.name
+                    """, cancellationToken, ("@id", id));
+
+                return Results.Ok(new { ags, replicas, databases, mirroring, logShipping });
             }
             catch (Exception ex)
             {
@@ -78,7 +100,9 @@ public static class AvailabilityEndpointMappings
                     error = ex.Message,
                     ags = Array.Empty<object>(),
                     replicas = Array.Empty<object>(),
-                    databases = Array.Empty<object>()
+                    databases = Array.Empty<object>(),
+                    mirroring = Array.Empty<object>(),
+                    logShipping = Array.Empty<object>()
                 });
             }
         }).RequireAuthorization();

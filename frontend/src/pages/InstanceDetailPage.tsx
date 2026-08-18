@@ -12,6 +12,7 @@ import type {
   InstanceWaitRow,
   ResourceGovernorResponse,
   InstanceSecurityResponse,
+  InstanceTableSizeRow,
 } from '../api/types';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts';
 import StatusBadge from '../components/StatusBadge';
@@ -23,7 +24,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Server, Cpu, HardDrive, Database, Activity, Clock, Shield,
   ChevronRight, Zap, BarChart3, Timer, AlertTriangle, Gauge, Layers,
-  Lock, UserX, Skull
+  Lock, UserX, Skull, Table2
 } from 'lucide-react';
 import TimeRangeSelector, { hoursLabel } from '../components/TimeRangeSelector';
 import { clsx } from 'clsx';
@@ -111,6 +112,10 @@ export default function InstanceDetailPage() {
   const [security, setSecurity] = useState<InstanceSecurityResponse | null>(null);
   const [securityLoading, setSecurityLoading] = useState(false);
   const [securityLoaded, setSecurityLoaded] = useState(false);
+  const [tableSizes, setTableSizes] = useState<InstanceTableSizeRow[]>([]);
+  const [tableSizesLoading, setTableSizesLoading] = useState(false);
+  const [tableSizesLoaded, setTableSizesLoaded] = useState(false);
+  const [tableSizesGrowthDays, setTableSizesGrowthDays] = useState(30);
 
   useEffect(() => {
     (async () => {
@@ -161,6 +166,21 @@ export default function InstanceDetailPage() {
         setSecurityLoaded(true);
       });
   }, [tab, instanceId, securityLoaded]);
+
+  useEffect(() => {
+    if (tab !== 'table-sizes' || tableSizesLoaded) return;
+    setTableSizesLoading(true);
+    api.instanceTableSizes(instanceId)
+      .then(res => {
+        setTableSizes(Array.isArray(res.data) ? res.data : []);
+        setTableSizesGrowthDays(res.growthDays);
+      })
+      .catch(() => setTableSizes([]))
+      .finally(() => {
+        setTableSizesLoading(false);
+        setTableSizesLoaded(true);
+      });
+  }, [tab, instanceId, tableSizesLoaded]);
 
   // ── Derived data ───────────────────────────────────────────────────────
 
@@ -236,6 +256,7 @@ export default function InstanceDetailPage() {
     { key: 'drives', label: 'Drives', count: drives.length },
     { key: 'resource-governor', label: 'Resource Governor' },
     { key: 'security', label: 'Security' },
+    { key: 'table-sizes', label: 'Table Sizes' },
   ];
 
   if (loading) return <LoadingSpinner />;
@@ -938,6 +959,60 @@ export default function InstanceDetailPage() {
                       </div>
                     )}
                   </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ── Table Sizes ──────────────────────────────────────────────── */}
+          {tab === 'table-sizes' && (
+            <div className="space-y-4">
+              {tableSizesLoading && <LoadingSpinner />}
+              {!tableSizesLoading && (
+                <>
+                  <div className="flex items-center gap-2">
+                    <Table2 className="w-4 h-4 text-blue-400" />
+                    <h3 className="text-sm font-semibold text-white">Largest Tables</h3>
+                    <span className="text-xs text-gray-500">
+                      by reserved space, growth over last {tableSizesGrowthDays} days
+                    </span>
+                  </div>
+                  {tableSizes.length === 0 ? (
+                    <EmptyState message="No table size history collected for this instance yet." />
+                  ) : (
+                    <div className="glass rounded-xl overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-slate-800/80 text-left text-xs text-gray-400 uppercase tracking-wider">
+                            <th className="px-4 py-3">Database</th>
+                            <th className="px-4 py-3">Table</th>
+                            <th className="px-4 py-3 text-right">Rows</th>
+                            <th className="px-4 py-3 text-right">Reserved</th>
+                            <th className="px-4 py-3 text-right">Growth / day</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                          {tableSizes.map((t) => (
+                            <tr key={t.ObjectID} className="hover:bg-white/5">
+                              <td className="px-4 py-2.5 text-gray-300">{t.DatabaseName}</td>
+                              <td className="px-4 py-2.5 text-white font-medium font-mono text-xs">{t.SchemaName}.{t.ObjectName}</td>
+                              <td className="px-4 py-2.5 text-right text-gray-300">{t.Rows?.toLocaleString()}</td>
+                              <td className="px-4 py-2.5 text-right text-gray-300">{formatKb(t.ReservedKb)}</td>
+                              <td className="px-4 py-2.5 text-right">
+                                {t.CalcDays && t.CalcDays >= 1 ? (
+                                  <span className={clsx((t.AvgKbPerDay ?? 0) > 0 ? 'text-yellow-400' : 'text-gray-400')}>
+                                    {(t.AvgKbPerDay ?? 0) >= 0 ? '+' : ''}{formatKb(t.AvgKbPerDay)}/day
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-600 text-xs">not enough history</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </>
               )}
             </div>

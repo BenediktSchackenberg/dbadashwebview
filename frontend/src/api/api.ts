@@ -26,6 +26,7 @@ import type {
   InstanceCpuBaselineResponse,
   ResourceGovernorResponse,
   InstanceSecurityResponse,
+  InstanceTableSizeResponse,
   InstanceCpuRow,
   InstanceDatabaseRow,
   InstanceDetailResponse,
@@ -41,6 +42,7 @@ import type {
   MemoryResponse,
   MonitoringConfigurationChangeRow,
   MonitoringConfigurationRow,
+  MonitoringTraceFlagRow,
   PatchingRow,
   PerformanceCounterRow,
   PerformanceIOResponse,
@@ -139,6 +141,8 @@ export const api = {
   instanceResourceGovernor: (id: number, hours = 24) =>
     request<ResourceGovernorResponse>(`/api/instances/${id}/resource-governor?hours=${hours}`),
   instanceSecurity: (id: number) => request<InstanceSecurityResponse>(`/api/instances/${id}/security`),
+  instanceTableSizes: (id: number, growthDays = 30, top = 100) =>
+    request<InstanceTableSizeResponse>(`/api/instances/${id}/table-sizes?growthDays=${growthDays}&top=${top}`),
   instanceWaits: (id: number, hours = 24) => request<InstanceWaitRow[]>(`/api/instances/${id}/waits?hours=${hours}`),
   instanceDrives: (id: number) => request<InstanceDriveRow[]>(`/api/instances/${id}/drives`),
   instanceDatabases: (id: number) => request<InstanceDatabaseRow[]>(`/api/instances/${id}/databases`),
@@ -201,6 +205,8 @@ export const api = {
     request<ApiDataResponse<MonitoringConfigurationRow>>(`/api/monitoring/configuration?instanceId=${instanceId}`),
   monitoringConfigurationChanges: (instanceId: number, days = 30) =>
     request<ApiDataResponse<MonitoringConfigurationChangeRow>>(`/api/monitoring/configuration/changes?instanceId=${instanceId}&days=${days}`),
+  monitoringTraceFlags: (instanceId: number) =>
+    request<ApiDataResponse<MonitoringTraceFlagRow>>(`/api/monitoring/trace-flags?instanceId=${instanceId}`),
   monitoringPatching: () =>
     request<ApiDataResponse<PatchingRow>>('/api/monitoring/patching'),
   monitoringSchemaChanges: (instanceId: number, days = 30) =>

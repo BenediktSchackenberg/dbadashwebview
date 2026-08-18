@@ -216,11 +216,36 @@ export interface InstanceHadrDatabaseRow extends ApiRow {
   DatabaseName?: string | null;
 }
 
+export interface InstanceMirroringRow extends ApiRow {
+  DatabaseID: number;
+  DatabaseName?: string | null;
+  mirroring_state_desc?: string | null;
+  mirroring_role_desc?: string | null;
+  mirroring_safety_level_desc?: string | null;
+  mirroring_partner_name?: string | null;
+  mirroring_partner_instance?: string | null;
+  mirroring_witness_name?: string | null;
+  mirroring_witness_state_desc?: string | null;
+  mirroring_redo_queue?: number | null;
+  mirroring_redo_queue_type?: string | null;
+  PartnerStateDesc?: string | null;
+}
+
+export interface InstanceLogShippingRow extends ApiRow {
+  DatabaseID: number;
+  DatabaseName?: string | null;
+  restore_date?: string | null;
+  backup_start_date?: string | null;
+  last_file?: string | null;
+}
+
 export interface InstanceHadrResponse {
   error?: string;
   ags: InstanceHadrGroupRow[];
   replicas: InstanceHadrReplicaRow[];
   databases: InstanceHadrDatabaseRow[];
+  mirroring: InstanceMirroringRow[];
+  logShipping: InstanceLogShippingRow[];
 }
 
 export interface HadrOverviewGroupRow extends ApiRow {
@@ -434,6 +459,29 @@ export interface InstanceSecurityResponse {
   killedSessions: KilledSessionEntry[];
   sysadminMembers: SysadminMemberEntry[];
   note?: string;
+}
+
+export interface InstanceTableSizeRow extends ApiRow {
+  ObjectID: number;
+  DatabaseID: number;
+  DatabaseName?: string | null;
+  SchemaName?: string | null;
+  ObjectName?: string | null;
+  SnapshotDate: string;
+  Rows: number;
+  ReservedKb: number;
+  UsedKb: number;
+  DataKb: number;
+  IndexKb: number;
+  AvgRowsPerDay?: number | null;
+  AvgKbPerDay?: number | null;
+  CalcDays?: number | null;
+}
+
+export interface InstanceTableSizeResponse {
+  data: InstanceTableSizeRow[];
+  growthDays: number;
+  error?: string;
 }
 
 export interface EstateDriveRow extends ApiRow {
@@ -679,6 +727,11 @@ export interface MonitoringConfigurationChangeRow extends ApiRow {
   old_value?: string | number | boolean | null;
   new_value?: string | number | boolean | null;
   ChangeDate?: string | null;
+}
+
+export interface MonitoringTraceFlagRow extends ApiRow {
+  TraceFlag: number;
+  ValidFrom?: string | null;
 }
 
 export interface QueryAnalysisRow extends ApiRow {

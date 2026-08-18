@@ -5,6 +5,7 @@ import type {
   InstanceListRow,
   MonitoringConfigurationChangeRow,
   MonitoringConfigurationRow,
+  MonitoringTraceFlagRow,
 } from '../api/types';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { motion } from 'framer-motion';
@@ -19,12 +20,14 @@ export default function ConfigurationPage() {
   const { id: routeId } = useParams();
   const [config, setConfig] = useState<MonitoringConfigurationRow[]>([]);
   const [changes, setChanges] = useState<MonitoringConfigurationChangeRow[]>([]);
+  const [traceFlags, setTraceFlags] = useState<MonitoringTraceFlagRow[]>([]);
   const [configNote, setConfigNote] = useState('');
   const [changesNote, setChangesNote] = useState('');
+  const [traceFlagsNote, setTraceFlagsNote] = useState('');
   const [loading, setLoading] = useState(true);
   const [instances, setInstances] = useState<InstanceListRow[]>([]);
   const [selectedInstance, setSelectedInstance] = useState<number | undefined>(routeId ? Number(routeId) : undefined);
-  const [tab, setTab] = useState<'current' | 'changes'>('current');
+  const [tab, setTab] = useState<'current' | 'changes' | 'trace-flags'>('current');
   const [search, setSearch] = useState('');
 
   useEffect(() => {
@@ -32,16 +35,19 @@ export default function ConfigurationPage() {
   }, []);
 
   useEffect(() => {
-    if (!selectedInstance) { setConfig([]); setChanges([]); setLoading(false); return; }
+    if (!selectedInstance) { setConfig([]); setChanges([]); setTraceFlags([]); setLoading(false); return; }
     setLoading(true);
     Promise.all([
       api.monitoringConfiguration(selectedInstance).catch(() => ({ data: [], note: '' })),
       api.monitoringConfigurationChanges(selectedInstance).catch(() => ({ data: [], note: '' })),
-    ]).then(([cfg, chg]) => {
+      api.monitoringTraceFlags(selectedInstance).catch(() => ({ data: [], note: '' })),
+    ]).then(([cfg, chg, tf]) => {
       setConfig(Array.isArray(cfg.data) ? cfg.data : []);
       setConfigNote(cfg.note || '');
       setChanges(Array.isArray(chg.data) ? chg.data : []);
       setChangesNote(chg.note || '');
+      setTraceFlags(Array.isArray(tf.data) ? tf.data : []);
+      setTraceFlagsNote(tf.note || '');
     }).finally(() => setLoading(false));
   }, [selectedInstance]);
 
@@ -86,10 +92,14 @@ export default function ConfigurationPage() {
             <button onClick={() => setTab('changes')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${tab === 'changes' ? 'bg-indigo-500/20 text-indigo-400' : 'text-gray-400 hover:text-white hover:bg-slate-800/50'}`}>
               Changes {changes.length > 0 && <span className="ml-1 px-1.5 py-0.5 rounded-full text-xs bg-indigo-500/30">{changes.length}</span>}
             </button>
+            <button onClick={() => setTab('trace-flags')} className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${tab === 'trace-flags' ? 'bg-indigo-500/20 text-indigo-400' : 'text-gray-400 hover:text-white hover:bg-slate-800/50'}`}>
+              Trace Flags {traceFlags.length > 0 && <span className="ml-1 px-1.5 py-0.5 rounded-full text-xs bg-indigo-500/30">{traceFlags.length}</span>}
+            </button>
           </div>
 
           {configNote && <div className="glass-card p-3 text-xs text-yellow-400">{configNote}</div>}
           {tab === 'changes' && changesNote && <div className="glass-card p-3 text-xs text-yellow-400">{changesNote}</div>}
+          {tab === 'trace-flags' && traceFlagsNote && <div className="glass-card p-3 text-xs text-yellow-400">{traceFlagsNote}</div>}
 
           {tab === 'current' && (
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="glass-card overflow-hidden">
@@ -158,6 +168,34 @@ export default function ConfigurationPage() {
                       </tr>
                     ))}
                     {changes.length === 0 && <tr><td colSpan={4} className="px-3 py-8 text-center text-gray-500">No configuration changes detected</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </motion.div>
+          )}
+
+          {tab === 'trace-flags' && (
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="glass-card overflow-hidden">
+              <div className="p-4 border-b border-white/10">
+                <h2 className="text-lg font-semibold text-white">Enabled Trace Flags</h2>
+                <p className="text-xs text-gray-500 mt-0.5">Server-level DBCC TRACEON flags currently set (dbo.TraceFlags)</p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="border-b border-white/10">
+                    <tr>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-400">Trace Flag</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-400">Set Since</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {traceFlags.map((row, i) => (
+                      <tr key={i} className="border-b border-white/5 hover:bg-slate-800/50">
+                        <td className="px-3 py-2 text-white font-medium font-mono">{row.TraceFlag}</td>
+                        <td className="px-3 py-2 text-gray-400">{row.ValidFrom ? new Date(row.ValidFrom).toLocaleString() : '-'}</td>
+                      </tr>
+                    ))}
+                    {traceFlags.length === 0 && <tr><td colSpan={2} className="px-3 py-8 text-center text-gray-500">No trace flags currently set</td></tr>}
                   </tbody>
                 </table>
               </div>
