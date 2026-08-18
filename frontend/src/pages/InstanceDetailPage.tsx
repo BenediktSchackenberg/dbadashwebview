@@ -11,6 +11,7 @@ import type {
   InstanceJobRow,
   InstanceWaitRow,
   ResourceGovernorResponse,
+  InstanceSecurityResponse,
 } from '../api/types';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts';
 import StatusBadge from '../components/StatusBadge';
@@ -21,7 +22,8 @@ import EmptyState from '../components/EmptyState';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Server, Cpu, HardDrive, Database, Activity, Clock, Shield,
-  ChevronRight, Zap, BarChart3, Timer, AlertTriangle, Gauge, Layers
+  ChevronRight, Zap, BarChart3, Timer, AlertTriangle, Gauge, Layers,
+  Lock, UserX, Skull
 } from 'lucide-react';
 import TimeRangeSelector, { hoursLabel } from '../components/TimeRangeSelector';
 import { clsx } from 'clsx';
@@ -106,6 +108,9 @@ export default function InstanceDetailPage() {
   const [resourceGovernor, setResourceGovernor] = useState<ResourceGovernorResponse | null>(null);
   const [rgLoading, setRgLoading] = useState(false);
   const [rgLoaded, setRgLoaded] = useState(false);
+  const [security, setSecurity] = useState<InstanceSecurityResponse | null>(null);
+  const [securityLoading, setSecurityLoading] = useState(false);
+  const [securityLoaded, setSecurityLoaded] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -144,6 +149,18 @@ export default function InstanceDetailPage() {
         setRgLoaded(true);
       });
   }, [tab, instanceId, rgLoaded]);
+
+  useEffect(() => {
+    if (tab !== 'security' || securityLoaded) return;
+    setSecurityLoading(true);
+    api.instanceSecurity(instanceId)
+      .then(setSecurity)
+      .catch(() => setSecurity(null))
+      .finally(() => {
+        setSecurityLoading(false);
+        setSecurityLoaded(true);
+      });
+  }, [tab, instanceId, securityLoaded]);
 
   // ── Derived data ───────────────────────────────────────────────────────
 
@@ -218,6 +235,7 @@ export default function InstanceDetailPage() {
     { key: 'databases', label: 'Databases', count: databases.length },
     { key: 'drives', label: 'Drives', count: drives.length },
     { key: 'resource-governor', label: 'Resource Governor' },
+    { key: 'security', label: 'Security' },
   ];
 
   if (loading) return <LoadingSpinner />;
@@ -794,6 +812,133 @@ export default function InstanceDetailPage() {
                     </div>
                   )}
                 </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Security ─────────────────────────────────────────────────── */}
+          {tab === 'security' && (
+            <div className="space-y-6">
+              {securityLoading && <LoadingSpinner />}
+
+              {!securityLoading && security?.note && (
+                <p className="text-xs text-yellow-400/80 italic">{security.note}</p>
+              )}
+
+              {!securityLoading && security && (
+                <>
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Lock className="w-4 h-4 text-red-400" />
+                      <h3 className="text-sm font-semibold text-white">Sysadmin Role Members</h3>
+                    </div>
+                    {security.sysadminMembers.length === 0 ? (
+                      <EmptyState message="No sysadmin role members collected." />
+                    ) : (
+                      <div className="glass rounded-xl overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="bg-slate-800/80 text-left text-xs text-gray-400 uppercase tracking-wider">
+                              <th className="px-4 py-3">Login / Group</th>
+                              <th className="px-4 py-3">Type</th>
+                              <th className="px-4 py-3">Status</th>
+                              <th className="px-4 py-3">Created</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-white/5">
+                            {security.sysadminMembers.map((m, i) => (
+                              <tr key={i} className="hover:bg-white/5">
+                                <td className="px-4 py-2.5 text-white font-medium">{m.memberName}</td>
+                                <td className="px-4 py-2.5 text-gray-300 text-xs">{m.memberType}</td>
+                                <td className="px-4 py-2.5">
+                                  {m.isDisabled ? (
+                                    <span className="text-xs text-gray-500">Disabled</span>
+                                  ) : (
+                                    <span className="text-xs text-emerald-400">Active</span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-2.5 text-gray-400 text-xs">{m.createDate ? format(new Date(m.createDate), 'yyyy-MM-dd') : '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <UserX className="w-4 h-4 text-yellow-400" />
+                      <h3 className="text-sm font-semibold text-white">Failed Logins</h3>
+                      {security.failedLogins.count > 0 && (
+                        <span className="text-xs text-gray-500">
+                          {security.failedLogins.count} total
+                          {security.failedLogins.lastLogDate && ` · last ${formatDistanceToNow(new Date(security.failedLogins.lastLogDate), { addSuffix: true })}`}
+                        </span>
+                      )}
+                    </div>
+                    {security.failedLogins.recent.length === 0 ? (
+                      <EmptyState message="No failed logins recorded." />
+                    ) : (
+                      <div className="glass rounded-xl overflow-hidden max-h-96 overflow-y-auto">
+                        <table className="w-full text-sm">
+                          <thead className="sticky top-0">
+                            <tr className="bg-slate-800/80 text-left text-xs text-gray-400 uppercase tracking-wider">
+                              <th className="px-4 py-3">Time</th>
+                              <th className="px-4 py-3">Detail</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-white/5">
+                            {security.failedLogins.recent.map((f, i) => (
+                              <tr key={i} className="hover:bg-white/5">
+                                <td className="px-4 py-2.5 text-gray-400 text-xs whitespace-nowrap align-top">{format(new Date(f.logDate), 'yyyy-MM-dd HH:mm:ss')}</td>
+                                <td className="px-4 py-2.5 text-gray-300 text-xs font-mono break-all">{f.text || '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Skull className="w-4 h-4 text-purple-400" />
+                      <h3 className="text-sm font-semibold text-white">Killed Session Audit Log</h3>
+                    </div>
+                    {security.killedSessions.length === 0 ? (
+                      <EmptyState message="No session-kill actions recorded for this instance." />
+                    ) : (
+                      <div className="glass rounded-xl overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="bg-slate-800/80 text-left text-xs text-gray-400 uppercase tracking-wider">
+                              <th className="px-4 py-3">Session</th>
+                              <th className="px-4 py-3">Killed By</th>
+                              <th className="px-4 py-3">When</th>
+                              <th className="px-4 py-3">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-white/5">
+                            {security.killedSessions.map((k, i) => (
+                              <tr key={i} className="hover:bg-white/5">
+                                <td className="px-4 py-2.5 text-white font-mono text-xs">{k.sessionId}</td>
+                                <td className="px-4 py-2.5 text-gray-300">{k.killedBy}</td>
+                                <td className="px-4 py-2.5 text-gray-400 text-xs">{format(new Date(k.logDate), 'yyyy-MM-dd HH:mm:ss')}</td>
+                                <td className="px-4 py-2.5">
+                                  <span className={clsx('text-xs',
+                                    k.status === 'KILLED' ? 'text-emerald-400' : k.status === 'REQUEST' ? 'text-yellow-400' : 'text-red-400')}>
+                                    {k.status || '—'}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                </>
               )}
             </div>
           )}

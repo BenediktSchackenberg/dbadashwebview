@@ -100,6 +100,7 @@ app.MapEstateEndpoints();
 app.MapReportEndpoints();
 app.MapCorruptionEndpoints();
 app.MapResourceGovernorEndpoints();
+app.MapSecurityEndpoints();
 
 app.MapFallbackToFile("index.html");
 

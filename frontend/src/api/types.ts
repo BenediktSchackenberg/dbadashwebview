@@ -404,6 +404,38 @@ export interface ResourceGovernorResponse {
   note?: string;
 }
 
+export interface FailedLoginEntry {
+  logDate: string;
+  text?: string | null;
+}
+
+export interface KilledSessionEntry {
+  sessionId: number;
+  killedBy?: string | null;
+  logDate: string;
+  status?: string | null;
+}
+
+export interface SysadminMemberEntry {
+  memberName: string;
+  memberType?: string | null;
+  isDisabled: boolean;
+  createDate?: string | null;
+  modifyDate?: string | null;
+}
+
+export interface InstanceSecurityResponse {
+  failedLogins: {
+    count: number;
+    firstLogDate?: string | null;
+    lastLogDate?: string | null;
+    recent: FailedLoginEntry[];
+  };
+  killedSessions: KilledSessionEntry[];
+  sysadminMembers: SysadminMemberEntry[];
+  note?: string;
+}
+
 export interface EstateDriveRow extends ApiRow {
   DriveID?: number | null;
   InstanceID?: number | null;

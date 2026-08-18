@@ -25,6 +25,7 @@ import type {
   InstanceBackupRow,
   InstanceCpuBaselineResponse,
   ResourceGovernorResponse,
+  InstanceSecurityResponse,
   InstanceCpuRow,
   InstanceDatabaseRow,
   InstanceDetailResponse,
@@ -137,6 +138,7 @@ export const api = {
     request<InstanceCpuBaselineResponse>(`/api/instances/${id}/cpu/baseline?hours=${hours}&lookbackDays=${lookbackDays}`),
   instanceResourceGovernor: (id: number, hours = 24) =>
     request<ResourceGovernorResponse>(`/api/instances/${id}/resource-governor?hours=${hours}`),
+  instanceSecurity: (id: number) => request<InstanceSecurityResponse>(`/api/instances/${id}/security`),
   instanceWaits: (id: number, hours = 24) => request<InstanceWaitRow[]>(`/api/instances/${id}/waits?hours=${hours}`),
   instanceDrives: (id: number) => request<InstanceDriveRow[]>(`/api/instances/${id}/drives`),
   instanceDatabases: (id: number) => request<InstanceDatabaseRow[]>(`/api/instances/${id}/databases`),
