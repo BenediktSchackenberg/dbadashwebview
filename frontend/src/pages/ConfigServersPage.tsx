@@ -50,7 +50,10 @@ export default function ConfigServersPage() {
                 <td className="py-3 text-gray-400 text-xs">{inst.Edition || '—'}</td>
                 <td className="py-3 text-gray-400 text-xs">{inst.ProductVersion || '—'}</td>
                 <td className="py-3 text-center">
-                  <StatusBadge status={inst.IsActive ? 1 : 4} />
+                  {/* DBA Dash enum: 4 = OK, 3 = N/A. An active instance is
+                      healthy, not Critical (1), and an intentionally disabled
+                      one is N/A rather than OK. */}
+                  <StatusBadge status={inst.IsActive ? 4 : 3} />
                 </td>
                 <td className="py-3 text-center">
                   <div className="flex items-center justify-center gap-1">

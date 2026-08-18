@@ -57,6 +57,15 @@ public sealed class UserScope
     public bool IsUnrestricted => AllowedTags.Count == 0 && AllowedGroupIds.Count == 0;
 
     /// <summary>
+    /// True when the scope can actually be enforced in SQL. Only tag scope is
+    /// translated into a predicate today, so a scope that carries group ids but
+    /// no tags has nothing to filter on. Callers must check this rather than
+    /// <see cref="IsUnrestricted"/> before building a tag predicate — otherwise
+    /// they emit <c>IN ()</c> / a dangling <c>AND</c> and the query fails.
+    /// </summary>
+    public bool HasTagScope => AllowedTags.Count > 0;
+
+    /// <summary>
     /// Returns a SQL predicate (without leading AND) that constrains the
     /// supplied <paramref name="instanceIdColumn"/> to instances the caller is
     /// allowed to see. Returns an empty string when no scope is set. The
@@ -126,7 +135,9 @@ public sealed class UserScope
 
     /// <summary>
     /// Returns the set of instance ids the caller is allowed to see, or <c>null</c>
-    /// when the scope is unrestricted (callers should treat null as "no filter").
+    /// when there is no tag scope to enforce (callers should treat null as "no
+    /// filter"). A scope carrying only group ids yields <c>null</c>, matching the
+    /// documented "group scope by itself behaves as unrestricted" behaviour.
     /// Used by aggregate endpoints (dashboard / reports) that post-filter row
     /// collections instead of rewriting every SQL aggregate.
     /// </summary>
@@ -134,7 +145,7 @@ public sealed class UserScope
         DBADashWebView.Data.SqlDataService sql,
         CancellationToken cancellationToken)
     {
-        if (IsUnrestricted)
+        if (!HasTagScope)
         {
             return null;
         }
@@ -157,14 +168,14 @@ public sealed class UserScope
     /// <summary>
     /// Checks whether the given instance id falls within the user's scope by
     /// running a single, parameterised <c>SELECT 1</c> against the tag tables.
-    /// Returns true immediately when the scope is unrestricted.
+    /// Returns true immediately when there is no tag scope to enforce.
     /// </summary>
     public async Task<bool> IsInstanceAllowedAsync(
         DBADashWebView.Data.SqlDataService sql,
         int instanceId,
         CancellationToken cancellationToken)
     {
-        if (IsUnrestricted)
+        if (!HasTagScope)
         {
             return true;
         }

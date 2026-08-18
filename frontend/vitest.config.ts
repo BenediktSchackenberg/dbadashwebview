@@ -6,6 +6,9 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
-    include: ['src/**/*.test.ts'],
+    setupFiles: ['./src/test-setup.ts'],
+    // Must cover .tsx as well — component tests live next to the components
+    // they cover, and a bare '*.test.ts' glob silently skips every one of them.
+    include: ['src/**/*.test.{ts,tsx}'],
   },
 });
