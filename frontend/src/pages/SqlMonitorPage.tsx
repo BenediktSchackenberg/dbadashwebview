@@ -199,6 +199,12 @@ export default function SqlMonitorPage() {
 
   const goToAlerts = (categoryLabel: string, instanceId?: number) => {
     const category = alertCategoryByLabel(categoryLabel);
+    const realDestination = category?.destination?.(instanceId);
+    if (realDestination) {
+      navigate(realDestination);
+      return;
+    }
+
     const params = new URLSearchParams();
     if (instanceId != null) params.set('instance', String(instanceId));
     if (category) params.set('type', category.slug);

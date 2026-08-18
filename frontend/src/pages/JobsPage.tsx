@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { api } from '../api/api';
 import type { InstanceListRow } from '../api/types';
@@ -9,9 +10,16 @@ import { clsx } from 'clsx';
 import { format } from 'date-fns';
 
 export default function JobsPage() {
-  const [tab, setTab] = useState('all');
+  // Deep-link support (e.g. from the SQL Monitor overview's "Job failing"
+  // alert): ?instance=<id>&tab=failed. Read once at mount.
+  const [searchParams] = useSearchParams();
+  const initialInstanceParam = searchParams.get('instance');
+
+  const [tab, setTab] = useState(searchParams.get('tab') === 'failed' ? 'failed' : 'all');
   const [instances, setInstances] = useState<InstanceListRow[]>([]);
-  const [selectedInstance, setSelectedInstance] = useState<number | null>(null);
+  const [selectedInstance, setSelectedInstance] = useState<number | null>(
+    initialInstanceParam != null && !Number.isNaN(Number(initialInstanceParam)) ? Number(initialInstanceParam) : null
+  );
   const [recent, setRecent] = useState<any[]>([]);
   const [failures, setFailures] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
