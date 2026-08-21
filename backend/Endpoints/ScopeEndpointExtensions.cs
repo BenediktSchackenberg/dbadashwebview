@@ -45,12 +45,15 @@ internal static class ScopeEndpointExtensions
         string parameterPrefix = "@scope")
     {
         var scope = UserScope.FromPrincipal(user);
-        if (scope.IsUnrestricted)
+        var predicate = scope.BuildInstanceFilter(instanceIdColumn, parameterPrefix);
+        if (string.IsNullOrEmpty(predicate))
         {
+            // No tag scope to enforce (unrestricted, or group-only scope, which
+            // is not translated into SQL yet). Emitting " AND " on its own here
+            // would produce invalid T-SQL at every call site.
             return (string.Empty, Array.Empty<(string, object?)>());
         }
 
-        var predicate = scope.BuildInstanceFilter(instanceIdColumn, parameterPrefix);
         var parameters = scope.ParameterTuples(parameterPrefix).ToArray();
         return (" AND " + predicate, parameters);
     }
