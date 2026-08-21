@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api/api';
 import type { InstanceListRow } from '../api/types';
 import { useRefresh } from '../App';
@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { format, formatDistanceToNow } from 'date-fns';
+import { alertCategoryBySlug } from '../utils/alertCategories';
 
 /* ── Helpers ── */
 
@@ -86,17 +87,30 @@ const SEV_CONFIG = {
 export default function AlertsPage() {
   const { lastRefresh } = useRefresh();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // Deep-link support (e.g. from the SQL Monitor overview): ?instance=<id>&type=<slug>.
+  // Only "Job failing" maps to a real field (ParsedAlert.alertType); the other
+  // categories don't exist as a field in this collection-error/failed-job feed,
+  // so they seed the free-text search with a keyword instead of pretending to be
+  // an exact filter. Read once at mount — navigating here is always a fresh route
+  // transition from SqlMonitorPage, not an in-place param change.
+  const initialCategory = alertCategoryBySlug(searchParams.get('type'));
+  const monitoringStoppedNote = searchParams.get('type') === 'monitoring-stopped';
+
   const [raw, setRaw] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(initialCategory?.keyword || '');
   const [sevFilter, setSevFilter] = useState<Severity | 'all'>('all');
   const [statusFilter, setStatusFilter] = useState<AlertStatus | 'all'>('open');
+  const [typeFilter, setTypeFilter] = useState<'job_failure' | null>(
+    initialCategory?.matchesAlertType === 'job_failure' ? 'job_failure' : null
+  );
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
 
   // Instance selector — '' = nothing chosen yet (initial state, no fetch)
   // 'all' = fetch across the whole fleet (explicit opt-in, may be slow)
   // numeric id (as string) = single instance
-  const [instanceChoice, setInstanceChoice] = useState<string>('');
+  const [instanceChoice, setInstanceChoice] = useState<string>(searchParams.get('instance') || '');
   const [instances, setInstances] = useState<InstanceListRow[]>([]);
   const [instancesLoading, setInstancesLoading] = useState(true);
 
@@ -128,9 +142,10 @@ export default function AlertsPage() {
   const filtered = useMemo(() => alerts.filter(a => {
     if (statusFilter !== 'all' && a.status !== statusFilter) return false;
     if (sevFilter !== 'all' && a.severity !== sevFilter) return false;
+    if (typeFilter && a.alertType !== typeFilter) return false;
     if (q && !a.message.toLowerCase().includes(q) && !a.instanceName.toLowerCase().includes(q) && !a.context.toLowerCase().includes(q)) return false;
     return true;
-  }), [alerts, statusFilter, sevFilter, q]);
+  }), [alerts, statusFilter, sevFilter, typeFilter, q]);
 
   const counts = useMemo(() => ({
     total: alerts.length,
@@ -151,6 +166,19 @@ export default function AlertsPage() {
     }
     return Array.from(m.entries()).sort((a, b) => b[1] - a[1]);
   }, [filtered]);
+
+  const monitoringStoppedBanner = monitoringStoppedNote && (
+    <div className="flex items-start gap-2.5 bg-blue-500/5 border border-blue-500/20 rounded-xl px-4 py-3">
+      <Info className="w-4 h-4 mt-0.5 flex-shrink-0 text-blue-400" />
+      <div>
+        <p className="text-sm font-medium text-blue-200">"Monitoring stopped" isn't a collection-error record</p>
+        <p className="text-xs text-blue-200/70 mt-0.5">
+          It means an instance hasn't reported data in the last 10 minutes, so there's nothing to filter for it here.
+          Pick that instance below to see its recent collection errors leading up to going quiet.
+        </p>
+      </div>
+    </div>
+  );
 
   const instanceSelector = (
     <div className="flex items-center gap-2 flex-wrap">
@@ -189,6 +217,7 @@ export default function AlertsPage() {
           <h1 className="text-2xl font-bold text-white">Alerts & Errors</h1>
           <p className="text-xs text-gray-500 mt-1">Pick a server to load its alerts — or choose <span className="text-gray-300">All instances</span> for the full fleet (slower).</p>
         </div>
+        {monitoringStoppedBanner}
         <div className="glass rounded-2xl p-6">{instanceSelector}</div>
         <div className="glass rounded-2xl p-16 flex flex-col items-center gap-3">
           <Server className="w-12 h-12 text-gray-600" />
@@ -207,6 +236,7 @@ export default function AlertsPage() {
           <h1 className="text-2xl font-bold text-white">Alerts & Errors</h1>
           {instanceSelector}
         </div>
+        {monitoringStoppedBanner}
         <div className="glass rounded-2xl p-16 flex flex-col items-center gap-4">
           <Inbox className="w-16 h-16 text-gray-600" />
           <p className="text-lg font-medium text-gray-400">No alerts — everything looks healthy!</p>
@@ -226,6 +256,8 @@ export default function AlertsPage() {
         </div>
         {instanceSelector}
       </div>
+
+      {monitoringStoppedBanner}
 
       {/* Filter Strip */}
       <div className="space-y-3">
@@ -247,6 +279,16 @@ export default function AlertsPage() {
               <span className="font-mono text-[11px]">{k.count}</span>
             </button>
           ))}
+          <span className="w-px h-5 bg-white/10 mx-1" />
+          <button
+            onClick={() => setTypeFilter(typeFilter === 'job_failure' ? null : 'job_failure')}
+            className={clsx(
+              'flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition-all border',
+              typeFilter === 'job_failure' ? 'bg-purple-500/15 border-purple-500/30 text-purple-200' : 'bg-white/5 border-white/5 text-gray-400 hover:bg-white/10'
+            )}
+          >
+            <span className="font-semibold">Failed jobs only</span>
+          </button>
         </div>
 
         <div className="flex flex-wrap gap-2 md:gap-3">
@@ -272,6 +314,7 @@ export default function AlertsPage() {
 
         <p className="text-xs text-gray-500">
           Active filters: <span className="text-gray-300">Status = {statusFilter}</span> · <span className="text-gray-300">Severity = {sevFilter}</span>
+          {typeFilter && <> · <span className="text-gray-300">Type = Failed jobs</span></>}
         </p>
       </div>
 
@@ -290,6 +333,11 @@ export default function AlertsPage() {
           </button>
         )}
       </div>
+      {initialCategory?.keyword && search === initialCategory.keyword && (
+        <p className="text-[11px] text-gray-500 -mt-3">
+          Pre-filled from the "{initialCategory.label}" category on SQL Monitor — a keyword match, not an exact filter, since this feed doesn't track that category directly.
+        </p>
+      )}
 
       {/* Main Grid: Alert List + Detail */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-5">
