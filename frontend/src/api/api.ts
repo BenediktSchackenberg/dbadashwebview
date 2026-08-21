@@ -2,6 +2,7 @@ import { clearAuthSession, getAuthSession, isAuthenticated, setAuthSession } fro
 import type {
   AdConfig,
   AdLoginTestResult,
+  ApplicationVersionResponse,
   AvailabilityGroupSummaryRow,
   BackupAmpelResponse,
   BackupManagementResponse,
@@ -124,6 +125,7 @@ export const api = {
     return response;
   },
   health: () => request<{ status: string }>('/api/health'),
+  version: () => request<ApplicationVersionResponse>('/api/version'),
   dashboardSummary: () => request<DashboardSummaryRow[]>('/api/dashboard/summary'),
   dashboardStats: () => request<DashboardStats>('/api/dashboard/stats'),
   instances: () => request<InstanceListRow[]>('/api/instances'),

@@ -111,3 +111,26 @@ test('redirects viewers away from admin settings routes', async ({ page }) => {
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole('heading', { name: 'Summary' })).toBeVisible();
 });
+
+test('shows the installed application version on the About page', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('auth-session', JSON.stringify({
+      token: 'admin-jwt',
+      username: 'admin',
+      displayName: 'Administrator',
+      role: 'Admin',
+      source: 'local',
+    }));
+  });
+
+  await mockShellApis(page);
+  await page.route('**/api/version', async (route) => {
+    await route.fulfill({ json: { version: 'v0.2.6', source: 'version-file' } });
+  });
+
+  await page.goto('/about');
+
+  await expect(page.getByRole('heading', { name: 'About DBA Dash WebView' })).toBeVisible();
+  await expect(page.getByText('v0.2.6', { exact: true })).toBeVisible();
+  await expect(page.getByText('Release package', { exact: true })).toBeVisible();
+});

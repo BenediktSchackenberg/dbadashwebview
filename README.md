@@ -363,7 +363,7 @@ $stagingPath = "C:\Temp\dbadash-webview-new"
 Expand-Archive -Path $releaseZip -DestinationPath $stagingPath -Force
 ```
 
-Release ZIPs produced by the current build workflow include `version.txt`. After deployment, this file identifies the installed release tag; CI artifacts built from a branch contain the source commit SHA instead. For an older deployment without `version.txt`, inspect `(Get-Item "C:\inetpub\dbadash\DBADashWebView.dll").VersionInfo.ProductVersion`; the value after `+` is the source commit SHA.
+Release ZIPs produced by the current build workflow include `version.txt`. After deployment, this file identifies the installed release tag; CI artifacts built from a branch contain the source commit SHA instead. Older deployments may not have this file; the About page and the verification command below automatically fall back to the assembly build information in that case.
 
 ### 2. Back up configuration and runtime state
 
@@ -426,7 +426,12 @@ The application needs modify permission on `config/` to save users, AD settings,
 ```powershell
 Start-WebAppPool -Name "DBADashWebView"
 Invoke-RestMethod "http://localhost:8080/api/health"
-Get-Content "$sitePath\version.txt"
+$installedVersion = if (Test-Path "$sitePath\version.txt") {
+    Get-Content "$sitePath\version.txt"
+} else {
+    (Get-Item "$sitePath\DBADashWebView.dll").VersionInfo.ProductVersion
+}
+$installedVersion
 ```
 
 Then verify that:
@@ -496,7 +501,7 @@ Configure via **Settings → Thresholds**. Define warning and critical levels pe
 
 ## 📡 API Reference
 
-All endpoints require JWT authentication via `Authorization: Bearer <token>` header.
+Protected endpoints require JWT authentication via an `Authorization: Bearer <token>` header. Health, version, and authentication bootstrap endpoints are public.
 
 <details>
 <summary><strong>Authentication</strong></summary>
@@ -505,6 +510,7 @@ All endpoints require JWT authentication via `Authorization: Bearer <token>` hea
 GET  /api/auth/status             Returns auth/bootstrap status
 POST /api/auth/login              { "username": "...", "password": "..." }  ->  { "token": "...", "role": "Admin|Operator|Viewer" }
 GET  /api/health                  Health check (no auth required)
+GET  /api/version                 Installed release or assembly build version (no auth required)
 ```
 </details>
 
