@@ -1,7 +1,29 @@
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { ExternalLink, Github, Heart } from 'lucide-react';
+import { ExternalLink, Github, Heart, Tag } from 'lucide-react';
+import { api } from '../api/api';
+import type { ApplicationVersionResponse } from '../api/types';
 
 export default function AboutPage() {
+  const [versionInfo, setVersionInfo] = useState<ApplicationVersionResponse | null>(null);
+  const [versionUnavailable, setVersionUnavailable] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+
+    api.version()
+      .then((response) => {
+        if (active) setVersionInfo(response);
+      })
+      .catch(() => {
+        if (active) setVersionUnavailable(true);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       <motion.h1 initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="text-3xl font-bold text-white">
@@ -14,6 +36,18 @@ export default function AboutPage() {
           A modern web-based dashboard for SQL Server fleet monitoring, providing a browser-accessible read-only view
           of the data collected by <strong className="text-white">DBA Dash</strong>.
         </p>
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-white/10 bg-white/5 px-4 py-3">
+          <Tag className="h-5 w-5 text-blue-400" />
+          <span className="text-sm text-gray-400">Installed version</span>
+          <code className="rounded bg-black/20 px-2 py-1 text-sm text-white">
+            {versionInfo?.version ?? (versionUnavailable ? 'Unavailable' : 'Loading…')}
+          </code>
+          {versionInfo && (
+            <span className="text-xs text-gray-500">
+              {versionInfo.source === 'version-file' ? 'Release package' : 'Assembly fallback (legacy package)'}
+            </span>
+          )}
+        </div>
       </motion.div>
 
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}

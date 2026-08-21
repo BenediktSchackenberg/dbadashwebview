@@ -1,3 +1,4 @@
+using DBADashWebView;
 using DBADashWebView.Auth;
 using DBADashWebView.Data;
 using DBADashWebView.Endpoints;
@@ -62,6 +63,7 @@ builder.Services.AddSingleton<LocalUserStore>();
 builder.Services.AddSingleton<ActiveDirectoryAuthService>();
 builder.Services.AddSingleton<ThresholdSettingsStore>();
 builder.Services.AddSingleton<SqlDataService>();
+builder.Services.AddSingleton<ApplicationVersionProvider>();
 
 var app = builder.Build();
 app.UseExceptionHandler("/api/error");

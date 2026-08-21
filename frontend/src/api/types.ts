@@ -10,6 +10,11 @@ export interface ApiErrorShape {
   message?: string;
 }
 
+export interface ApplicationVersionResponse {
+  version: string;
+  source: 'version-file' | 'assembly';
+}
+
 export interface AuthStatusResponse {
   localAuthEnabled: boolean;
   adEnabled: boolean;

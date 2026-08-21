@@ -9,6 +9,9 @@ public static class AuthSettingsEndpointMappings
     {
         endpoints.MapGet("/api/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow }));
 
+        endpoints.MapGet("/api/version", (ApplicationVersionProvider versionProvider) =>
+            Results.Ok(versionProvider.GetCurrentVersion()));
+
         endpoints.MapGet("/api/auth/status", async (LocalUserStore localUsers, ActiveDirectoryAuthService adAuth, CancellationToken cancellationToken) =>
         {
             var localStatus = await localUsers.GetStatusAsync(cancellationToken);
