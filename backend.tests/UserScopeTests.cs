@@ -87,8 +87,8 @@ public sealed class UserScopeTests
         Assert.Contains("i.InstanceID IN", predicate);
         Assert.Contains("@scope_tag_0", predicate);
         Assert.Contains("@scope_tag_1", predicate);
-        Assert.Contains("dbo.InstanceTag", predicate);
-        Assert.Contains("dbo.Tag", predicate);
+        Assert.Contains("dbo.InstanceIDsTags", predicate);
+        Assert.Contains("dbo.Tags", predicate);
         // Values must not be inlined into the SQL.
         Assert.DoesNotContain("prod", predicate);
         Assert.DoesNotContain("eu-west", predicate);
