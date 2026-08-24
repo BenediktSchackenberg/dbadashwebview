@@ -79,6 +79,75 @@ public static class EstateEndpointMappings
             }
         }).RequireAuthorization();
 
+        // Real growth for a chosen set of drives, backed by dbo.DriveSnapshot (a row
+        // per drive per collection cycle) rather than a guessed/linear projection.
+        // Returns the oldest and newest snapshot within the window per drive; the
+        // caller derives a rate/projection from those two real data points.
+        endpoints.MapGet("/api/drives/growth", async (string? driveIds, int? days, ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
+        {
+            var ids = ParseDriveIds(driveIds);
+
+            if (ids.Count == 0)
+            {
+                return Results.Ok(new { data = Array.Empty<object>() });
+            }
+
+            try
+            {
+                var (scopeSnippet, scopeParameters) = user.ScopedInstanceFilter("d.InstanceID");
+                var idParamNames = ids.Select((_, index) => $"@id{index}").ToArray();
+                var idParams = ids.Select((driveId, index) => ($"@id{index}", (object?)driveId)).ToArray();
+                var fromDate = DateTime.UtcNow.AddDays(-ClampGrowthWindowDays(days));
+
+                await using var connection = await sql.OpenConnectionAsync(cancellationToken);
+                await using var command = new SqlCommand(
+                    $"""
+                    WITH bounds AS (
+                        SELECT s.DriveID, s.SnapshotDate, s.Capacity, s.FreeSpace,
+                               ROW_NUMBER() OVER (PARTITION BY s.DriveID ORDER BY s.SnapshotDate ASC) AS rn_asc,
+                               ROW_NUMBER() OVER (PARTITION BY s.DriveID ORDER BY s.SnapshotDate DESC) AS rn_desc,
+                               COUNT(*) OVER (PARTITION BY s.DriveID) AS pointCount
+                        FROM dbo.DriveSnapshot s
+                        JOIN dbo.Drives d ON d.DriveID = s.DriveID
+                        WHERE s.DriveID IN ({string.Join(", ", idParamNames)})
+                          AND s.SnapshotDate >= @fromDate
+                          AND d.IsActive = 1
+                          {scopeSnippet}
+                    )
+                    SELECT DriveID,
+                           MAX(pointCount) AS DataPoints,
+                           MAX(CASE WHEN rn_asc = 1 THEN SnapshotDate END) AS OldestSnapshotDate,
+                           MAX(CASE WHEN rn_asc = 1 THEN FreeSpace END) AS OldestFreeSpace,
+                           MAX(CASE WHEN rn_desc = 1 THEN SnapshotDate END) AS LatestSnapshotDate,
+                           MAX(CASE WHEN rn_desc = 1 THEN FreeSpace END) AS LatestFreeSpace,
+                           MAX(CASE WHEN rn_desc = 1 THEN Capacity END) AS LatestCapacity
+                    FROM bounds
+                    WHERE rn_asc = 1 OR rn_desc = 1
+                    GROUP BY DriveID
+                    """,
+                    connection)
+                {
+                    CommandTimeout = 30
+                };
+                command.Parameters.AddWithValue("@fromDate", fromDate);
+                foreach (var (name, value) in idParams)
+                {
+                    command.Parameters.AddWithValue(name, value ?? DBNull.Value);
+                }
+                foreach (var (name, value) in scopeParameters)
+                {
+                    command.Parameters.AddWithValue(name, value ?? DBNull.Value);
+                }
+
+                var data = await EndpointResultMapper.ReadRowsAsync(command, cancellationToken, camelCase: true);
+                return Results.Ok(new { data });
+            }
+            catch (Exception ex)
+            {
+                return Results.Ok(new { error = ex.Message, data = Array.Empty<object>() });
+            }
+        }).RequireAuthorization();
+
         endpoints.MapGet("/api/tree", async (ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             try
@@ -145,4 +214,21 @@ public static class EstateEndpointMappings
 
         return endpoints;
     }
+
+    /// <summary>
+    /// Parses a comma-separated list of drive ids from a query string, dropping
+    /// anything non-numeric, deduping, and capping the count so a caller can't
+    /// force an unbounded IN-list.
+    /// </summary>
+    internal static List<int> ParseDriveIds(string? raw, int maxCount = 50) =>
+        (raw ?? string.Empty)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(s => int.TryParse(s, out var parsed) ? parsed : (int?)null)
+            .Where(v => v.HasValue)
+            .Select(v => v!.Value)
+            .Distinct()
+            .Take(maxCount)
+            .ToList();
+
+    internal static int ClampGrowthWindowDays(int? days) => Math.Clamp(days ?? 30, 1, 365);
 }

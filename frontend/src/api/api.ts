@@ -13,6 +13,7 @@ import type {
   CreateLocalUserRequest,
   DbSpaceRow,
   EstateBackupRow,
+  DriveGrowthPoint,
   EstateDriveRow,
   FleetStatsRow,
   HadrOverviewResponse,
@@ -148,6 +149,8 @@ export const api = {
   instanceHadr: (id: number) => request<InstanceHadrResponse>(`/api/instances/${id}/hadr`),
   hadrOverview: () => request<HadrOverviewResponse>('/api/hadr/overview'),
   drives: () => request<EstateDriveRow[]>('/api/drives'),
+  drivesGrowth: (driveIds: number[], days = 30) =>
+    request<{ data: DriveGrowthPoint[] }>(`/api/drives/growth?driveIds=${driveIds.join(',')}&days=${days}`),
   instanceQueries: (id: number) => request<QueryAnalysisRow[]>(`/api/instances/${id}/queries`),
   backupsEstate: () => request<EstateBackupRow[]>('/api/backups/estate'),
   backupsManagement: () => request<BackupManagementResponse>('/api/backups/management'),
