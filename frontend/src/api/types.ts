@@ -748,6 +748,20 @@ export interface TempDbFileRow extends ApiRow {
   usedKb?: number | null;
 }
 
+export interface TagRow extends ApiRow {
+  tagId: number;
+  tagName: string;
+  tagValue?: string | null;
+  isSystem: boolean;
+  instanceIds: number[];
+}
+
+export interface CreateTagRequest {
+  tagName: string;
+  tagValue?: string;
+  instanceIds: number[];
+}
+
 export interface DbSpaceRow extends ApiRow {
   databaseName?: string | null;
   fileName?: string | null;

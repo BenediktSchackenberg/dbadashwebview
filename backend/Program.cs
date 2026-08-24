@@ -99,6 +99,7 @@ app.MapPerformanceEndpoints();
 app.MapMonitoringEndpoints();
 app.MapEstateEndpoints();
 app.MapReportEndpoints();
+app.MapTagsEndpoints();
 
 app.MapFallbackToFile("index.html");
 

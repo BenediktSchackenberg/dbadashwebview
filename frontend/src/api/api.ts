@@ -11,6 +11,7 @@ import type {
   ApiRow,
   AuthStatusResponse,
   CreateLocalUserRequest,
+  CreateTagRequest,
   DbSpaceRow,
   EstateBackupRow,
   DriveGrowthPoint,
@@ -47,6 +48,7 @@ import type {
   RunningQueryRow,
   SchemaChangeRow,
   SlowQueryRow,
+  TagRow,
   TempDbFileRow,
   ThresholdMap,
   TreeInstanceNode,
@@ -229,4 +231,13 @@ export const api = {
     request<LocalUser>('/api/settings/users', { method: 'POST', body: JSON.stringify(payload) }),
   updateLocalUser: (id: string, payload: UpdateLocalUserRequest) =>
     request<LocalUser>(`/api/settings/users/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  tags: () => request<TagRow[]>('/api/tags'),
+  createTag: (payload: CreateTagRequest) =>
+    request<TagRow>('/api/tags', { method: 'POST', body: JSON.stringify(payload) }),
+  deleteTag: (tagId: number) =>
+    request<{ success: boolean }>(`/api/tags/${tagId}`, { method: 'DELETE' }),
+  attachTag: (tagId: number, instanceId: number) =>
+    request<{ success: boolean }>(`/api/tags/${tagId}/instances/${instanceId}`, { method: 'POST' }),
+  detachTag: (tagId: number, instanceId: number) =>
+    request<{ success: boolean }>(`/api/tags/${tagId}/instances/${instanceId}`, { method: 'DELETE' }),
 };
