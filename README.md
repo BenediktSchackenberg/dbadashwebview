@@ -464,7 +464,41 @@ CREATE LOGIN [dbadashweb] WITH PASSWORD = 'YourSecurePassword';
 CREATE USER [dbadashweb] FOR LOGIN [dbadashweb];
 ALTER ROLE db_datareader ADD MEMBER [dbadashweb];
 GRANT EXECUTE ON SCHEMA::dbo TO [dbadashweb];
+
+-- Required for the DBA Dash Alerts panel (DBA Dash 3.17.0 or later)
+GRANT EXECUTE ON OBJECT::Alert.ActiveAlerts_Get TO [dbadashweb];
+GRANT EXECUTE ON OBJECT::Alert.ClosedAlerts_Get TO [dbadashweb];
+GRANT REFERENCES ON TYPE::dbo.IDs TO [dbadashweb];
 ```
+
+### Write Capabilities (optional)
+
+Everything above is read-only. Features that write back to DBADashDB are opt-in and
+stay disabled unless you enable them *and* grant the matching EXECUTE permissions —
+otherwise the UI would show buttons that can only fail.
+
+| Capability | Setting | Additional grants |
+| --- | --- | --- |
+| Alert acknowledge / close / notes | `WriteCapabilities:AlertLifecycle` | `Alert.ActiveAlertsAck_Upd`, `Alert.ClosedAlerts_Add`, `Alert.Alerts_Notes_Upd` |
+
+```json
+{
+  "WriteCapabilities": {
+    "AlertLifecycle": true
+  }
+}
+```
+
+```sql
+USE DBADashDB;
+GRANT EXECUTE ON OBJECT::Alert.ActiveAlertsAck_Upd TO [dbadashweb];
+GRANT EXECUTE ON OBJECT::Alert.ClosedAlerts_Add    TO [dbadashweb];
+GRANT EXECUTE ON OBJECT::Alert.Alerts_Notes_Upd    TO [dbadashweb];
+GRANT REFERENCES ON TYPE::dbo.BigIDs               TO [dbadashweb];
+```
+
+The alert lifecycle schema (`Alert.*`) requires DBA Dash 3.17.0 or later. On older
+repositories the alert panel reports that it is unsupported instead of failing.
 
 ### Active Directory Authentication
 

@@ -11,6 +11,8 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { format, formatDistanceToNow } from 'date-fns';
+import DbaDashAlertsPanel from '../components/DbaDashAlertsPanel';
+import TabNav from '../components/TabNav';
 import { alertCategoryBySlug } from '../utils/alertCategories';
 
 /* ── Helpers ── */
@@ -85,6 +87,40 @@ const SEV_CONFIG = {
 /* ── Component ── */
 
 export default function AlertsPage() {
+  const [searchParams] = useSearchParams();
+  const [pageTab, setPageTab] = useState<'dbadash' | 'legacy'>(() =>
+    searchParams.has('instance') || searchParams.has('type') ? 'legacy' : 'dbadash'
+  );
+  const [legacyInstanceId, setLegacyInstanceId] = useState<number | undefined>(undefined);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Alerts</h1>
+          <p className="text-xs text-gray-500 mt-1">
+            {pageTab === 'dbadash'
+              ? "DBA Dash's alert engine — acknowledge, close, and annotate"
+              : 'Collection errors and failed jobs · newest first · auto-refresh 30s'}
+          </p>
+        </div>
+        <TabNav
+          tabs={[
+            { key: 'dbadash', label: 'DBA Dash Alerts' },
+            { key: 'legacy', label: 'Collection Errors & Failed Jobs' },
+          ]}
+          active={pageTab}
+          onChange={key => setPageTab(key as 'dbadash' | 'legacy')}
+        />
+      </div>
+
+      {pageTab === 'dbadash' && <DbaDashAlertsPanel instanceId={legacyInstanceId} />}
+      {pageTab === 'legacy' && <CollectionErrorsFeed onInstanceChange={setLegacyInstanceId} />}
+    </div>
+  );
+}
+
+function CollectionErrorsFeed({ onInstanceChange }: { onInstanceChange: (instanceId: number | undefined) => void }) {
   const { lastRefresh } = useRefresh();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -121,6 +157,10 @@ export default function AlertsPage() {
       .catch(() => setInstances([]))
       .finally(() => setInstancesLoading(false));
   }, []);
+
+  useEffect(() => {
+    onInstanceChange(instanceChoice === '' || instanceChoice === 'all' ? undefined : Number(instanceChoice));
+  }, [instanceChoice, onInstanceChange]);
 
   useEffect(() => {
     if (instanceChoice === '') {
@@ -248,14 +288,14 @@ export default function AlertsPage() {
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Alerts & Errors</h1>
-          <p className="text-xs text-gray-500 mt-1">Collection errors and failed jobs · newest first · auto-refresh 30s</p>
+        {/* Header */}
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-white">Alerts & Errors</h1>
+            <p className="text-xs text-gray-500 mt-1">Collection errors and failed jobs · newest first · auto-refresh 30s</p>
+          </div>
+          {instanceSelector}
         </div>
-        {instanceSelector}
-      </div>
 
       {monitoringStoppedBanner}
 

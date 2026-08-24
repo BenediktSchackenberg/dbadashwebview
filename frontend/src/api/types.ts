@@ -757,3 +757,77 @@ export interface DbSpaceRow extends ApiRow {
   growth?: number | null;
   isPercentGrowth?: boolean | number | null;
 }
+
+// DBA Dash's real alert lifecycle (Alert.ActiveAlerts / Alert.ClosedAlerts),
+// as opposed to the synthetic collection-error/failed-job feed on /api/alerts/recent.
+export interface ActiveAlertRow extends ApiRow {
+  alertID: number;
+  instanceID: number;
+  instanceDisplayName?: string | null;
+  priority: number;
+  priorityDescription?: string | null;
+  alertType?: string | null;
+  alertKey?: string | null;
+  firstMessage?: string | null;
+  lastMessage?: string | null;
+  triggerDate?: string | null;
+  alertDuration?: string | null;
+  updatedDate?: string | null;
+  timeSinceLastUpdate?: string | null;
+  updateCount?: number | null;
+  isAcknowledged: boolean;
+  isResolved: boolean;
+  resolvedDate?: string | null;
+  isBlackout: boolean;
+  alertStatus?: number | null;
+  notes?: string | null;
+  groupName?: string | null;
+  ruleNotes?: string | null;
+}
+
+export interface ClosedAlertRow extends ApiRow {
+  alertID: number;
+  instanceID: number;
+  instanceDisplayName?: string | null;
+  priority: number;
+  priorityDescription?: string | null;
+  alertType?: string | null;
+  alertKey?: string | null;
+  firstMessage?: string | null;
+  lastMessage?: string | null;
+  triggerDate?: string | null;
+  alertDuration?: string | null;
+  isAcknowledged: boolean;
+  isResolved: boolean;
+  resolvedDate?: string | null;
+  notes?: string | null;
+  closedDate?: string | null;
+  groupName?: string | null;
+  ruleNotes?: string | null;
+}
+
+export interface AlertLifecycleResponse<T> {
+  supported: boolean;
+  /**
+   * Whether the deployment opted into alert writes. Read access does not imply
+   * write access: the procedures need EXECUTE grants a db_datareader install
+   * will not have, so the UI hides the actions rather than offering buttons
+   * that can only fail.
+   */
+  canWrite?: boolean;
+  error?: string;
+  data: T[];
+}
+
+export interface AcknowledgeAlertsRequest {
+  alertIds: number[];
+  isAcknowledged: boolean;
+}
+
+export interface CloseAlertsRequest {
+  alertIds: number[];
+}
+
+export interface UpdateAlertNotesRequest {
+  notes?: string;
+}

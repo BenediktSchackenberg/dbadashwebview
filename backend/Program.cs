@@ -23,6 +23,7 @@ if (string.IsNullOrWhiteSpace(jwtOptions.Secret))
 
 var signingKey = new SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes(jwtOptions.Secret));
 var corsSettings = builder.Configuration.GetSection("Cors").Get<CorsSettings>() ?? new CorsSettings();
+var writeCapabilities = builder.Configuration.GetSection(WriteCapabilityOptions.SectionName).Get<WriteCapabilityOptions>() ?? new WriteCapabilityOptions();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -39,7 +40,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 builder.Services.AddAuthorizationBuilder()
-    .AddPolicy(AppPolicies.AdminOnly, policy => policy.RequireRole(AppRoles.Admin));
+    .AddPolicy(AppPolicies.AdminOnly, policy => policy.RequireRole(AppRoles.Admin))
+    .AddPolicy(AppPolicies.OperatorOrAdmin, policy => policy.RequireRole(AppRoles.Admin, AppRoles.Operator));
 
 builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
 {
@@ -63,6 +65,7 @@ builder.Services.AddSingleton<LocalUserStore>();
 builder.Services.AddSingleton<ActiveDirectoryAuthService>();
 builder.Services.AddSingleton<ThresholdSettingsStore>();
 builder.Services.AddSingleton<SqlDataService>();
+builder.Services.AddSingleton(writeCapabilities);
 builder.Services.AddSingleton<ApplicationVersionProvider>();
 
 var app = builder.Build();
@@ -99,6 +102,7 @@ app.MapPerformanceEndpoints();
 app.MapMonitoringEndpoints();
 app.MapEstateEndpoints();
 app.MapReportEndpoints();
+app.MapAlertsEndpoints();
 
 app.MapFallbackToFile("index.html");
 
