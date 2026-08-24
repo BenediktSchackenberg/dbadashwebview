@@ -26,14 +26,13 @@ export default function MultiSelectFilter({ label, options, selected, onChange, 
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+        setSearch('');
+      }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) setSearch('');
   }, [open]);
 
   const filteredOptions = search
@@ -51,7 +50,10 @@ export default function MultiSelectFilter({ label, options, selected, onChange, 
   return (
     <div className="relative" ref={ref}>
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={() => {
+          setOpen(o => !o);
+          setSearch('');
+        }}
         className={clsx(
           'flex items-center gap-2 px-3 py-2 rounded-lg text-sm border transition-colors',
           selected.length > 0
