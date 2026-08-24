@@ -87,7 +87,10 @@ const SEV_CONFIG = {
 /* ── Component ── */
 
 export default function AlertsPage() {
-  const [pageTab, setPageTab] = useState<'dbadash' | 'legacy'>('dbadash');
+  const [searchParams] = useSearchParams();
+  const [pageTab, setPageTab] = useState<'dbadash' | 'legacy'>(() =>
+    searchParams.has('instance') || searchParams.has('type') ? 'legacy' : 'dbadash'
+  );
   const [legacyInstanceId, setLegacyInstanceId] = useState<number | undefined>(undefined);
 
   return (
