@@ -808,6 +808,13 @@ export interface ClosedAlertRow extends ApiRow {
 
 export interface AlertLifecycleResponse<T> {
   supported: boolean;
+  /**
+   * Whether the deployment opted into alert writes. Read access does not imply
+   * write access: the procedures need EXECUTE grants a db_datareader install
+   * will not have, so the UI hides the actions rather than offering buttons
+   * that can only fail.
+   */
+  canWrite?: boolean;
   error?: string;
   data: T[];
 }

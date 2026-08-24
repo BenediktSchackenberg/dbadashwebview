@@ -466,6 +466,34 @@ ALTER ROLE db_datareader ADD MEMBER [dbadashweb];
 GRANT EXECUTE ON SCHEMA::dbo TO [dbadashweb];
 ```
 
+### Write Capabilities (optional)
+
+Everything above is read-only. Features that write back to DBADashDB are opt-in and
+stay disabled unless you enable them *and* grant the matching EXECUTE permissions —
+otherwise the UI would show buttons that can only fail.
+
+| Capability | Setting | Additional grants |
+| --- | --- | --- |
+| Alert acknowledge / close / notes | `WriteCapabilities:AlertLifecycle` | `Alert.ActiveAlertsAck_Upd`, `Alert.ClosedAlerts_Add`, `Alert.Alerts_Notes_Upd` |
+
+```json
+{
+  "WriteCapabilities": {
+    "AlertLifecycle": true
+  }
+}
+```
+
+```sql
+USE DBADashDB;
+GRANT EXECUTE ON OBJECT::Alert.ActiveAlertsAck_Upd TO [dbadashweb];
+GRANT EXECUTE ON OBJECT::Alert.ClosedAlerts_Add    TO [dbadashweb];
+GRANT EXECUTE ON OBJECT::Alert.Alerts_Notes_Upd    TO [dbadashweb];
+```
+
+The alert lifecycle schema (`Alert.*`) requires DBA Dash 3.17.0 or later. On older
+repositories the alert panel reports that it is unsupported instead of failing.
+
 ### Active Directory Authentication
 
 Configure via **Settings -> Users -> Active Directory**, or directly edit `config/ad-config.json`:

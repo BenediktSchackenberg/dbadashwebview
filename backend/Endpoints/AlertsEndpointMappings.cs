@@ -2,6 +2,7 @@ using System.Data;
 using System.Security.Claims;
 using DBADashWebView.Auth;
 using DBADashWebView.Data;
+using DBADashWebView.Settings;
 using Microsoft.Data.SqlClient;
 using Microsoft.Data.SqlClient.Server;
 
@@ -26,7 +27,7 @@ public static class AlertsEndpointMappings
 {
     public static IEndpointRouteBuilder MapAlertsEndpoints(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapGet("/api/alerts/active", async (int? instanceId, ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/alerts/active", async (int? instanceId, ClaimsPrincipal user, SqlDataService sql, WriteCapabilityOptions writeCapabilities, ILogger<Program> logger, CancellationToken cancellationToken) =>
         {
             if (instanceId is int requestedInstanceId)
             {
@@ -37,6 +38,11 @@ public static class AlertsEndpointMappings
             try
             {
                 var allowedIds = await user.AllowedInstanceIdsAsync(sql, cancellationToken);
+                if (IsEmptyScope(allowedIds))
+                {
+                    return Results.Ok(EmptyScopeResponse(writeCapabilities));
+                }
+
                 await using var connection = await sql.OpenConnectionAsync(cancellationToken);
                 await using var command = new SqlCommand("Alert.ActiveAlerts_Get", connection)
                 {
@@ -47,7 +53,7 @@ public static class AlertsEndpointMappings
                 command.Parameters.AddWithValue("@InstanceID", (object?)instanceId ?? DBNull.Value);
 
                 var data = await EndpointResultMapper.ReadRowsAsync(command, cancellationToken, camelCase: true);
-                return Results.Ok(new { supported = true, data });
+                return Results.Ok(new { supported = true, canWrite = writeCapabilities.AlertLifecycle, data });
             }
             catch (SqlException ex) when (IsMissingAlertSchema(ex))
             {
@@ -55,11 +61,12 @@ public static class AlertsEndpointMappings
             }
             catch (Exception ex)
             {
-                return Results.Ok(new { supported = true, error = ex.Message, data = Array.Empty<object>() });
+                logger.LogError(ex, "Active alerts endpoint failed");
+                return Results.Problem(title: "Unable to read active alerts", statusCode: StatusCodes.Status500InternalServerError);
             }
         }).RequireAuthorization();
 
-        endpoints.MapGet("/api/alerts/closed", async (int? instanceId, int? top, ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
+        endpoints.MapGet("/api/alerts/closed", async (int? instanceId, int? top, ClaimsPrincipal user, SqlDataService sql, WriteCapabilityOptions writeCapabilities, ILogger<Program> logger, CancellationToken cancellationToken) =>
         {
             if (instanceId is int requestedInstanceId)
             {
@@ -70,6 +77,11 @@ public static class AlertsEndpointMappings
             try
             {
                 var allowedIds = await user.AllowedInstanceIdsAsync(sql, cancellationToken);
+                if (IsEmptyScope(allowedIds))
+                {
+                    return Results.Ok(EmptyScopeResponse(writeCapabilities));
+                }
+
                 await using var connection = await sql.OpenConnectionAsync(cancellationToken);
                 await using var command = new SqlCommand("Alert.ClosedAlerts_Get", connection)
                 {
@@ -81,7 +93,7 @@ public static class AlertsEndpointMappings
                 command.Parameters.AddWithValue("@Top", Math.Clamp(top ?? 500, 1, 5000));
 
                 var data = await EndpointResultMapper.ReadRowsAsync(command, cancellationToken, camelCase: true);
-                return Results.Ok(new { supported = true, data });
+                return Results.Ok(new { supported = true, canWrite = writeCapabilities.AlertLifecycle, data });
             }
             catch (SqlException ex) when (IsMissingAlertSchema(ex))
             {
@@ -89,7 +101,8 @@ public static class AlertsEndpointMappings
             }
             catch (Exception ex)
             {
-                return Results.Ok(new { supported = true, error = ex.Message, data = Array.Empty<object>() });
+                logger.LogError(ex, "Closed alerts endpoint failed");
+                return Results.Problem(title: "Unable to read closed alerts", statusCode: StatusCodes.Status500InternalServerError);
             }
         }).RequireAuthorization();
 
@@ -97,18 +110,25 @@ public static class AlertsEndpointMappings
             AcknowledgeAlertsRequest request,
             ClaimsPrincipal user,
             SqlDataService sql,
+            WriteCapabilityOptions writeCapabilities,
             CancellationToken cancellationToken) =>
         {
+            if (WriteDisabledResult(writeCapabilities) is { } disabled) return disabled;
+
             if (request.AlertIds is null || request.AlertIds.Length == 0)
             {
                 return Results.Problem(title: "At least one alert id is required", statusCode: StatusCodes.Status400BadRequest);
             }
 
-            var scopeDenied = await EnsureAlertsInScopeAsync(user, sql, request.AlertIds, cancellationToken);
-            if (scopeDenied is not null) return scopeDenied;
-
             try
             {
+                // Kept inside the guarded block: on a pre-3.17 repository the scope
+                // check itself reads Alert.ActiveAlerts / Alert.ClosedAlerts, and
+                // outside the try it would throw straight past the compatibility
+                // handling below and surface as a 500 instead of supported = false.
+                var scopeDenied = await EnsureAlertsInScopeAsync(user, sql, request.AlertIds, cancellationToken);
+                if (scopeDenied is not null) return scopeDenied;
+
                 await using var connection = await sql.OpenConnectionAsync(cancellationToken);
                 await using var command = new SqlCommand("Alert.ActiveAlertsAck_Upd", connection)
                 {
@@ -132,18 +152,25 @@ public static class AlertsEndpointMappings
             CloseAlertsRequest request,
             ClaimsPrincipal user,
             SqlDataService sql,
+            WriteCapabilityOptions writeCapabilities,
             CancellationToken cancellationToken) =>
         {
+            if (WriteDisabledResult(writeCapabilities) is { } disabled) return disabled;
+
             if (request.AlertIds is null || request.AlertIds.Length == 0)
             {
                 return Results.Problem(title: "At least one alert id is required", statusCode: StatusCodes.Status400BadRequest);
             }
 
-            var scopeDenied = await EnsureAlertsInScopeAsync(user, sql, request.AlertIds, cancellationToken);
-            if (scopeDenied is not null) return scopeDenied;
-
             try
             {
+                // Kept inside the guarded block: on a pre-3.17 repository the scope
+                // check itself reads Alert.ActiveAlerts / Alert.ClosedAlerts, and
+                // outside the try it would throw straight past the compatibility
+                // handling below and surface as a 500 instead of supported = false.
+                var scopeDenied = await EnsureAlertsInScopeAsync(user, sql, request.AlertIds, cancellationToken);
+                if (scopeDenied is not null) return scopeDenied;
+
                 await using var connection = await sql.OpenConnectionAsync(cancellationToken);
                 await using var command = new SqlCommand("Alert.ClosedAlerts_Add", connection)
                 {
@@ -167,13 +194,20 @@ public static class AlertsEndpointMappings
             UpdateAlertNotesRequest request,
             ClaimsPrincipal user,
             SqlDataService sql,
+            WriteCapabilityOptions writeCapabilities,
             CancellationToken cancellationToken) =>
         {
-            var scopeDenied = await EnsureAlertsInScopeAsync(user, sql, [alertId], cancellationToken);
-            if (scopeDenied is not null) return scopeDenied;
+            if (WriteDisabledResult(writeCapabilities) is { } disabled) return disabled;
 
             try
             {
+                // Kept inside the guarded block: on a pre-3.17 repository the scope
+                // check itself reads Alert.ActiveAlerts / Alert.ClosedAlerts, and
+                // outside the try it would throw straight past the compatibility
+                // handling below and surface as a 500 instead of supported = false.
+                var scopeDenied = await EnsureAlertsInScopeAsync(user, sql, [alertId], cancellationToken);
+                if (scopeDenied is not null) return scopeDenied;
+
                 await using var connection = await sql.OpenConnectionAsync(cancellationToken);
                 await using var command = new SqlCommand("Alert.Alerts_Notes_Upd", connection)
                 {
@@ -198,9 +232,40 @@ public static class AlertsEndpointMappings
     private static readonly object AlertSchemaMissingResponse = new
     {
         supported = false,
+        canWrite = false,
         error = "This DBADashDB doesn't have DBA Dash's alert lifecycle schema (Alert.*). Alert acknowledge/close/notes requires DBA Dash 3.17.0 or later.",
         data = Array.Empty<object>()
     };
+
+    /// <summary>
+    /// True when the caller is scope-restricted (non-null set) but that scope
+    /// resolves to no instances at all.
+    ///
+    /// This must short-circuit before the stored procedure runs.
+    /// <c>Alert.ActiveAlerts_Get</c> derives its own flag with
+    /// <c>@AllInstances = CASE WHEN EXISTS(SELECT 1 FROM @InstanceIDs) THEN 0 ELSE 1 END</c>
+    /// and then filters with <c>... OR @AllInstances = 1</c>, so an empty
+    /// table-valued parameter does not mean "no instances" — it means "every
+    /// instance". Passing an empty scope through would hand a restricted user the
+    /// entire fleet's alerts. <c>Alert.ClosedAlerts_Get</c> follows the same shape.
+    /// </summary>
+    private static bool IsEmptyScope(HashSet<int>? allowedIds) => allowedIds is { Count: 0 };
+
+    private static object EmptyScopeResponse(WriteCapabilityOptions writeCapabilities) =>
+        new { supported = true, canWrite = writeCapabilities.AlertLifecycle, data = Array.Empty<object>() };
+
+    /// <summary>
+    /// Returns a 403 when the alert write capability is off, or <c>null</c> to let
+    /// the request through. Role alone is not enough: the deployment also has to be
+    /// provisioned with the EXECUTE grants these procedures need.
+    /// </summary>
+    private static IResult? WriteDisabledResult(WriteCapabilityOptions writeCapabilities) =>
+        writeCapabilities.AlertLifecycle
+            ? null
+            : Results.Problem(
+                title: "Alert write operations are disabled",
+                detail: "Set WriteCapabilities:AlertLifecycle to true and grant the EXECUTE permissions documented in the README.",
+                statusCode: StatusCodes.Status403Forbidden);
 
     private static bool IsMissingAlertSchema(SqlException ex) => IsMissingAlertSchema(ex.Number, ex.Message);
 

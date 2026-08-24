@@ -26,7 +26,7 @@ function isActiveAlert(alert: AlertRow): alert is ActiveAlertRow {
 }
 
 export default function DbaDashAlertsPanel({ instanceId }: { instanceId?: number }) {
-  const canAct = hasRole(['Admin', 'Operator']);
+  const hasWriteRole = hasRole(['Admin', 'Operator']);
   const [tab, setTab] = useState<Tab>('active');
   const [rows, setRows] = useState<AlertRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,6 +36,11 @@ export default function DbaDashAlertsPanel({ instanceId }: { instanceId?: number
   const [busy, setBusy] = useState(false);
   const [notesTarget, setNotesTarget] = useState<AlertRow | null>(null);
   const [notesDraft, setNotesDraft] = useState('');
+  const [writeEnabled, setWriteEnabled] = useState(false);
+
+  // Both must hold: the signed-in user's role, and the deployment having opted
+  // into alert writes with the EXECUTE grants they need.
+  const canAct = hasWriteRole && writeEnabled;
 
   useEffect(() => {
     setSelected(new Set());
@@ -49,10 +54,12 @@ export default function DbaDashAlertsPanel({ instanceId }: { instanceId?: number
     try {
       const response = tab === 'active' ? await api.alertsActive(instanceId) : await api.alertsClosed(instanceId);
       setSupported(response.supported);
+      setWriteEnabled(response.canWrite === true);
       setRows(Array.isArray(response.data) ? response.data : []);
       if (response.error) setError(response.error);
     } catch (err) {
       setRows([]);
+      setWriteEnabled(false);
       setError(err instanceof Error ? err.message : 'Unable to load alerts.');
     } finally {
       setLoading(false);
@@ -140,6 +147,14 @@ export default function DbaDashAlertsPanel({ instanceId }: { instanceId?: number
           </div>
         )}
       </div>
+
+      {supported && hasWriteRole && !writeEnabled && (
+        <p className="text-xs text-gray-500">
+          Acknowledge, close and notes are read-only here: this deployment has not enabled{' '}
+          <code>WriteCapabilities:AlertLifecycle</code>. See the README for the setting and the
+          EXECUTE grants it needs.
+        </p>
+      )}
 
       {!supported && (
         <div className="glass rounded-xl p-6 flex items-start gap-3 border border-yellow-500/20">

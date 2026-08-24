@@ -3,7 +3,12 @@ using Microsoft.Data.SqlClient;
 
 namespace DBADashWebView.Data;
 
-public sealed class SqlDataService
+/// <remarks>
+/// Not sealed, and <see cref="QueryAsync(string, CancellationToken, ValueTuple{string, object}[])"/>
+/// is virtual, so endpoint tests can substitute a fake and exercise handlers that
+/// return before ever opening a connection.
+/// </remarks>
+public class SqlDataService
 {
     private readonly string _connectionString;
 
@@ -15,7 +20,7 @@ public sealed class SqlDataService
     public Task<List<Dictionary<string, object?>>> QueryAsync(string sql, params (string name, object? value)[] parameters) =>
         QueryAsync(sql, CancellationToken.None, parameters);
 
-    public async Task<List<Dictionary<string, object?>>> QueryAsync(
+    public virtual async Task<List<Dictionary<string, object?>>> QueryAsync(
         string sql,
         CancellationToken cancellationToken,
         params (string name, object? value)[] parameters)
