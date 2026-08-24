@@ -223,12 +223,15 @@ export default function DbaDashAlertsPanel({ instanceId }: { instanceId?: number
                       <p className="text-xs text-gray-500 mt-1.5 bg-white/5 rounded-lg px-2.5 py-1.5">{alert.notes}</p>
                     )}
                     <div className="flex items-center gap-3 mt-2">
-                      <button
-                        onClick={() => { setNotesTarget(alert); setNotesDraft(alert.notes || ''); }}
-                        className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-white transition-colors"
-                      >
-                        <MessageSquare className="w-3 h-3" /> {alert.notes ? 'Edit notes' : 'Add notes'}
-                      </button>
+                      {(canAct || alert.notes) && (
+                        <button
+                          onClick={() => { setNotesTarget(alert); setNotesDraft(alert.notes || ''); }}
+                          className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-white transition-colors"
+                        >
+                          <MessageSquare className="w-3 h-3" />
+                          {canAct ? (alert.notes ? 'Edit notes' : 'Add notes') : 'View notes'}
+                        </button>
+                      )}
                       {canAct && tab === 'active' && (
                         <>
                           <button
@@ -285,7 +288,11 @@ export default function DbaDashAlertsPanel({ instanceId }: { instanceId?: number
                 {busy ? 'Saving...' : 'Save Notes'}
               </button>
             ) : (
-              <p className="text-xs text-gray-500 mt-2">Viewer role can't edit notes.</p>
+              <p className="text-xs text-gray-500 mt-2">
+                  {hasWriteRole
+                    ? 'Notes are read-only: this deployment has not enabled WriteCapabilities:AlertLifecycle.'
+                    : "Your role can't edit notes."}
+                </p>
             )}
           </div>
         </div>
