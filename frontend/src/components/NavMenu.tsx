@@ -17,6 +17,7 @@ import {
   Play,
   Settings,
   Shield,
+  ShieldAlert,
   Wrench,
   Info,
 } from 'lucide-react';
@@ -74,6 +75,7 @@ const navGroups: NavGroup[] = [
       { label: 'Configuration', path: '/monitoring/configuration', icon: Settings },
       { label: 'Patching', path: '/monitoring/patching', icon: Wrench },
       { label: 'Schema Changes', path: '/monitoring/schema-changes', icon: Blocks },
+      { label: 'Corruption', path: '/corruption', icon: ShieldAlert },
       { label: 'Identity Columns', path: '/monitoring/identity-columns', icon: Database },
       { label: 'TempDB', path: '/monitoring/tempdb', icon: Database },
       { label: 'DB Space', path: '/monitoring/db-space', icon: HardDrive },

@@ -7,6 +7,8 @@ import type {
   InstanceHadrGroupRow,
   InstanceHadrReplicaRow,
   InstanceHadrResponse,
+  InstanceMirroringRow,
+  InstanceLogShippingRow,
 } from '../api/types';
 import LoadingSpinner from '../components/LoadingSpinner';
 import EmptyState from '../components/EmptyState';
@@ -14,7 +16,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import clsx from 'clsx';
 import {
   Shield, Server, Database, ArrowRight, ArrowDown, ChevronDown, ChevronRight,
-  Activity, AlertTriangle, Network, Crown, RefreshCw, Search, X
+  Activity, AlertTriangle, Network, Crown, RefreshCw, Search, X, Copy, History
 } from 'lucide-react';
 
 /* ── helpers ── */
@@ -45,6 +47,16 @@ function syncStateBadge(state: string | null | undefined): string {
   if (s === 'SYNCHRONIZING') return 'bg-blue-500/20 text-blue-300';
   if (s === 'NOT SYNCHRONIZING') return 'bg-red-500/20 text-red-300';
   if (s === 'REVERTING') return 'bg-yellow-500/20 text-yellow-300';
+  return 'bg-gray-500/20 text-gray-400';
+}
+
+function mirroringStateBadge(state: string | null | undefined): string {
+  if (!state) return 'bg-gray-500/20 text-gray-400';
+  const s = state.toUpperCase();
+  if (s === 'SYNCHRONIZED') return 'bg-green-500/20 text-green-300';
+  if (s === 'SYNCHRONIZING') return 'bg-blue-500/20 text-blue-300';
+  if (s === 'PENDING_FAILOVER') return 'bg-yellow-500/20 text-yellow-300';
+  if (s === 'SUSPENDED' || s === 'DISCONNECTED' || s === 'UNSYNCHRONIZED') return 'bg-red-500/20 text-red-300';
   return 'bg-gray-500/20 text-gray-400';
 }
 
@@ -322,7 +334,83 @@ function InstanceHadrView({ instanceId }: { instanceId: number }) {
   if (loading) return <LoadingSpinner />;
   if (!data || data.error) return <EmptyState message={data?.error || 'Failed to load HA/DR data'} />;
 
-  const { ags = [], replicas = [], databases = [] } = data;
+  const { ags = [], replicas = [], databases = [], mirroring = [], logShipping = [] } = data;
+
+  const mirroringAndLogShippingSections = (
+    <>
+      {mirroring.length > 0 && (
+        <div className="glass rounded-xl overflow-hidden">
+          <div className="px-4 py-3 bg-slate-800/80 flex items-center gap-2 text-xs text-gray-400 uppercase tracking-wider">
+            <Copy className="w-3.5 h-3.5 text-purple-400" /> Database Mirroring
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-gray-500 border-b border-white/5">
+                <th className="px-4 py-2">Database</th>
+                <th className="px-4 py-2">Role</th>
+                <th className="px-4 py-2">State</th>
+                <th className="px-4 py-2">Partner</th>
+                <th className="px-4 py-2">Witness</th>
+                <th className="px-4 py-2">Safety</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {mirroring.map((m: InstanceMirroringRow) => (
+                <tr key={m.DatabaseID} className="hover:bg-white/5">
+                  <td className="px-4 py-2.5 text-white font-medium">{m.DatabaseName}</td>
+                  <td className="px-4 py-2.5 text-gray-300">{m.mirroring_role_desc || '—'}</td>
+                  <td className="px-4 py-2.5">
+                    <span className={clsx('px-2 py-0.5 rounded-full text-xs', mirroringStateBadge(m.mirroring_state_desc))}>
+                      {m.mirroring_state_desc || 'UNKNOWN'}
+                    </span>
+                    {m.PartnerStateDesc && m.PartnerStateDesc !== m.mirroring_state_desc && (
+                      <span className="text-xs text-gray-500 ml-1">(partner: {m.PartnerStateDesc})</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2.5 text-gray-400 text-xs">{m.mirroring_partner_instance || m.mirroring_partner_name || '—'}</td>
+                  <td className="px-4 py-2.5 text-gray-400 text-xs">{m.mirroring_witness_name || '—'}</td>
+                  <td className="px-4 py-2.5 text-gray-400 text-xs">{m.mirroring_safety_level_desc || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {logShipping.length > 0 && (
+        <div className="glass rounded-xl overflow-hidden">
+          <div className="px-4 py-3 bg-slate-800/80 flex items-center gap-2 text-xs text-gray-400 uppercase tracking-wider">
+            <History className="w-3.5 h-3.5 text-cyan-400" /> Log Shipping
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-gray-500 border-b border-white/5">
+                <th className="px-4 py-2">Database</th>
+                <th className="px-4 py-2">Last Restore</th>
+                <th className="px-4 py-2">Last Backup Restored</th>
+                <th className="px-4 py-2">Last File</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {logShipping.map((l: InstanceLogShippingRow) => {
+                const staleHours = l.restore_date ? (Date.now() - new Date(l.restore_date).getTime()) / 3600000 : null;
+                return (
+                  <tr key={l.DatabaseID} className="hover:bg-white/5">
+                    <td className="px-4 py-2.5 text-white font-medium">{l.DatabaseName}</td>
+                    <td className={clsx('px-4 py-2.5 text-xs', staleHours == null ? 'text-gray-500' : staleHours > 4 ? 'text-red-400' : staleHours > 1 ? 'text-yellow-400' : 'text-emerald-400')}>
+                      {l.restore_date ? new Date(l.restore_date).toLocaleString() : '—'}
+                    </td>
+                    <td className="px-4 py-2.5 text-gray-400 text-xs">{l.backup_start_date ? new Date(l.backup_start_date).toLocaleString() : '—'}</td>
+                    <td className="px-4 py-2.5 text-gray-500 text-xs font-mono truncate max-w-[240px]">{l.last_file || '—'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  );
 
   if (ags.length === 0) return (
     <div className="space-y-4">
@@ -335,7 +423,11 @@ function InstanceHadrView({ instanceId }: { instanceId: number }) {
         </span>
       </div>
       </div>
-      <EmptyState message="No Availability Groups configured on this instance" />
+      {mirroring.length === 0 && logShipping.length === 0 ? (
+        <EmptyState message="No Availability Groups, Database Mirroring, or Log Shipping configured on this instance" />
+      ) : (
+        mirroringAndLogShippingSections
+      )}
     </div>
   );
 
@@ -538,6 +630,8 @@ function InstanceHadrView({ instanceId }: { instanceId: number }) {
           </div>
         );
       })}
+
+      {(mirroring.length > 0 || logShipping.length > 0) && mirroringAndLogShippingSections}
     </div>
   );
 }

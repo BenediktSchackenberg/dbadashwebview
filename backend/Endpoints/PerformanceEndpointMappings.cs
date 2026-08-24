@@ -64,10 +64,11 @@ public static class PerformanceEndpointMappings
                            rq.login_name,
                            rq.host_name,
                            rq.program_name,
-                           CAST(NULL AS nvarchar(max)) AS query_text
+                           qt.text AS query_text
                     FROM dbo.RunningQueries rq
                     JOIN dbo.Instances i ON rq.InstanceID = i.InstanceID
                     LEFT JOIN dbo.Databases d ON rq.database_id = d.database_id AND rq.InstanceID = d.InstanceID
+                    LEFT JOIN dbo.QueryText qt ON rq.sql_handle = qt.sql_handle
                     WHERE rq.SnapshotDateUTC > DATEADD(hour, -1, GETUTCDATE()) {filter} {scopeSnippet}
                     ORDER BY rq.SnapshotDateUTC DESC
                     """;
@@ -103,9 +104,10 @@ public static class PerformanceEndpointMappings
                            rq.reads,
                            rq.writes,
                            rq.SnapshotDateUTC AS SnapshotDate,
-                           CAST(NULL AS nvarchar(max)) AS query_text
+                           qt.text AS query_text
                     FROM dbo.RunningQueries rq
                     JOIN dbo.Instances i ON rq.InstanceID = i.InstanceID
+                    LEFT JOIN dbo.QueryText qt ON rq.sql_handle = qt.sql_handle
                     WHERE rq.SnapshotDateUTC > DATEADD(hour, -1, GETUTCDATE())
                       AND (rq.blocking_session_id > 0
                            OR rq.session_id IN (
@@ -500,10 +502,12 @@ public static class PerformanceEndpointMappings
         {
             var deny = await user.EnsureInstanceAccessAsync(instanceId, sql, cancellationToken);
             if (deny is not null) return deny;
-            // DBADash stores procedure/object-level execution stats in dbo.ObjectExecutionStats.
-            // There are no separate QueryStoreStats or TopQueries tables in the DBADash schema.
-            // We query ObjectExecutionStats grouped by object to surface the top CPU consumers,
-            // which is the closest equivalent to a Query Store top-queries view. (#55)
+            // DBADash has dbo.QueryPlans/QueryText (keyed by plan_handle/sql_handle) but no
+            // query-level AGGREGATED runtime-stats table to drive a "top queries" ranking from -
+            // only dbo.RunningQueries (point-in-time) and dbo.SlowQueries (individual slow-query
+            // events, which already carry their own captured text). The closest real aggregate is
+            // dbo.ObjectExecutionStats (procedure/object-level), used here as a top-CPU-consumers
+            // view. Real forced-plan history (not an approximation) is a separate endpoint below.
             string note = string.Empty;
             object data = Array.Empty<object>();
             try
@@ -532,6 +536,35 @@ public static class PerformanceEndpointMappings
             catch (Exception ex)
             {
                 note = $"Query Store data unavailable: {ex.Message}";
+            }
+
+            return Results.Ok(new { data, note });
+        }).RequireAuthorization();
+
+        // Real forced-plan audit trail from dbo.PlanForcingLog - who forced/unforced which plan
+        // for which query, when, and its status. Read-only: forcing a plan is a write against the
+        // target SQL Server's actual query plan cache, which stays a DBA Dash desktop client action.
+        endpoints.MapGet("/api/performance/plan-forcing-log", async (int instanceId, ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
+        {
+            var deny = await user.EnsureInstanceAccessAsync(instanceId, sql, cancellationToken);
+            if (deny is not null) return deny;
+            string note = string.Empty;
+            object data = Array.Empty<object>();
+            try
+            {
+                const string query = """
+                    SELECT TOP 200
+                        MessageGroupID, InstanceID, database_name, log_date, log_type, user_name,
+                        query_id, plan_id, object_name, query_sql_text, notes, status
+                    FROM dbo.PlanForcingLog
+                    WHERE InstanceID = @instanceId
+                    ORDER BY log_date DESC
+                    """;
+                data = await sql.QueryAsync(query, cancellationToken, ("@instanceId", instanceId));
+            }
+            catch (Exception ex)
+            {
+                note = $"Plan forcing log unavailable: {ex.Message}";
             }
 
             return Results.Ok(new { data, note });

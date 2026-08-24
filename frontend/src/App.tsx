@@ -22,6 +22,7 @@ const BackupAmpelPage = lazy(() => import('./pages/BackupAmpelPage'));
 const SqlMonitorPage = lazy(() => import('./pages/SqlMonitorPage'));
 const AlertsPage = lazy(() => import('./pages/AlertsPage'));
 const DrivesPage = lazy(() => import('./pages/DrivesPage'));
+const CorruptionPage = lazy(() => import('./pages/CorruptionPage'));
 const AvailabilityGroupsPage = lazy(() => import('./pages/AvailabilityGroupsPage'));
 const DatabaseDetailPage = lazy(() => import('./pages/DatabaseDetailPage'));
 const AnalysisPage = lazy(() => import('./pages/AnalysisPage'));
@@ -298,6 +299,7 @@ export default function App() {
                   <Route path="/instances/:id/databases/:dbId" element={<DatabaseDetailPage />} />
                   <Route path="/instances/:id/backups" element={<BackupsPage />} />
                   <Route path="/instances/:id/drives" element={<DrivesPage />} />
+                  <Route path="/instances/:id/corruption" element={<CorruptionPage />} />
                   <Route path="/instances/:id/configuration" element={<ConfigurationPage />} />
                   <Route path="/instances/:id/hadr" element={<AvailabilityGroupsPage />} />
                   <Route path="/instances/:id/jobs" element={<JobTimelinePage />} />
@@ -306,6 +308,7 @@ export default function App() {
                   <Route path="/backups" element={<BackupsPage />} />
                   <Route path="/alerts" element={<AlertsPage />} />
                   <Route path="/drives" element={<DrivesPage />} />
+                  <Route path="/corruption" element={<CorruptionPage />} />
                   <Route path="/availability-groups" element={<AvailabilityGroupsPage />} />
                   <Route path="/analysis" element={<AnalysisPage />} />
                   <Route path="/queries" element={<QueriesPage />} />

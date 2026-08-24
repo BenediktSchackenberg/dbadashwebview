@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { api } from '../api/api';
-import type { ApiRow, InstanceCpuRow, InstanceListRow, InstanceWaitRow } from '../api/types';
+import type { ApiRow, InstanceCpuBaselinePoint, InstanceCpuRow, InstanceListRow, InstanceWaitRow } from '../api/types';
 import { useRefresh } from '../App';
 import LoadingSpinner from '../components/LoadingSpinner';
 import EmptyState from '../components/EmptyState';
@@ -8,6 +8,22 @@ import {
   ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, Brush, ReferenceLine
 } from 'recharts';
+
+const BASELINE_LOOKBACK_DAYS = 14;
+// Below this, the "14-day average" bucket is really a 1-2 sample average -
+// not worth presenting as a baseline yet.
+const MIN_SAMPLE_COUNT_FOR_BASELINE = 3;
+
+function findBaselinePoint(
+  eventTimeIso: string,
+  bucketMinutes: number,
+  baseline: InstanceCpuBaselinePoint[]
+): InstanceCpuBaselinePoint | undefined {
+  const d = new Date(eventTimeIso);
+  const minuteOfDay = d.getUTCHours() * 60 + d.getUTCMinutes();
+  const bucket = Math.floor(minuteOfDay / bucketMinutes) * bucketMinutes;
+  return baseline.find(p => p.MinuteOfDay === bucket);
+}
 
 interface AlertTimelineRow extends ApiRow {
   EventTime?: string | null;
@@ -24,6 +40,9 @@ export default function AnalysisPage() {
   const [loading, setLoading] = useState(true);
   const [metrics, setMetrics] = useState({ cpu: true, ioWaits: false, memory: false });
   const [showBaseline, setShowBaseline] = useState(false);
+  const [baselineData, setBaselineData] = useState<InstanceCpuBaselinePoint[]>([]);
+  const [baselineBucketMinutes, setBaselineBucketMinutes] = useState(15);
+  const [baselineLoading, setBaselineLoading] = useState(false);
 
   useEffect(() => {
     api.instances().then(d => {
@@ -47,17 +66,40 @@ export default function AnalysisPage() {
     }).finally(() => setLoading(false));
   }, [selectedInstance, lastRefresh]);
 
+  useEffect(() => {
+    if (!selectedInstance || !showBaseline) return;
+    setBaselineLoading(true);
+    api.instanceCpuBaseline(selectedInstance, 24, BASELINE_LOOKBACK_DAYS)
+      .then(res => {
+        setBaselineData(Array.isArray(res.data) ? res.data : []);
+        setBaselineBucketMinutes(res.bucketMinutes || 15);
+      })
+      .catch(() => setBaselineData([]))
+      .finally(() => setBaselineLoading(false));
+  }, [selectedInstance, showBaseline, lastRefresh]);
+
   const chartData = useMemo(() => {
-    return cpuData.map((c, i) => ({
-      time: new Date(c.EventTime).toLocaleTimeString(),
-      fullTime: c.EventTime,
-      cpu: c.SQLProcessCPU ?? 0,
-      totalCpu: c.TotalCPU ?? 0,
-      ioWaits: waitsData.length > 0 ? (waitsData[0]?.TotalWaitMs ?? 0) / Math.max(cpuData.length, 1) : 0,
-      memory: c.TotalCPU ? Math.min(c.TotalCPU * 0.7 + 10, 100) : 0,
-      baselineCpu: showBaseline ? Math.max(0, (c.SQLProcessCPU ?? 0) + (Math.sin(i * 0.1) * 15)) : undefined,
-    })).reverse();
-  }, [cpuData, waitsData, showBaseline]);
+    return cpuData.map((c) => {
+      const baselinePoint = showBaseline ? findBaselinePoint(c.EventTime, baselineBucketMinutes, baselineData) : undefined;
+      const baselineCpu = baselinePoint && baselinePoint.SampleCount >= MIN_SAMPLE_COUNT_FOR_BASELINE
+        ? baselinePoint.AvgCpu ?? undefined
+        : undefined;
+      return {
+        time: new Date(c.EventTime).toLocaleTimeString(),
+        fullTime: c.EventTime,
+        cpu: c.SQLProcessCPU ?? 0,
+        totalCpu: c.TotalCPU ?? 0,
+        ioWaits: waitsData.length > 0 ? (waitsData[0]?.TotalWaitMs ?? 0) / Math.max(cpuData.length, 1) : 0,
+        memory: c.TotalCPU ? Math.min(c.TotalCPU * 0.7 + 10, 100) : 0,
+        baselineCpu,
+      };
+    }).reverse();
+  }, [cpuData, waitsData, showBaseline, baselineData, baselineBucketMinutes]);
+
+  const baselineHasEnoughHistory = useMemo(
+    () => baselineData.some(p => p.SampleCount >= MIN_SAMPLE_COUNT_FOR_BASELINE),
+    [baselineData]
+  );
 
   const alertTimes = useMemo(() => {
     return alerts
@@ -108,9 +150,17 @@ export default function AnalysisPage() {
               onChange={() => setShowBaseline(b => !b)}
               className="rounded bg-white/10 border-white/20"
             />
-            Baseline (last week)
+            Baseline ({BASELINE_LOOKBACK_DAYS}-day avg)
+            {baselineLoading && <span className="text-xs text-gray-500">loading…</span>}
           </label>
         </div>
+
+        {showBaseline && !baselineLoading && !baselineHasEnoughHistory && (
+          <p className="text-xs text-amber-400/80 mb-3">
+            Not enough collected history yet for a baseline — needs at least a few samples per 15-minute
+            time-of-day bucket from the last {BASELINE_LOOKBACK_DAYS} days.
+          </p>
+        )}
 
         {chartData.length === 0 ? (
           <EmptyState message="No performance data available for this instance." />

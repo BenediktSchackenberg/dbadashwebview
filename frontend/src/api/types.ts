@@ -103,6 +103,18 @@ export interface InstanceCpuRow extends ApiRow {
   TotalCPU?: number | null;
 }
 
+export interface InstanceCpuBaselinePoint extends ApiRow {
+  MinuteOfDay: number;
+  AvgCpu: number | null;
+  SampleCount: number;
+}
+
+export interface InstanceCpuBaselineResponse {
+  data: InstanceCpuBaselinePoint[];
+  bucketMinutes: number;
+  error?: string;
+}
+
 export interface InstanceWaitRow extends ApiRow {
   WaitTypeID?: number | null;
   WaitType?: string | null;
@@ -209,11 +221,36 @@ export interface InstanceHadrDatabaseRow extends ApiRow {
   DatabaseName?: string | null;
 }
 
+export interface InstanceMirroringRow extends ApiRow {
+  DatabaseID: number;
+  DatabaseName?: string | null;
+  mirroring_state_desc?: string | null;
+  mirroring_role_desc?: string | null;
+  mirroring_safety_level_desc?: string | null;
+  mirroring_partner_name?: string | null;
+  mirroring_partner_instance?: string | null;
+  mirroring_witness_name?: string | null;
+  mirroring_witness_state_desc?: string | null;
+  mirroring_redo_queue?: number | null;
+  mirroring_redo_queue_type?: string | null;
+  PartnerStateDesc?: string | null;
+}
+
+export interface InstanceLogShippingRow extends ApiRow {
+  DatabaseID: number;
+  DatabaseName?: string | null;
+  restore_date?: string | null;
+  backup_start_date?: string | null;
+  last_file?: string | null;
+}
+
 export interface InstanceHadrResponse {
   error?: string;
   ags: InstanceHadrGroupRow[];
   replicas: InstanceHadrReplicaRow[];
   databases: InstanceHadrDatabaseRow[];
+  mirroring: InstanceMirroringRow[];
+  logShipping: InstanceLogShippingRow[];
 }
 
 export interface HadrOverviewGroupRow extends ApiRow {
@@ -312,6 +349,144 @@ export interface EstateBackupRow extends ApiRow {
   fullBackupSize?: number | null;
   diffBackupDate?: string | null;
   logBackupDate?: string | null;
+}
+
+export interface CorruptionRow {
+  databaseId: number;
+  databaseName?: string | null;
+  instanceId: number;
+  instanceDisplayName?: string | null;
+  sourceTable: number;
+  source: string;
+  updateDate: string;
+  ackDate?: string | null;
+  isAcknowledged: boolean;
+  countOfRows?: number | null;
+}
+
+export interface ResourceGovernorConfig {
+  isEnabled: boolean;
+  classifierFunction?: string | null;
+  reconfigurationError: boolean;
+  reconfigurationPending: boolean;
+  maxOutstandingIoPerVolume: number;
+  validFrom: string;
+}
+
+export interface ResourceGovernorConfigHistoryEntry extends ResourceGovernorConfig {
+  validTo: string;
+}
+
+export interface ResourceGovernorPool {
+  poolId: number;
+  name: string;
+  minCpuPercent: number;
+  maxCpuPercent: number;
+  capCpuPercent?: number | null;
+  minMemoryPercent: number;
+  maxMemoryPercent: number;
+  periodCpuPercent?: number | null;
+  periodCpuSharePercent?: number | null;
+  cpuCapUtilizationPercent?: number | null;
+  cpuCapNearThresholdPercent?: number | null;
+  usedMemoryKb: number;
+  maxMemoryKb: number;
+  targetMemoryKb: number;
+  outOfMemoryCountTotal: number;
+  memGrantTimeoutCountTotal: number;
+  periodOutOfMemoryCountPerMin?: number | null;
+  periodMemGrantTimeoutCountPerMin?: number | null;
+  periodReadIoThrottledPerMin?: number | null;
+  periodWriteIoThrottledPerMin?: number | null;
+  snapshotDate: string;
+}
+
+export interface ResourceGovernorWorkloadGroup {
+  groupId: number;
+  name: string;
+  poolName: string;
+  importance: string;
+  requestMaxCpuTimeSec: number;
+  maxDop: number;
+  groupMaxRequests: number;
+  activeRequestCount: number;
+  queuedRequestCount: number;
+  blockedTaskCount: number;
+  periodCpuPercent?: number | null;
+  periodCpuSharePercent?: number | null;
+  periodRequestsPerMin?: number | null;
+  periodQueuedRequestCountPerMin?: number | null;
+  periodLockWaitsPerMin?: number | null;
+  periodLockWaitTimeMsPerSec?: number | null;
+  tempdbDataSpaceKb?: number | null;
+  peakTempdbDataSpaceKb?: number | null;
+  totalTempdbDataLimitViolationCount?: number | null;
+  periodTempdbDataLimitViolationsPerMin?: number | null;
+  snapshotDate: string;
+}
+
+export interface ResourceGovernorResponse {
+  config: ResourceGovernorConfig | null;
+  configHistory: ResourceGovernorConfigHistoryEntry[];
+  pools: ResourceGovernorPool[];
+  workloadGroups: ResourceGovernorWorkloadGroup[];
+  periodHours: number;
+  note?: string;
+}
+
+export interface FailedLoginEntry {
+  logDate: string;
+  text?: string | null;
+}
+
+export interface KilledSessionEntry {
+  sessionId: number;
+  killedBy?: string | null;
+  logDate: string;
+  status?: string | null;
+}
+
+export interface SysadminMemberEntry {
+  memberName: string;
+  memberType?: string | null;
+  isDisabled: boolean;
+  createDate?: string | null;
+  modifyDate?: string | null;
+}
+
+export interface InstanceSecurityResponse {
+  failedLogins: {
+    count: number;
+    firstLogDate?: string | null;
+    lastLogDate?: string | null;
+    recent: FailedLoginEntry[];
+  };
+  killedSessions: KilledSessionEntry[];
+  sysadminMembers: SysadminMemberEntry[];
+  note?: string;
+}
+
+export interface InstanceTableSizeRow extends ApiRow {
+  ObjectID: number;
+  DatabaseID: number;
+  DatabaseName?: string | null;
+  SchemaName?: string | null;
+  ObjectName?: string | null;
+  SnapshotDate: string;
+  Rows: number;
+  ReservedKb: number;
+  UsedKb: number;
+  DataKb: number;
+  IndexKb: number;
+  AvgRowsPerDay?: number | null;
+  AvgKbPerDay?: number | null;
+  CalcDays?: number | null;
+}
+
+export interface InstanceTableSizeResponse {
+  data: InstanceTableSizeRow[];
+  growthDays: number;
+  error?: string;
 }
 
 export interface EstateDriveRow extends ApiRow {
@@ -559,6 +734,11 @@ export interface MonitoringConfigurationChangeRow extends ApiRow {
   ChangeDate?: string | null;
 }
 
+export interface MonitoringTraceFlagRow extends ApiRow {
+  TraceFlag: number;
+  ValidFrom?: string | null;
+}
+
 export interface QueryAnalysisRow extends ApiRow {
   query_hash: string;
   TotalCPU?: number | null;
@@ -702,6 +882,21 @@ export interface QueryStoreRow extends ApiRow {
   avgDuration?: number | null;
   countExecutions?: number | null;
   avgLogicalIoReads?: number | null;
+}
+
+export interface PlanForcingLogRow extends ApiRow {
+  MessageGroupID: string;
+  InstanceID: number;
+  database_name: string;
+  log_date: string;
+  log_type: string;
+  user_name: string;
+  query_id: number;
+  plan_id: number;
+  object_name?: string | null;
+  query_sql_text?: string | null;
+  notes?: string | null;
+  status?: string | null;
 }
 
 export interface SchemaChangeRow extends ApiRow {

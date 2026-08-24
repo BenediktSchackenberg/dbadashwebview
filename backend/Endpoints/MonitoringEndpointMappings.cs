@@ -153,6 +153,33 @@ public static class MonitoringEndpointMappings
             return Results.Ok(new { data, note });
         }).RequireAuthorization();
 
+        endpoints.MapGet("/api/monitoring/trace-flags", async (int? instanceId, ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
+        {
+            object data = Array.Empty<object>();
+            var note = string.Empty;
+
+            if (!instanceId.HasValue)
+            {
+                return Results.Ok(new { data, note = "instanceId required" });
+            }
+
+            var deny = await user.EnsureInstanceAccessAsync(instanceId.Value, sql, cancellationToken);
+            if (deny is not null) return deny;
+
+            try
+            {
+                data = await sql.QueryAsync(
+                    "SELECT TraceFlag, ValidFrom FROM dbo.TraceFlags WHERE InstanceID = @instanceId ORDER BY TraceFlag",
+                    cancellationToken, ("@instanceId", instanceId.Value));
+            }
+            catch (Exception ex)
+            {
+                note = $"Trace flags unavailable: {ex.Message}";
+            }
+
+            return Results.Ok(new { data, note });
+        }).RequireAuthorization();
+
         endpoints.MapGet("/api/monitoring/patching", async (ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             try
