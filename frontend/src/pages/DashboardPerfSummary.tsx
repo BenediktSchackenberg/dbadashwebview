@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api/api';
-import type { DashboardPerformanceRow, ThresholdMap } from '../api/types';
+import type { DashboardPerformanceRow, ThresholdMap, ThresholdOverride } from '../api/types';
 import { RefreshCw, ArrowUpDown, ArrowUp, ArrowDown, Clock, Loader2 } from 'lucide-react';
 
 type SortDir = 'asc' | 'desc';
@@ -24,8 +24,44 @@ const columns = [
 
 type DashboardPerformanceColumnKey = typeof columns[number]['key'];
 
-function getCellClass(key: string, value: number, thresholds: ThresholdMap): string {
-  const threshold = thresholds[key];
+/**
+ * Most-specific-wins: an override scoped to this exact instance beats one scoped
+ * to a tag the instance carries, which beats the global default. When an
+ * instance carries multiple tags with conflicting overrides for the same
+ * metric, the most sensitive (lowest critical) one wins so nothing gets missed.
+ */
+function resolveThreshold(
+  metricKey: string,
+  instanceId: number,
+  thresholds: ThresholdMap,
+  overrides: ThresholdOverride[],
+  instanceTagIds: Map<number, number[]>
+): ThresholdMap[string] | null {
+  const instanceOverride = overrides.find(
+    (o) => o.scopeType === 'instance' && o.scopeId === instanceId && o.metricKey === metricKey
+  );
+  if (instanceOverride) return instanceOverride;
+
+  const tagIds = instanceTagIds.get(instanceId) || [];
+  const tagOverrides = overrides.filter(
+    (o) => o.scopeType === 'tag' && o.metricKey === metricKey && tagIds.includes(o.scopeId)
+  );
+  if (tagOverrides.length > 0) {
+    return tagOverrides.reduce((most, current) => (current.critical < most.critical ? current : most));
+  }
+
+  return thresholds[metricKey] || null;
+}
+
+function getCellClass(
+  key: string,
+  value: number,
+  instanceId: number,
+  thresholds: ThresholdMap,
+  overrides: ThresholdOverride[],
+  instanceTagIds: Map<number, number[]>
+): string {
+  const threshold = resolveThreshold(key, instanceId, thresholds, overrides, instanceTagIds);
   if (!threshold) return '';
   if (value >= threshold.critical) return 'bg-red-900/50 text-red-300';
   if (value >= threshold.warning) return 'bg-amber-900/50 text-amber-300';
@@ -42,6 +78,8 @@ function formatNum(value: unknown): string {
 export default function DashboardPerfSummary() {
   const [data, setData] = useState<DashboardPerformanceRow[]>([]);
   const [thresholds, setThresholds] = useState<ThresholdMap>({});
+  const [overrides, setOverrides] = useState<ThresholdOverride[]>([]);
+  const [instanceTagIds, setInstanceTagIds] = useState<Map<number, number[]>>(new Map());
   const [loading, setLoading] = useState(true);
   const [sortKey, setSortKey] = useState<DashboardPerformanceColumnKey>('maxCPU');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
@@ -51,9 +89,10 @@ export default function DashboardPerfSummary() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [perfRes, thresholdRes] = await Promise.all([
+      const [perfRes, thresholdRes, tagsRes] = await Promise.all([
         api.dashboardPerformanceSummary().catch(() => ({ data: [], note: '' })),
-        api.getThresholds().catch(() => ({ thresholds: {} })),
+        api.getThresholds().catch(() => ({ thresholds: {}, overrides: [] })),
+        api.getThresholdScopeTags().catch(() => ({ data: [] })),
       ]);
       const incoming = Array.isArray(perfRes.data) ? perfRes.data : [];
       setData((previous) => {
@@ -78,6 +117,16 @@ export default function DashboardPerfSummary() {
         return changed ? merged : previous;
       });
       setThresholds(thresholdRes.thresholds || {});
+      setOverrides(thresholdRes.overrides || []);
+      const tagMap = new Map<number, number[]>();
+      for (const tag of tagsRes.data || []) {
+        for (const instanceId of tag.instanceIds) {
+          const existing = tagMap.get(instanceId);
+          if (existing) existing.push(tag.tagId);
+          else tagMap.set(instanceId, [tag.tagId]);
+        }
+      }
+      setInstanceTagIds(tagMap);
       setLastRefresh(new Date());
     } finally {
       setLoading(false);
@@ -182,7 +231,7 @@ export default function DashboardPerfSummary() {
                     }
                     const value = Number(row[column.key]) || 0;
                     return (
-                      <td key={column.key} className={`py-2 px-3 text-right font-mono whitespace-nowrap ${getCellClass(column.key, value, thresholds)}`}>
+                      <td key={column.key} className={`py-2 px-3 text-right font-mono whitespace-nowrap ${getCellClass(column.key, value, row.instanceID, thresholds, overrides, instanceTagIds)}`}>
                         {formatNum(value)}
                       </td>
                     );

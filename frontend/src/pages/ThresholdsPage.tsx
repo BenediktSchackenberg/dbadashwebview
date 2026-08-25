@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api/api';
-import type { ThresholdMap } from '../api/api';
-import { Settings, Save } from 'lucide-react';
+import type { InstanceListRow, ThresholdMap, ThresholdOverride, ThresholdScopeTagOption, ThresholdScopeType } from '../api/types';
+import { Settings, Save, Plus, Trash2 } from 'lucide-react';
 
 const metrics = [
   { key: 'avgCPU', label: 'Avg CPU %' },
@@ -18,16 +18,55 @@ const metrics = [
   { key: 'iOPs', label: 'IOPs' },
 ];
 
+function metricLabel(key: string): string {
+  return metrics.find((m) => m.key === key)?.label || key;
+}
+
 export default function ThresholdsPage() {
   const [thresholds, setThresholds] = useState<ThresholdMap>({});
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
 
+  const [overrides, setOverrides] = useState<ThresholdOverride[]>([]);
+  const [instances, setInstances] = useState<InstanceListRow[]>([]);
+  const [tags, setTags] = useState<ThresholdScopeTagOption[]>([]);
+  const [savingOverride, setSavingOverride] = useState(false);
+
+  const [newScopeType, setNewScopeType] = useState<ThresholdScopeType>('instance');
+  const [newScopeId, setNewScopeId] = useState('');
+  const [newMetric, setNewMetric] = useState(metrics[0].key);
+  const [newWarning, setNewWarning] = useState('');
+  const [newCritical, setNewCritical] = useState('');
+
   useEffect(() => {
     api.getThresholds().then(res => {
       if (res.thresholds) setThresholds(res.thresholds);
+      if (Array.isArray(res.overrides)) setOverrides(res.overrides);
     }).catch(() => {});
+    api.instances().then(res => setInstances(Array.isArray(res) ? res : [])).catch(() => {});
+    api.getThresholdScopeTags().then(res => setTags(Array.isArray(res.data) ? res.data : [])).catch(() => {});
   }, []);
+
+  const instanceName = useMemo(() => {
+    const byId = new Map(instances.map(i => [i.InstanceID, i.InstanceDisplayName || i.Instance || `Instance #${i.InstanceID}`]));
+    return (id: number) => byId.get(id) || `Instance #${id}`;
+  }, [instances]);
+
+  const tagName = useMemo(() => {
+    const byId = new Map(tags.map(t => [t.tagId, t.tagValue ? `${t.tagName}: ${t.tagValue}` : t.tagName]));
+    return (id: number) => byId.get(id) || `Tag #${id}`;
+  }, [tags]);
+
+  const scopeOptions = newScopeType === 'instance'
+    ? instances.map(i => ({ value: i.InstanceID, label: i.InstanceDisplayName || i.Instance || `Instance #${i.InstanceID}` }))
+    : tags.map(t => ({ value: t.tagId, label: (t.tagValue ? `${t.tagName}: ${t.tagValue}` : t.tagName) + (t.isSystem ? ' (system)' : '') }));
+
+  const sortedOverrides = [...overrides].sort((a, b) => {
+    if (a.scopeType !== b.scopeType) return a.scopeType.localeCompare(b.scopeType);
+    const nameA = a.scopeType === 'instance' ? instanceName(a.scopeId) : tagName(a.scopeId);
+    const nameB = b.scopeType === 'instance' ? instanceName(b.scopeId) : tagName(b.scopeId);
+    return nameA.localeCompare(nameB) || metricLabel(a.metricKey).localeCompare(metricLabel(b.metricKey));
+  });
 
   const update = (key: string, field: 'warning' | 'critical', value: string) => {
     setThresholds(prev => {
@@ -53,6 +92,54 @@ export default function ThresholdsPage() {
       setSaving(false);
       setTimeout(() => setToast(null), 3000);
     }
+  };
+
+  const persistOverrides = async (updated: ThresholdOverride[]) => {
+    setSavingOverride(true);
+    try {
+      await api.saveThresholdOverrides(updated);
+      setOverrides(updated);
+      return true;
+    } catch (e) {
+      setToast({ msg: `Error: ${e instanceof Error ? e.message : 'Unknown error'}`, ok: false });
+      setTimeout(() => setToast(null), 3000);
+      return false;
+    } finally {
+      setSavingOverride(false);
+    }
+  };
+
+  const handleAddOverride = async () => {
+    if (newScopeId === '') return;
+    const scopeId = Number(newScopeId);
+    if (!Number.isFinite(scopeId) || scopeId <= 0) return;
+
+    const warning = newWarning === '' ? 0 : parseFloat(newWarning);
+    const critical = newCritical === '' ? 0 : parseFloat(newCritical);
+    if ((isNaN(warning) || warning === 0) && (isNaN(critical) || critical === 0)) return;
+
+    const next: ThresholdOverride = {
+      metricKey: newMetric,
+      scopeType: newScopeType,
+      scopeId,
+      warning: isNaN(warning) ? 0 : warning,
+      critical: isNaN(critical) ? 0 : critical,
+    };
+    const withoutDuplicate = overrides.filter(
+      o => !(o.scopeType === next.scopeType && o.scopeId === next.scopeId && o.metricKey === next.metricKey)
+    );
+    const ok = await persistOverrides([...withoutDuplicate, next]);
+    if (ok) {
+      setNewScopeId('');
+      setNewWarning('');
+      setNewCritical('');
+      setToast({ msg: 'Override saved', ok: true });
+      setTimeout(() => setToast(null), 3000);
+    }
+  };
+
+  const handleDeleteOverride = (target: ThresholdOverride) => {
+    persistOverrides(overrides.filter(o => o !== target));
   };
 
   return (
@@ -115,6 +202,94 @@ export default function ThresholdsPage() {
             {saving ? 'Saving...' : 'Save Thresholds'}
           </button>
         </div>
+      </div>
+
+      <div className="glass rounded-xl p-6 space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold text-white">Per-Instance / Per-Tag Overrides</h2>
+          <p className="text-sm text-gray-400 mt-1">
+            Override the global default above for a specific instance, or for every instance carrying a tag.
+            An instance-specific override always wins; a tag-specific override wins over the global default.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-[110px_1fr_1fr_110px_110px_auto] gap-3 items-center">
+          <select
+            value={newScopeType}
+            onChange={e => { setNewScopeType(e.target.value as ThresholdScopeType); setNewScopeId(''); }}
+            className="bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500/50"
+          >
+            <option value="instance">Instance</option>
+            <option value="tag">Tag</option>
+          </select>
+          <select
+            value={newScopeId}
+            onChange={e => setNewScopeId(e.target.value)}
+            className="bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500/50"
+          >
+            <option value="">
+              {newScopeType === 'instance' ? 'Select instance…' : 'Select tag…'}
+            </option>
+            {scopeOptions.map(opt => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+          <select
+            value={newMetric}
+            onChange={e => setNewMetric(e.target.value)}
+            className="bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500/50"
+          >
+            {metrics.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
+          </select>
+          <input
+            type="number"
+            step="any"
+            value={newWarning}
+            onChange={e => setNewWarning(e.target.value)}
+            placeholder="Warning"
+            className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/50"
+          />
+          <input
+            type="number"
+            step="any"
+            value={newCritical}
+            onChange={e => setNewCritical(e.target.value)}
+            placeholder="Critical"
+            className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-red-500/50"
+          />
+          <button
+            onClick={handleAddOverride}
+            disabled={savingOverride || newScopeId === ''}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/20 text-blue-400 rounded-lg text-sm hover:bg-blue-500/30 disabled:opacity-50 transition-colors"
+          >
+            <Plus className="w-4 h-4" /> Add
+          </button>
+        </div>
+
+        {sortedOverrides.length === 0 ? (
+          <p className="text-sm text-gray-500 py-2">No overrides configured.</p>
+        ) : (
+          <div className="divide-y divide-white/5">
+            {sortedOverrides.map((o, index) => (
+              <div key={`${o.scopeType}-${o.scopeId}-${o.metricKey}-${index}`} className="grid grid-cols-[110px_1fr_1fr_110px_110px_auto] gap-3 items-center py-2">
+                <span className="text-xs uppercase tracking-wider text-gray-400">{o.scopeType}</span>
+                <span className="text-sm text-white truncate">
+                  {o.scopeType === 'instance' ? instanceName(o.scopeId) : tagName(o.scopeId)}
+                </span>
+                <span className="text-sm text-gray-300">{metricLabel(o.metricKey)}</span>
+                <span className="text-sm text-amber-300">{o.warning || '--'}</span>
+                <span className="text-sm text-red-300">{o.critical || '--'}</span>
+                <button
+                  onClick={() => handleDeleteOverride(o)}
+                  disabled={savingOverride}
+                  className="p-1.5 rounded hover:bg-red-500/10 text-gray-400 hover:text-red-400 disabled:opacity-50 justify-self-end"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
