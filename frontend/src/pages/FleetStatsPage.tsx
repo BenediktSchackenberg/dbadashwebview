@@ -18,23 +18,13 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { api } from '../api/api';
 import type { FleetStatsRow } from '../api/types';
 import TimeRangeSelector, { hoursLabel } from '../components/TimeRangeSelector';
+import { SQL_SERVER_VERSION_COLORS as VERSION_COLORS, sqlServerVersionYear } from '../utils/sqlServerVersions';
 
 const tooltipStyle = {
   backgroundColor: '#1e293b',
   border: '1px solid rgba(255,255,255,0.1)',
   borderRadius: '8px',
   color: '#fff',
-};
-
-const VERSION_COLORS: Record<string, string> = {
-  '2022': '#3b82f6',
-  '2019': '#8b5cf6',
-  '2017': '#10b981',
-  '2016': '#f59e0b',
-  '2014': '#ef4444',
-  '2012': '#f97316',
-  '2008': '#ec4899',
-  Other: '#64748b',
 };
 
 type SortKey =
@@ -99,19 +89,6 @@ interface BucketDefinition {
   max: number;
 }
 
-function parseVersion(productVersion: string | null | undefined): string {
-  if (!productVersion) return 'Other';
-  const major = parseInt(productVersion, 10);
-  if (major >= 16) return '2022';
-  if (major >= 15) return '2019';
-  if (major >= 14) return '2017';
-  if (major >= 13) return '2016';
-  if (major >= 12) return '2014';
-  if (major >= 11) return '2012';
-  if (major >= 10) return '2008';
-  return 'Other';
-}
-
 function formatBytes(bytes: number): string {
   if (!bytes || bytes <= 0) return '-';
   if (bytes >= 1099511627776) return `${(bytes / 1099511627776).toFixed(1)} TB`;
@@ -166,7 +143,7 @@ export default function FleetStatsPage() {
         instanceName: row.InstanceName || `Instance ${row.InstanceID}`,
         editionName: row.Edition || 'Unknown',
         productVersionText: row.ProductVersion || '?',
-        sqlVersion: parseVersion(row.ProductVersion),
+        sqlVersion: sqlServerVersionYear(row.ProductVersion),
         cpuCount: row.cpu_count ?? 0,
         ramGb: row.physical_memory_kb ? Math.round(row.physical_memory_kb / 1048576) : 0,
         avgCpu24h: row.AvgCPU24h ?? 0,

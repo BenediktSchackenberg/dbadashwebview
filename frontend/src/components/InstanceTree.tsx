@@ -8,12 +8,7 @@ import { api } from '../api/api';
 import { getAuthSession } from '../auth/session';
 import NavMenu from './NavMenu';
 import type { TreeInstanceNode } from '../api/types';
-
-const versionMap: Record<number, string> = {
-  17: 'SQL Server 2025', 16: 'SQL Server 2022', 15: 'SQL Server 2019',
-  14: 'SQL Server 2017', 13: 'SQL Server 2016', 12: 'SQL Server 2014',
-  11: 'SQL Server 2012', 10: 'SQL Server 2008',
-};
+import { sqlServerVersionLabel } from '../utils/sqlServerVersions';
 
 const instanceCategories = [
   { key: 'configuration', icon: Settings, label: 'Configuration', path: (id: number) => `/instances/${id}/configuration` },
@@ -77,14 +72,14 @@ export default function InstanceTree({ onLogout, onNavigate, variant = 'sidebar'
     const groups = new Map<string, TreeInstanceNode[]>();
     filtered.forEach(inst => {
       const major = inst.productMajorVersion || 0;
-      const label = versionMap[major] || `SQL Server (v${major || '?'})`;
+      const label = sqlServerVersionLabel(major);
       if (!groups.has(label)) groups.set(label, []);
       groups.get(label)!.push(inst);
     });
     // Sort by version descending
     return [...groups.entries()].sort((a, b) => {
-      const va = filtered.find(i => (versionMap[i.productMajorVersion || 0] || '') === a[0])?.productMajorVersion || 0;
-      const vb = filtered.find(i => (versionMap[i.productMajorVersion || 0] || '') === b[0])?.productMajorVersion || 0;
+      const va = filtered.find(i => sqlServerVersionLabel(i.productMajorVersion) === a[0])?.productMajorVersion || 0;
+      const vb = filtered.find(i => sqlServerVersionLabel(i.productMajorVersion) === b[0])?.productMajorVersion || 0;
       return vb - va;
     });
   }, [filtered]);

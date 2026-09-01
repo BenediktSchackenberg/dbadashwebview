@@ -5,23 +5,13 @@ import { TrendingDown, Info, Server, Cpu, MemoryStick, Search, X, Filter } from 
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { api } from '../api/api';
 import type { UnderutilizedReportRow } from '../api/types';
+import { SQL_SERVER_VERSION_COLORS as VERSION_COLORS, sqlServerVersionYear } from '../utils/sqlServerVersions';
 
 const tooltipStyle = {
   backgroundColor: '#1e293b',
   border: '1px solid rgba(255,255,255,0.1)',
   borderRadius: '8px',
   color: '#fff',
-};
-
-const VERSION_COLORS: Record<string, string> = {
-  '2022': '#3b82f6',
-  '2019': '#8b5cf6',
-  '2017': '#10b981',
-  '2016': '#f59e0b',
-  '2014': '#ef4444',
-  '2012': '#f97316',
-  '2008': '#ec4899',
-  Other: '#64748b',
 };
 
 type SortKey = 'instanceName' | 'version' | 'edition' | 'cpuCount' | 'ramGb' | 'avgCpu' | 'maxCpu';
@@ -55,19 +45,6 @@ interface ChartRow {
   fill: string;
 }
 
-function parseVersion(productVersion: string | null | undefined): string {
-  if (!productVersion) return 'Other';
-  const major = parseInt(productVersion, 10);
-  if (major >= 16) return '2022';
-  if (major >= 15) return '2019';
-  if (major >= 14) return '2017';
-  if (major >= 13) return '2016';
-  if (major >= 12) return '2014';
-  if (major >= 11) return '2012';
-  if (major >= 10) return '2008';
-  return 'Other';
-}
-
 export default function UnderutilizedPage() {
   const [data, setData] = useState<UnderutilizedReportRow[]>([]);
   const [totalInstances, setTotalInstances] = useState(0);
@@ -94,7 +71,7 @@ export default function UnderutilizedPage() {
       instanceName: row.InstanceName || `Instance ${row.InstanceID}`,
       editionName: row.Edition || 'Unknown',
       productVersionText: row.ProductVersion || '?',
-      sqlVersion: parseVersion(row.ProductVersion),
+      sqlVersion: sqlServerVersionYear(row.ProductVersion),
       cpuCount: row.cpu_count ?? 0,
       ramGb: row.physical_memory_kb ? Math.round(row.physical_memory_kb / 1048576) : 0,
       avgCpu: row.AvgCPU ?? 0,

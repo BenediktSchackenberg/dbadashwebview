@@ -3,9 +3,7 @@ import { Shield, Server } from 'lucide-react';
 import { api } from '../api/api';
 import type { PatchingRow } from '../api/types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-
-const VERSION_COLORS: Record<string, string> = { '16': '#10b981', '15': '#3b82f6', '14': '#f59e0b', '13': '#ef4444', '12': '#8b5cf6' };
-const getVersionLabel = (v: number) => ({ 16: 'SQL 2022', 15: 'SQL 2019', 14: 'SQL 2017', 13: 'SQL 2016', 12: 'SQL 2014', 11: 'SQL 2012' }[v] || `SQL v${v}`);
+import { sqlServerShortVersionLabel, sqlServerVersionColor } from '../utils/sqlServerVersions';
 
 export default function PatchingPage() {
   const [data, setData] = useState<PatchingRow[]>([]);
@@ -18,7 +16,7 @@ export default function PatchingPage() {
     (acc[version] = acc[version] || []).push(d);
     return acc;
   }, {});
-  const pieData = Object.entries(versionGroups).map(([v, items]) => ({ name: getVersionLabel(Number(v)), value: items.length, version: v }));
+  const pieData = Object.entries(versionGroups).map(([v, items]) => ({ name: sqlServerShortVersionLabel(Number(v)), value: items.length, version: v }));
 
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Loading...</div>;
 
@@ -30,7 +28,7 @@ export default function PatchingPage() {
           <h3 className="text-sm font-semibold text-gray-400 mb-4">Version Distribution</h3>
           <ResponsiveContainer width="100%" height={250}>
             <PieChart><Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={90} dataKey="value" label={({ name, value }) => `${name} (${value})`}>
-              {pieData.map((e, i) => <Cell key={i} fill={VERSION_COLORS[e.version] || '#6b7280'} />)}
+              {pieData.map((e, i) => <Cell key={i} fill={sqlServerVersionColor(Number(e.version))} />)}
             </Pie><Tooltip /></PieChart>
           </ResponsiveContainer>
         </div>
@@ -44,7 +42,7 @@ export default function PatchingPage() {
               <tbody>{data.map((d, i) => (
                 <tr key={i} className="border-b border-white/5 hover:bg-slate-800/50">
                   <td className="py-2 text-white flex items-center gap-2"><Server className="w-4 h-4 text-gray-500" />{d.instanceName}</td>
-                  <td className="py-2"><span className="px-2 py-0.5 rounded text-xs" style={{ backgroundColor: (VERSION_COLORS[String(d.productMajorVersion ?? 0)] || '#6b7280') + '20', color: VERSION_COLORS[String(d.productMajorVersion ?? 0)] || '#6b7280' }}>{getVersionLabel(d.productMajorVersion ?? 0)}</span></td>
+                  <td className="py-2"><span className="px-2 py-0.5 rounded text-xs" style={{ backgroundColor: `${sqlServerVersionColor(d.productMajorVersion)}20`, color: sqlServerVersionColor(d.productMajorVersion) }}>{sqlServerShortVersionLabel(d.productMajorVersion)}</span></td>
                   <td className="py-2 text-gray-400">{d.edition}</td>
                   <td className="py-2 text-gray-500 font-mono text-xs">{d.productVersion}</td>
                 </tr>

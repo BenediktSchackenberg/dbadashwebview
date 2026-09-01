@@ -3,25 +3,11 @@ import { motion } from 'framer-motion';
 import { FileSpreadsheet, Server, Cpu, MemoryStick, Layers, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { api } from '../api/api';
-
-const versionMap: Record<number, string> = {
-  17: 'SQL Server 2025', 16: 'SQL Server 2022', 15: 'SQL Server 2019',
-  14: 'SQL Server 2017', 13: 'SQL Server 2016', 12: 'SQL Server 2014',
-  11: 'SQL Server 2012', 10: 'SQL Server 2008',
-};
+import { SQL_SERVER_SUPPORT_TIMELINE, sqlServerVersionLabel } from '../utils/sqlServerVersions';
 
 const COLORS = ['#3b82f6', '#60a5fa', '#93c5fd', '#2563eb', '#1d4ed8', '#8b5cf6', '#10b981', '#6366f1'];
 
 const tooltipStyle = { backgroundColor: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff' };
-
-const supportTimeline = [
-  { version: 'SQL Server 2012', major: 11, endDate: new Date('2022-07-12'), label: 'Jul 2022' },
-  { version: 'SQL Server 2014', major: 12, endDate: new Date('2024-07-09'), label: 'Jul 2024' },
-  { version: 'SQL Server 2016', major: 13, endDate: new Date('2026-07-14'), label: 'Jul 2026' },
-  { version: 'SQL Server 2017', major: 14, endDate: new Date('2027-10-12'), label: 'Oct 2027' },
-  { version: 'SQL Server 2019', major: 15, endDate: new Date('2030-01-08'), label: 'Jan 2030' },
-  { version: 'SQL Server 2022', major: 16, endDate: new Date('2034-01-10'), label: 'Jan 2034' },
-];
 
 type SortKey = 'InstanceName' | 'Edition' | 'ProductVersion' | 'cpu_count' | 'socket_count' | 'ramGb' | 'sqlserver_start_time';
 
@@ -42,7 +28,7 @@ export default function LicenseOverviewPage() {
   const versionDist = useMemo(() => {
     const map = new Map<string, number>();
     data.forEach(r => {
-      const name = versionMap[r.ProductMajorVersion] || `v${r.ProductMajorVersion || '?'}`;
+      const name = sqlServerVersionLabel(r.ProductMajorVersion);
       map.set(name, (map.get(name) || 0) + 1);
     });
     return [...map.entries()].map(([name, value]) => ({ name, value }));
@@ -57,7 +43,7 @@ export default function LicenseOverviewPage() {
   const supportInfo = useMemo(() => {
     const now = new Date();
     const oneYear = new Date(now.getTime() + 365 * 86400000);
-    return supportTimeline.map(s => {
+    return SQL_SERVER_SUPPORT_TIMELINE.map(s => {
       const count = data.filter(r => r.ProductMajorVersion === s.major).length;
       const expired = s.endDate < now;
       const nearExpiry = !expired && s.endDate < oneYear;

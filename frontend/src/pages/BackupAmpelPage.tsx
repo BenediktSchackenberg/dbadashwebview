@@ -5,6 +5,7 @@ import { Shield, ShieldAlert, ShieldCheck, Clock, Database, HardDrive, Search, X
 import { PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { api } from '../api/api';
 import type { BackupAmpelDatabaseRow, BackupAmpelInstanceRow } from '../api/types';
+import { sqlServerVersionYear } from '../utils/sqlServerVersions';
 
 const tooltipStyle = {
   backgroundColor: '#1e293b',
@@ -108,17 +109,6 @@ function formatAge(hours: number | null): string {
   if (hours < 1) return `${Math.round(hours * 60)} min`;
   if (hours < 48) return `${hours.toFixed(1)}h`;
   return `${Math.round(hours / 24)}d`;
-}
-
-function parseVersion(productVersion: string | null): string {
-  if (!productVersion) return '?';
-  const major = parseInt(productVersion, 10);
-  if (major >= 16) return '2022';
-  if (major >= 15) return '2019';
-  if (major >= 14) return '2017';
-  if (major >= 13) return '2016';
-  if (major >= 12) return '2014';
-  return productVersion.split('.')[0];
 }
 
 function StatusBadge({ status, size = 'md' }: { status: AmpelStatus; size?: 'sm' | 'md' }) {
@@ -499,7 +489,7 @@ export default function BackupAmpelPage() {
                     </div>
                   </td>
                   <td className="px-3 py-2.5 text-xs text-gray-400">
-                    {row.editionText ? `${row.editionText.split(' ')[0]} ${parseVersion(row.productVersionText)}` : '-'}
+                    {row.editionText ? `${row.editionText.split(' ')[0]} ${sqlServerVersionYear(row.productVersionText)}` : '-'}
                   </td>
                   <td className="px-3 py-2.5 text-sm text-gray-300 text-center">{row.databaseCountNumber}</td>
                   <td className={`px-3 py-2.5 text-sm ${row.fullAgeHours === null ? 'text-red-400' : row.fullAgeHours > 48 ? 'text-red-400' : row.fullAgeHours > 24 ? 'text-yellow-400' : 'text-green-400'}`}>
