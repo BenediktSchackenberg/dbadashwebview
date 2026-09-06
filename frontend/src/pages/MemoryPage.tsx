@@ -6,13 +6,18 @@ import { motion } from 'framer-motion';
 import { HardDrive } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area, CartesianGrid } from 'recharts';
 import TimeRangeSelector from '../components/TimeRangeSelector';
+import {
+  aggregateLatestMemoryClerks,
+  buildPageLifeExpectancySeries,
+  summarizeMemoryCounters,
+} from '../utils/memoryMetrics';
 
 export default function MemoryPage() {
   const [clerks, setClerks] = useState<MemoryClerkRow[]>([]);
   const [counters, setCounters] = useState<MemoryCounterRow[]>([]);
   const [clerkNote, setClerkNote] = useState('');
   const [counterNote, setCounterNote] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [instances, setInstances] = useState<InstanceListRow[]>([]);
   const [selectedInstance, setSelectedInstance] = useState<number | undefined>();
   const [hours, setHours] = useState(24);
@@ -22,8 +27,6 @@ export default function MemoryPage() {
   }, []);
 
   useEffect(() => {
-    if (!selectedInstance) { setLoading(false); return; }
-    setLoading(true);
     api.performanceMemory(selectedInstance, hours)
       .then(r => {
         setClerks(Array.isArray(r.clerks) ? r.clerks : []);
@@ -31,39 +34,27 @@ export default function MemoryPage() {
         setClerkNote(r.clerkNote || '');
         setCounterNote(r.counterNote || '');
       })
-      .catch(() => {})
+      .catch(() => {
+        setClerks([]);
+        setCounters([]);
+        setClerkNote('');
+        setCounterNote('Unable to load memory data.');
+      })
       .finally(() => setLoading(false));
   }, [selectedInstance, hours]);
 
   if (loading) return <LoadingSpinner />;
 
-  // Aggregate top clerks by name
-  const clerkAgg = new Map<string, number>();
-  clerks.forEach(c => {
-    const name = c.clerk_name || c.clerk_type || 'Unknown';
-    clerkAgg.set(name, (clerkAgg.get(name) || 0) + (c.pages_kb || 0));
-  });
-  const topClerks = [...clerkAgg.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 15)
-    .map(([name, kb]) => ({ name: name.length > 30 ? name.slice(0, 30) + '...' : name, sizeMB: Math.round(kb / 1024) }));
-
-  // Key memory counters
-  const getCounter = (name: string) => {
-    const c = counters.find(c => c.counter_name?.includes(name));
-    return c ? c.cntr_value : null;
-  };
-  const ple = getCounter('Page life expectancy');
-  const bufferPool = getCounter('Database Cache Memory');
-  const grantsP = getCounter('Memory Grants Pending');
+  const topClerks = aggregateLatestMemoryClerks(clerks);
+  const {
+    pageLifeExpectancy: ple,
+    bufferPoolKb: bufferPool,
+    memoryGrantsPending: grantsP,
+  } = summarizeMemoryCounters(counters);
 
   // Memory counters over time for area chart
-  const pleOverTime = counters
-    .filter((counter): counter is MemoryCounterRow & { SnapshotDate: string } =>
-      Boolean(counter.counter_name?.includes('Page life expectancy') && counter.SnapshotDate)
-    )
-    .sort((a, b) => new Date(a.SnapshotDate).getTime() - new Date(b.SnapshotDate).getTime())
-    .map(c => ({ time: new Date(c.SnapshotDate).toLocaleTimeString(), ple: c.cntr_value }));
+  const pleOverTime = buildPageLifeExpectancySeries(counters, selectedInstance == null)
+    .map(point => ({ time: new Date(point.timestamp).toLocaleTimeString(), ple: point.ple }));
 
   const notes = [clerkNote, counterNote].filter(Boolean);
 
@@ -75,14 +66,20 @@ export default function MemoryPage() {
           <h1 className="text-2xl font-bold text-white">Memory</h1>
         </div>
         <div className="flex items-center gap-3">
-          <select value={selectedInstance ?? ''} onChange={e => setSelectedInstance(e.target.value ? Number(e.target.value) : undefined)}
+          <select value={selectedInstance ?? ''} onChange={e => {
+            setLoading(true);
+            setSelectedInstance(e.target.value ? Number(e.target.value) : undefined);
+          }}
             className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm text-gray-300 focus:outline-none">
             <option value="">All Instances</option>
             {instances.map((inst) => (
               <option key={inst.InstanceID} value={inst.InstanceID}>{inst.InstanceDisplayName || inst.Instance || inst.InstanceID}</option>
             ))}
           </select>
-          <TimeRangeSelector value={hours} onChange={setHours} />
+          <TimeRangeSelector value={hours} onChange={value => {
+            setLoading(true);
+            setHours(value);
+          }} />
         </div>
       </div>
 
@@ -95,9 +92,9 @@ export default function MemoryPage() {
       {/* Key Metrics */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
-          { label: 'Page Life Expectancy', value: ple != null ? `${ple}s` : 'N/A', color: 'text-blue-400' },
-          { label: 'Buffer Pool', value: bufferPool != null ? `${Math.round(bufferPool / 1024)} MB` : 'N/A', color: 'text-green-400' },
-          { label: 'Memory Grants Pending', value: grantsP != null ? grantsP : 'N/A', color: grantsP && grantsP > 0 ? 'text-red-400' : 'text-gray-400' },
+          { label: selectedInstance == null ? 'Lowest Page Life Expectancy' : 'Page Life Expectancy', value: ple != null ? `${ple}s` : 'N/A', color: 'text-blue-400' },
+          { label: selectedInstance == null ? 'Total Buffer Pool' : 'Buffer Pool', value: bufferPool != null ? `${Math.round(bufferPool / 1024)} MB` : 'N/A', color: 'text-green-400' },
+          { label: selectedInstance == null ? 'Total Memory Grants Pending' : 'Memory Grants Pending', value: grantsP != null ? grantsP : 'N/A', color: grantsP != null && grantsP > 0 ? 'text-red-400' : 'text-gray-400' },
         ].map(m => (
           <motion.div key={m.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="glass-ultra rounded-2xl p-5">
             <div className="text-xs text-gray-500 mb-1">{m.label}</div>

@@ -113,10 +113,13 @@ public sealed class RecordingSqlDataService(IConfiguration configuration) : SqlD
 
     public string LastSql { get; private set; } = string.Empty;
 
+    public List<string> SqlHistory { get; } = [];
+
     public void Reset()
     {
         QueryCount = 0;
         LastSql = string.Empty;
+        SqlHistory.Clear();
     }
 
     public override Task<List<Dictionary<string, object?>>> QueryAsync(
@@ -126,6 +129,7 @@ public sealed class RecordingSqlDataService(IConfiguration configuration) : SqlD
     {
         QueryCount++;
         LastSql = sql;
+        SqlHistory.Add(sql);
         return Task.FromResult(new List<Dictionary<string, object?>>());
     }
 }

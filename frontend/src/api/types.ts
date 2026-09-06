@@ -155,7 +155,16 @@ export interface AvailabilityGroupSummaryRow extends ApiRow {
   group_id: string;
   InstanceID: number;
   name?: string | null;
+  ag_name?: string | null;
   InstanceDisplayName?: string | null;
+  secondary_count?: number | null;
+  synchronization_health?: number | null;
+  is_failover_ready?: boolean | number | null;
+  // Compatibility with older/custom API projections.
+  AGName?: string | null;
+  SecondariesCount?: number | null;
+  SyncHealth?: string | null;
+  FailoverReady?: boolean | number | null;
 }
 
 export interface InstanceHadrGroupRow extends ApiRow {

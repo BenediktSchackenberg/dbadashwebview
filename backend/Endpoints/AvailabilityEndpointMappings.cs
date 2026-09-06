@@ -14,10 +14,113 @@ public static class AvailabilityEndpointMappings
             {
                 var (scopeSnippet, scopeParameters) = user.ScopedInstanceFilter("ag.InstanceID");
                 var data = await sql.QueryAsync($"""
-                    SELECT ag.*, i.InstanceDisplayName
-                    FROM dbo.AvailabilityGroups ag
-                    JOIN dbo.Instances i ON ag.InstanceID = i.InstanceID
-                    WHERE 1=1 {scopeSnippet}
+                    WITH ScopedGroups AS (
+                        SELECT ag.InstanceID,
+                               ag.group_id,
+                               ag.name,
+                               COALESCE(i.InstanceDisplayName, i.Instance) AS InstanceDisplayName
+                        FROM dbo.AvailabilityGroups ag
+                        JOIN dbo.Instances i ON ag.InstanceID = i.InstanceID
+                        WHERE i.IsActive = 1 {scopeSnippet}
+                    ),
+                    GroupCandidates AS (
+                        SELECT sg.*,
+                               CASE WHEN EXISTS (
+                                   SELECT 1
+                                   FROM dbo.DatabasesHADR dh
+                                   WHERE dh.InstanceID = sg.InstanceID
+                                     AND dh.group_id = sg.group_id
+                                     AND dh.is_local = 1
+                                     AND dh.is_primary_replica = 1
+                               ) THEN 1 ELSE 0 END AS HasLocalPrimary,
+                               (
+                                   SELECT COUNT(DISTINCT ar.replica_id)
+                                   FROM dbo.AvailabilityReplicas ar
+                                   WHERE ar.InstanceID = sg.InstanceID
+                                     AND ar.group_id = sg.group_id
+                               ) AS ReplicaCount
+                        FROM ScopedGroups sg
+                    ),
+                    SelectedGroups AS (
+                        SELECT gc.*,
+                               ROW_NUMBER() OVER (
+                                   PARTITION BY gc.group_id
+                                   ORDER BY gc.HasLocalPrimary DESC, gc.ReplicaCount DESC, gc.InstanceID
+                               ) AS source_rank
+                        FROM GroupCandidates gc
+                    )
+                    SELECT sg.group_id,
+                           sg.InstanceID,
+                           sg.name,
+                           COALESCE(primaryReplica.PrimaryName, sg.InstanceDisplayName) AS InstanceDisplayName,
+                           COALESCE(replicaStats.SecondaryCount, 0) AS secondary_count,
+                           COALESCE(databaseStats.SynchronizationHealth, 0) AS synchronization_health,
+                           CAST(CASE WHEN readyReplica.replica_id IS NULL THEN 0 ELSE 1 END AS bit) AS is_failover_ready
+                    FROM SelectedGroups sg
+                    OUTER APPLY (
+                        SELECT TOP (1)
+                               dh.replica_id,
+                               COALESCE(ar.replica_server_name,
+                                        CASE WHEN dh.is_local = 1 THEN sg.InstanceDisplayName END) AS PrimaryName
+                        FROM dbo.DatabasesHADR dh
+                        LEFT JOIN dbo.AvailabilityReplicas ar
+                          ON ar.InstanceID = dh.InstanceID
+                         AND ar.group_id = dh.group_id
+                         AND ar.replica_id = dh.replica_id
+                        WHERE dh.InstanceID = sg.InstanceID
+                          AND dh.group_id = sg.group_id
+                          AND dh.is_primary_replica = 1
+                        ORDER BY CASE WHEN dh.is_local = 1 THEN 0 ELSE 1 END,
+                                 ar.replica_server_name
+                    ) primaryReplica
+                    OUTER APPLY (
+                        SELECT COUNT(DISTINCT ar.replica_id) AS SecondaryCount
+                        FROM dbo.AvailabilityReplicas ar
+                        WHERE ar.InstanceID = sg.InstanceID
+                          AND ar.group_id = sg.group_id
+                          AND (primaryReplica.replica_id IS NULL OR ar.replica_id <> primaryReplica.replica_id)
+                    ) replicaStats
+                    OUTER APPLY (
+                        SELECT MIN(CASE
+                                   WHEN COALESCE(dh.is_suspended, 0) = 1 THEN 0
+                                   ELSE CONVERT(int, COALESCE(dh.synchronization_health, 0))
+                               END) AS SynchronizationHealth
+                        FROM dbo.DatabasesHADR dh
+                        JOIN dbo.Databases d ON d.DatabaseID = dh.DatabaseID AND d.IsActive = 1
+                        WHERE dh.InstanceID = sg.InstanceID
+                          AND dh.group_id = sg.group_id
+                    ) databaseStats
+                    OUTER APPLY (
+                        SELECT TOP (1) ar.replica_id
+                        FROM dbo.AvailabilityReplicas ar
+                        WHERE ar.InstanceID = sg.InstanceID
+                          AND ar.group_id = sg.group_id
+                          AND ar.replica_id <> primaryReplica.replica_id
+                          AND ar.availability_mode = 1
+                          AND EXISTS (
+                              SELECT 1
+                              FROM dbo.DatabasesHADR dh
+                              JOIN dbo.Databases d ON d.DatabaseID = dh.DatabaseID AND d.IsActive = 1
+                              WHERE dh.InstanceID = sg.InstanceID
+                                AND dh.group_id = sg.group_id
+                                AND dh.replica_id = ar.replica_id
+                          )
+                          AND NOT EXISTS (
+                              SELECT 1
+                              FROM dbo.DatabasesHADR dh
+                              JOIN dbo.Databases d ON d.DatabaseID = dh.DatabaseID AND d.IsActive = 1
+                              WHERE dh.InstanceID = sg.InstanceID
+                                AND dh.group_id = sg.group_id
+                                AND dh.replica_id = ar.replica_id
+                                AND (
+                                       COALESCE(dh.is_suspended, 0) = 1
+                                    OR COALESCE(dh.synchronization_state, 0) <> 2
+                                    OR COALESCE(dh.synchronization_health, 0) <> 2
+                                )
+                          )
+                    ) readyReplica
+                    WHERE sg.source_rank = 1
+                    ORDER BY sg.name
                     """, cancellationToken, scopeParameters);
                 return Results.Ok(data);
             }

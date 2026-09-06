@@ -195,16 +195,24 @@ public static class PerformanceEndpointMappings
                 var (scopeSnippet, scopeParameters) = user.ScopedInstanceFilter("mu.InstanceID");
                 var filter = instanceId.HasValue ? "AND mu.InstanceID = @instanceId" : string.Empty;
                 var query = $"""
-                    SELECT TOP 200 mu.InstanceID,
+                    WITH LatestSnapshot AS (
+                        SELECT mu.InstanceID, MAX(mu.SnapshotDate) AS SnapshotDate
+                        FROM dbo.MemoryUsage mu
+                        WHERE mu.SnapshotDate > DATEADD(hour, -@hours, GETUTCDATE()) {filter} {scopeSnippet}
+                        GROUP BY mu.InstanceID
+                    )
+                    SELECT mu.InstanceID,
                            COALESCE(i.InstanceDisplayName, i.Instance) AS InstanceDisplayName,
                            mct.MemoryClerkType AS clerk_type,
                            mct.MemoryClerkDescription AS clerk_name,
                            mu.pages_kb,
                            mu.SnapshotDate
-                    FROM dbo.MemoryUsage mu
+                    FROM LatestSnapshot latest
+                    JOIN dbo.MemoryUsage mu
+                      ON mu.InstanceID = latest.InstanceID
+                     AND mu.SnapshotDate = latest.SnapshotDate
                     JOIN dbo.Instances i ON mu.InstanceID = i.InstanceID
                     JOIN dbo.MemoryClerkType mct ON mu.MemoryClerkTypeID = mct.MemoryClerkTypeID
-                    WHERE mu.SnapshotDate > DATEADD(hour, -@hours, GETUTCDATE()) {filter} {scopeSnippet}
                     ORDER BY mu.pages_kb DESC
                     """;
                 var parameters = new List<(string, object?)>
@@ -228,17 +236,41 @@ public static class PerformanceEndpointMappings
                 var (scopeSnippet, scopeParameters) = user.ScopedInstanceFilter("pc.InstanceID");
                 var filter = instanceId.HasValue ? "AND pc.InstanceID = @instanceId" : string.Empty;
                 var query = $"""
-                    SELECT TOP 500 pc.InstanceID,
-                           COALESCE(i.InstanceDisplayName, i.Instance) AS InstanceDisplayName,
-                           c.counter_name,
-                           pc.Value AS cntr_value,
-                           pc.SnapshotDate
-                    FROM dbo.PerformanceCounters pc
-                    JOIN dbo.Instances i ON pc.InstanceID = i.InstanceID
-                    JOIN dbo.Counters c ON pc.CounterID = c.CounterID
-                    WHERE c.object_name LIKE '%Memory%'
-                      AND pc.SnapshotDate > DATEADD(hour, -@hours, GETUTCDATE()) {filter} {scopeSnippet}
-                    ORDER BY pc.SnapshotDate DESC
+                    WITH RankedCounters AS (
+                        SELECT pc.InstanceID,
+                               COALESCE(i.InstanceDisplayName, i.Instance) AS InstanceDisplayName,
+                               c.counter_name,
+                               pc.Value AS cntr_value,
+                               pc.SnapshotDate,
+                               ROW_NUMBER() OVER (
+                                   PARTITION BY pc.InstanceID, pc.CounterID
+                                   ORDER BY pc.SnapshotDate DESC
+                               ) AS counter_rank
+                        FROM dbo.PerformanceCounters pc
+                        JOIN dbo.Instances i ON pc.InstanceID = i.InstanceID
+                        JOIN dbo.Counters c ON pc.CounterID = c.CounterID
+                        WHERE (
+                                  c.counter_name LIKE 'Page life expectancy%'
+                               OR c.counter_name LIKE 'Database Cache Memory%'
+                               OR c.counter_name LIKE 'Memory Grants Pending%'
+                              )
+                          AND pc.SnapshotDate > DATEADD(hour, -@hours, GETUTCDATE()) {filter} {scopeSnippet}
+                    ),
+                    RecentPleHistory AS (
+                        SELECT TOP (5000) InstanceID, InstanceDisplayName, counter_name,
+                                          cntr_value, SnapshotDate
+                        FROM RankedCounters
+                        WHERE counter_name LIKE 'Page life expectancy%'
+                          AND counter_rank > 1
+                        ORDER BY SnapshotDate DESC
+                    )
+                    SELECT InstanceID, InstanceDisplayName, counter_name, cntr_value, SnapshotDate
+                    FROM RankedCounters
+                    WHERE counter_rank = 1
+                    UNION ALL
+                    SELECT InstanceID, InstanceDisplayName, counter_name, cntr_value, SnapshotDate
+                    FROM RecentPleHistory
+                    ORDER BY SnapshotDate DESC
                     """;
                 var parameters = new List<(string, object?)>
                 {

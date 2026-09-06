@@ -5,11 +5,13 @@ import { useRefresh } from '../App';
 import LoadingSpinner from '../components/LoadingSpinner';
 import StatCard from '../components/StatCard';
 import { Network, CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
+import type { AvailabilityGroupSummaryRow } from '../api/types';
+import { availabilityGroupFailoverReady, availabilityGroupHealth } from '../utils/availabilityGroupStatus';
 
 export default function EstateAGsPage() {
   const { lastRefresh } = useRefresh();
   const navigate = useNavigate();
-  const [ags, setAgs] = useState<any[]>([]);
+  const [ags, setAgs] = useState<AvailabilityGroupSummaryRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -20,8 +22,8 @@ export default function EstateAGsPage() {
 
   const stats = useMemo(() => {
     const total = ags.length;
-    const healthy = ags.filter(a => a.synchronization_health === 2 || a.SyncHealth === 'HEALTHY').length;
-    const warning = ags.filter(a => a.synchronization_health === 1 || a.SyncHealth === 'PARTIALLY_HEALTHY').length;
+    const healthy = ags.filter(ag => availabilityGroupHealth(ag) === 'Healthy').length;
+    const warning = ags.filter(ag => availabilityGroupHealth(ag) === 'Warning').length;
     const critical = total - healthy - warning;
     return { total, healthy, warning, critical: Math.max(0, critical) };
   }, [ags]);
@@ -52,10 +54,9 @@ export default function EstateAGsPage() {
           </thead>
           <tbody>
             {ags.map((ag, i) => {
-              const syncHealth = ag.synchronization_health === 2 || ag.SyncHealth === 'HEALTHY' ? 'Healthy'
-                : ag.synchronization_health === 1 || ag.SyncHealth === 'PARTIALLY_HEALTHY' ? 'Warning' : 'Critical';
+              const syncHealth = availabilityGroupHealth(ag);
               const syncColor = syncHealth === 'Healthy' ? 'text-emerald-400' : syncHealth === 'Warning' ? 'text-yellow-400' : 'text-red-400';
-              const failoverReady = ag.is_failover_ready ?? ag.FailoverReady ?? false;
+              const failoverReady = availabilityGroupFailoverReady(ag);
               return (
                 <tr key={i}
                   onClick={() => navigate('/availability-groups')}
