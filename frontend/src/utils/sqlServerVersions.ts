@@ -101,6 +101,27 @@ export const SQL_SERVER_SUPPORT_TIMELINE = SQL_SERVER_VERSIONS
   }))
   .reverse();
 
+export function sqlServerSupportTimelineForMajors(majorVersions: readonly unknown[]) {
+  const counts = new Map<number, number>();
+
+  majorVersions.forEach(value => {
+    const major = typeof value === 'number'
+      ? value
+      : typeof value === 'string'
+        ? Number.parseInt(value, 10)
+        : Number.NaN;
+
+    if (Number.isFinite(major)) {
+      counts.set(major, (counts.get(major) ?? 0) + 1);
+    }
+  });
+
+  return SQL_SERVER_SUPPORT_TIMELINE.flatMap(version => {
+    const count = counts.get(version.major) ?? 0;
+    return count > 0 ? [{ ...version, count }] : [];
+  });
+}
+
 export function sqlServerVersionInfo(major: number | null | undefined): SqlServerVersionInfo | undefined {
   return major == null ? undefined : versionByMajor.get(major);
 }

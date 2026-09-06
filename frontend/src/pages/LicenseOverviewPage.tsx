@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { FileSpreadsheet, Server, Cpu, MemoryStick, Layers, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { api } from '../api/api';
-import { SQL_SERVER_SUPPORT_TIMELINE, sqlServerVersionLabel } from '../utils/sqlServerVersions';
+import { sqlServerSupportTimelineForMajors, sqlServerVersionLabel } from '../utils/sqlServerVersions';
 
 const COLORS = ['#3b82f6', '#60a5fa', '#93c5fd', '#2563eb', '#1d4ed8', '#8b5cf6', '#10b981', '#6366f1'];
 
@@ -11,8 +11,35 @@ const tooltipStyle = { backgroundColor: '#1e293b', border: '1px solid rgba(255,2
 
 type SortKey = 'InstanceName' | 'Edition' | 'ProductVersion' | 'cpu_count' | 'socket_count' | 'ramGb' | 'sqlserver_start_time';
 
+interface LicenseRow {
+  InstanceName?: string | null;
+  Edition?: string | null;
+  ProductMajorVersion?: number | string | null;
+  ProductVersion?: string | null;
+  cpu_count?: number | null;
+  socket_count?: number | null;
+  physical_memory_kb?: number | null;
+  sqlserver_start_time?: string | null;
+}
+
+interface SortHeaderProps {
+  columnKey: SortKey;
+  label: string;
+  activeKey: SortKey;
+  ascending: boolean;
+  onSort: (key: SortKey) => void;
+}
+
+function SortHeader({ columnKey, label, activeKey, ascending, onSort }: SortHeaderProps) {
+  return (
+    <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider cursor-pointer hover:text-white" onClick={() => onSort(columnKey)}>
+      {label} {activeKey === columnKey ? (ascending ? '▲' : '▼') : ''}
+    </th>
+  );
+}
+
 export default function LicenseOverviewPage() {
-  const [data, setData] = useState<any[]>([]);
+  const [data, setData] = useState<LicenseRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [sortKey, setSortKey] = useState<SortKey>('InstanceName');
   const [sortAsc, setSortAsc] = useState(true);
@@ -28,7 +55,10 @@ export default function LicenseOverviewPage() {
   const versionDist = useMemo(() => {
     const map = new Map<string, number>();
     data.forEach(r => {
-      const name = sqlServerVersionLabel(r.ProductMajorVersion);
+      const major = typeof r.ProductMajorVersion === 'string'
+        ? Number.parseInt(r.ProductMajorVersion, 10)
+        : r.ProductMajorVersion;
+      const name = sqlServerVersionLabel(major);
       map.set(name, (map.get(name) || 0) + 1);
     });
     return [...map.entries()].map(([name, value]) => ({ name, value }));
@@ -43,25 +73,27 @@ export default function LicenseOverviewPage() {
   const supportInfo = useMemo(() => {
     const now = new Date();
     const oneYear = new Date(now.getTime() + 365 * 86400000);
-    return SQL_SERVER_SUPPORT_TIMELINE.map(s => {
-      const count = data.filter(r => r.ProductMajorVersion === s.major).length;
+    return sqlServerSupportTimelineForMajors(data.map(r => r.ProductMajorVersion)).map(s => {
       const expired = s.endDate < now;
       const nearExpiry = !expired && s.endDate < oneYear;
-      return { ...s, count, expired, nearExpiry };
+      return { ...s, expired, nearExpiry };
     });
   }, [data]);
 
   const sorted = useMemo(() => {
     const copy = [...data];
     copy.sort((a, b) => {
-      let av: any, bv: any;
+      let av: string | number | null | undefined;
+      let bv: string | number | null | undefined;
       if (sortKey === 'ramGb') { av = (a.physical_memory_kb || 0); bv = (b.physical_memory_kb || 0); }
       else { av = a[sortKey]; bv = b[sortKey]; }
       if (av == null && bv == null) return 0;
       if (av == null) return 1;
       if (bv == null) return -1;
-      if (typeof av === 'string') return sortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
-      return sortAsc ? av - bv : bv - av;
+      if (typeof av === 'number' && typeof bv === 'number') return sortAsc ? av - bv : bv - av;
+      const aText = String(av);
+      const bText = String(bv);
+      return sortAsc ? aText.localeCompare(bText) : bText.localeCompare(aText);
     });
     return copy;
   }, [data, sortKey, sortAsc]);
@@ -70,12 +102,6 @@ export default function LicenseOverviewPage() {
     if (sortKey === key) setSortAsc(!sortAsc);
     else { setSortKey(key); setSortAsc(true); }
   };
-
-  const SortHeader = ({ k, label }: { k: SortKey; label: string }) => (
-    <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider cursor-pointer hover:text-white" onClick={() => handleSort(k)}>
-      {label} {sortKey === k ? (sortAsc ? '▲' : '▼') : ''}
-    </th>
-  );
 
   if (loading) return <div className="flex items-center justify-center h-64 text-gray-400">Loading...</div>;
 
@@ -156,13 +182,13 @@ export default function LicenseOverviewPage() {
         <table className="w-full">
           <thead>
             <tr className="border-b border-white/10">
-              <SortHeader k="InstanceName" label="Instance" />
-              <SortHeader k="Edition" label="Edition" />
-              <SortHeader k="ProductVersion" label="Version" />
-              <SortHeader k="cpu_count" label="Cores" />
-              <SortHeader k="socket_count" label="Sockets" />
-              <SortHeader k="ramGb" label="RAM (GB)" />
-              <SortHeader k="sqlserver_start_time" label="Start Date" />
+              <SortHeader columnKey="InstanceName" label="Instance" activeKey={sortKey} ascending={sortAsc} onSort={handleSort} />
+              <SortHeader columnKey="Edition" label="Edition" activeKey={sortKey} ascending={sortAsc} onSort={handleSort} />
+              <SortHeader columnKey="ProductVersion" label="Version" activeKey={sortKey} ascending={sortAsc} onSort={handleSort} />
+              <SortHeader columnKey="cpu_count" label="Cores" activeKey={sortKey} ascending={sortAsc} onSort={handleSort} />
+              <SortHeader columnKey="socket_count" label="Sockets" activeKey={sortKey} ascending={sortAsc} onSort={handleSort} />
+              <SortHeader columnKey="ramGb" label="RAM (GB)" activeKey={sortKey} ascending={sortAsc} onSort={handleSort} />
+              <SortHeader columnKey="sqlserver_start_time" label="Start Date" activeKey={sortKey} ascending={sortAsc} onSort={handleSort} />
             </tr>
           </thead>
           <tbody>

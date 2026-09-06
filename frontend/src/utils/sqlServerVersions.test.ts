@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   SQL_SERVER_SUPPORT_TIMELINE,
+  sqlServerSupportTimelineForMajors,
   sqlServerShortVersionLabel,
   sqlServerVersionLabel,
   sqlServerVersionYear,
@@ -34,5 +35,15 @@ describe('SQL Server version metadata', () => {
 
     expect(sql2025?.label).toBe('Jan 2036');
     expect(sql2025?.endDate.toISOString()).toBe('2036-01-06T23:59:59.000Z');
+  });
+
+  it('only includes versions that are present in the estate', () => {
+    const timeline = sqlServerSupportTimelineForMajors([14, 16, '16', null]);
+
+    expect(timeline.map(version => ({ major: version.major, count: version.count }))).toEqual([
+      { major: 14, count: 1 },
+      { major: 16, count: 2 },
+    ]);
+    expect(timeline.some(version => version.major === 11)).toBe(false);
   });
 });
