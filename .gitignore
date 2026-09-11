@@ -30,3 +30,6 @@ Thumbs.db
 
 # Local release packages
 artifacts/
+publish/
+backend/publish/
+dbadash-webview.zip
