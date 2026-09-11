@@ -121,25 +121,21 @@ public static class MonitoringEndpointMappings
             try
             {
                 data = await sql.QueryAsync("""
-                    ;WITH Ranked AS (
-                        SELECT sco.name,
-                               sc.value,
-                               sc.value_in_use,
-                               sc.ValidFrom,
-                               LAG(sc.value) OVER (PARTITION BY sc.configuration_id ORDER BY sc.ValidFrom) AS prev_value
-                        FROM dbo.SysConfig sc
-                        JOIN dbo.SysConfigOptions sco ON sc.configuration_id = sco.configuration_id
-                        WHERE sc.InstanceID = @instanceId
-                          AND sc.ValidFrom > DATEADD(day, -@days, GETUTCDATE())
-                    )
-                    SELECT name,
-                           prev_value AS old_value,
-                           value AS new_value,
-                           ValidFrom AS ChangeDate
-                    FROM Ranked
-                    WHERE prev_value IS NOT NULL
-                      AND prev_value <> value
-                    ORDER BY ValidFrom DESC
+                    SELECT sco.name,
+                           h.value AS old_value,
+                           h.new_value,
+                           h.ValidTo AS ChangeDate
+                    FROM dbo.SysConfigHistory h
+                    JOIN dbo.SysConfigOptions sco
+                      ON h.configuration_id = sco.configuration_id
+                    WHERE h.InstanceID = @instanceId
+                      AND h.ValidTo >= DATEADD(day, -@days, GETUTCDATE())
+                      AND h.ValidTo <= GETUTCDATE()
+                      AND NOT (
+                          h.value = h.new_value
+                          OR (h.value IS NULL AND h.new_value IS NULL)
+                      )
+                    ORDER BY h.ValidTo DESC
                     """,
                     cancellationToken,
                     ("@instanceId", instanceId.Value),
