@@ -58,14 +58,12 @@ import type {
   UnderutilizedReportRow,
   UpdateAlertNotesRequest,
   UpdateLocalUserRequest,
+  ViewTagOption,
   WaitTimelineRow,
 } from './types';
+import { clearAdminViewTags, encodeAdminViewTagsHeader, getAdminViewTags } from '../viewFilter';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
-
-function getToken(): string | null {
-  return getAuthSession()?.token ?? null;
-}
 
 export function setToken(token: string) {
   const session = getAuthSession();
@@ -75,6 +73,7 @@ export function setToken(token: string) {
 
 export function clearToken() {
   clearAuthSession();
+  clearAdminViewTags();
 }
 
 function extractErrorMessage(payload: unknown): string | null {
@@ -93,18 +92,24 @@ async function readPayload<T>(res: Response): Promise<T> {
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = getToken();
+  const session = getAuthSession();
+  const token = session?.token;
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...((options.headers as Record<string, string>) || {}),
   };
   if (token) headers.Authorization = `Bearer ${token}`;
+  if (session?.role === 'Admin') {
+    const viewTags = encodeAdminViewTagsHeader(getAdminViewTags());
+    if (viewTags) headers['X-DBADash-View-Tags'] = viewTags;
+  }
 
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
   const payload = await readPayload<unknown>(res).catch(() => null);
 
   if (res.status === 401) {
     clearAuthSession();
+    clearAdminViewTags();
     if (window.location.pathname !== '/login') {
       window.location.href = '/login';
     }
@@ -133,6 +138,7 @@ export const api = {
   },
   health: () => request<{ status: string }>('/api/health'),
   version: () => request<ApplicationVersionResponse>('/api/version'),
+  tags: () => request<ViewTagOption[]>('/api/tags'),
   dashboardSummary: () => request<DashboardSummaryRow[]>('/api/dashboard/summary'),
   dashboardStats: () => request<DashboardStats>('/api/dashboard/stats'),
   instances: () => request<InstanceListRow[]>('/api/instances'),

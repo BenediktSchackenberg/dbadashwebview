@@ -60,4 +60,5 @@ public static class AppClaimTypes
 {
     public const string AllowedTag = "scope_tag";
     public const string AllowedGroupId = "scope_group";
+    public const string ViewTag = "view_tag";
 }

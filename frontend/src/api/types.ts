@@ -15,6 +15,11 @@ export interface ApplicationVersionResponse {
   source: 'version-file' | 'assembly';
 }
 
+export interface ViewTagOption {
+  name: string;
+  instanceCount: number;
+}
+
 export interface AuthStatusResponse {
   localAuthEnabled: boolean;
   adEnabled: boolean;

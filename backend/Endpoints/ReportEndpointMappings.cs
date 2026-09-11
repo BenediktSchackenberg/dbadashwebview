@@ -245,18 +245,26 @@ public static class ReportEndpointMappings
 
                 await using var statsCommand = new SqlCommand(
                     """
-                    SELECT COUNT(*) AS BackupCount24h,
-                           SUM(backup_size) AS TotalSize24h,
-                           AVG(DATEDIFF(second, backup_start_date, backup_finish_date)) AS AvgDurationSec24h
-                    FROM dbo.Backups
-                    WHERE backup_start_date >= DATEADD(hour, -24, GETUTCDATE())
+                    SELECT d.InstanceID,
+                           COUNT(*) AS BackupCount24h,
+                           SUM(b.backup_size) AS TotalSize24h,
+                           COUNT(DATEDIFF(second, b.backup_start_date, b.backup_finish_date)) AS DurationCount24h,
+                           SUM(DATEDIFF(second, b.backup_start_date, b.backup_finish_date)) AS TotalDurationSec24h
+                    FROM dbo.Backups b
+                    JOIN dbo.Databases d ON b.DatabaseID = d.DatabaseID
+                    WHERE b.backup_start_date >= DATEADD(hour, -24, GETUTCDATE())
+                    GROUP BY d.InstanceID
                     """,
                     connection)
                 {
                     CommandTimeout = 60
                 };
                 var statsRows = await EndpointResultMapper.ReadRowsAsync(statsCommand, cancellationToken);
-                var statsRow = statsRows.FirstOrDefault();
+                statsRows = statsRows.FilterByInstanceIds(allowedIds);
+                var backupCount24h = statsRows.Sum(row => row["BackupCount24h"] is null ? 0 : Convert.ToInt32(row["BackupCount24h"]));
+                var totalSize24h = statsRows.Sum(row => row["TotalSize24h"] is null ? 0m : Convert.ToDecimal(row["TotalSize24h"]));
+                var durationCount24h = statsRows.Sum(row => row["DurationCount24h"] is null ? 0 : Convert.ToInt32(row["DurationCount24h"]));
+                var totalDurationSec24h = statsRows.Sum(row => row["TotalDurationSec24h"] is null ? 0L : Convert.ToInt64(row["TotalDurationSec24h"]));
 
                 return Results.Ok(new
                 {
@@ -277,9 +285,11 @@ public static class ReportEndpointMappings
                     cpuByInstance,
                     stats = new
                     {
-                        backupCount24h = statsRow?["BackupCount24h"] != null ? Convert.ToInt32(statsRow["BackupCount24h"]) : 0,
-                        totalSize24h = statsRow?["TotalSize24h"] != null ? Convert.ToDecimal(statsRow["TotalSize24h"]) : 0m,
-                        avgDurationSec24h = statsRow?["AvgDurationSec24h"] != null ? Convert.ToInt32(statsRow["AvgDurationSec24h"]) : 0
+                        backupCount24h,
+                        totalSize24h,
+                        avgDurationSec24h = durationCount24h > 0
+                            ? Convert.ToInt32(totalDurationSec24h / durationCount24h)
+                            : 0
                     }
                 });
             }
