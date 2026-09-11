@@ -26,6 +26,7 @@ public sealed class UserScopeTests
         var scope = UserScope.FromPrincipal(null);
         Assert.True(scope.IsUnrestricted);
         Assert.Empty(scope.AllowedTags);
+        Assert.Empty(scope.ViewTags);
         Assert.Empty(scope.AllowedGroupIds);
     }
 
@@ -110,6 +111,28 @@ public sealed class UserScopeTests
         Assert.Equal("a", tuples[0].value);
         Assert.Equal("@scope_tag_1", tuples[1].name);
         Assert.Equal("b", tuples[1].value);
+    }
+
+    [Fact]
+    public void BuildInstanceFilter_AuthorizationAndViewTags_AreIntersected()
+    {
+        var principal = PrincipalWith(
+            new Claim(AppClaimTypes.AllowedTag, "production"),
+            new Claim(AppClaimTypes.ViewTag, "team-blue"),
+            new Claim(AppClaimTypes.ViewTag, "eu-west"));
+
+        var scope = UserScope.FromPrincipal(principal);
+        var predicate = scope.BuildInstanceFilter("i.InstanceID");
+        var parameters = scope.ParameterTuples().ToArray();
+
+        Assert.Equal(new[] { "team-blue", "eu-west" }, scope.ViewTags);
+        Assert.Contains("@scope_tag_0", predicate);
+        Assert.Contains("@scope_view_tag_0", predicate);
+        Assert.Contains("@scope_view_tag_1", predicate);
+        Assert.Contains(" AND ", predicate);
+        Assert.Equal(3, parameters.Length);
+        Assert.DoesNotContain("production", predicate);
+        Assert.DoesNotContain("team-blue", predicate);
     }
 
     // ---------------------------------------------------------------------

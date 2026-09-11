@@ -141,6 +141,7 @@ Purpose-built reports for IT managers:
 - **Local + AD Auth** - persisted local users with hashed passwords and optional AD fallback
 - **Server Management** — view monitored instances and connection details
 - **Groups & Tags** — organize instances for filtering
+- **Admin View Filter** — temporarily narrow the full UI to one or more DBA Dash tags without changing access permissions
 - **Users & RBAC** — Admin / Operator / Viewer roles
 - **Data Retention** — configure cleanup per data category
 
@@ -558,6 +559,7 @@ GET /api/dashboard/monitor                  SQL Monitor card grid + alerts
 GET /api/tree                               Instance tree with databases (for sidebar)
 GET /api/instances                          All instances with version info
 GET /api/instances/{id}                     Instance detail + Summary_Get row
+GET /api/tags                               DBA Dash tags and active instance counts (Admin only)
 ```
 </details>
 

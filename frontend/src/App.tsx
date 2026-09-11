@@ -1,4 +1,4 @@
-import { Suspense, createContext, lazy, useContext, useEffect, useMemo, useState } from 'react';
+import { Suspense, createContext, lazy, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Menu, Moon, RefreshCw, Sun } from 'lucide-react';
@@ -7,10 +7,12 @@ import { hasRole } from './auth/session';
 import type { AuthRole } from './auth/session';
 import type { SearchInstanceRow, SearchJobRow } from './api/types';
 import Breadcrumbs from './components/Breadcrumbs';
+import AdminTagFilter from './components/AdminTagFilter';
 import InstanceTree from './components/InstanceTree';
 import LoadingSpinner from './components/LoadingSpinner';
 import SearchDialog from './components/SearchDialog';
 import TimeRangePicker from './components/TimeRangePicker';
+import { getAdminViewTags, setAdminViewTags } from './viewFilter';
 
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
@@ -90,7 +92,13 @@ function useTheme() {
   return { dark, toggle: () => setDark(current => !current) };
 }
 
-function Layout({ children }: { children: React.ReactNode }) {
+interface LayoutProps {
+  children: React.ReactNode;
+  viewTags: string[];
+  onViewTagsChange: (tags: string[]) => void;
+}
+
+function Layout({ children, viewTags, onViewTagsChange }: LayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { lastRefresh, refresh } = useRefresh();
@@ -143,7 +151,15 @@ function Layout({ children }: { children: React.ReactNode }) {
 
   const handleLogout = () => {
     clearToken();
+    onViewTagsChange([]);
     navigate('/login');
+  };
+
+  const handleViewTagsChange = (tags: string[]) => {
+    onViewTagsChange(tags);
+    if (/^\/instances\/\d+/.test(location.pathname)) {
+      navigate('/');
+    }
   };
 
   // Close drawer on route change
@@ -225,6 +241,7 @@ function Layout({ children }: { children: React.ReactNode }) {
               <span>Search</span>
               <kbd className="rounded bg-white/10 px-1 py-0.5 text-[10px]">{shortcutLabel}</kbd>
             </button>
+            <AdminTagFilter selected={viewTags} onChange={handleViewTagsChange} />
             <TimeRangePicker />
             <button
               onClick={toggleTheme}
@@ -270,10 +287,15 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   const [lastRefresh, setLastRefresh] = useState(new Date());
+  const [viewTags, setViewTags] = useState(getAdminViewTags);
 
   const refresh = () => {
     setLastRefresh(new Date());
   };
+
+  const updateViewTags = useCallback((tags: string[]) => {
+    setViewTags(setAdminViewTags(tags));
+  }, []);
 
   return (
     <RefreshContext.Provider value={{ lastRefresh, refresh }}>
@@ -290,7 +312,11 @@ export default function App() {
           path="*"
           element={(
             <AuthGuard>
-              <Layout>
+              <Layout
+                key={JSON.stringify(viewTags)}
+                viewTags={viewTags}
+                onViewTagsChange={updateViewTags}
+              >
                 <Routes>
                   <Route path="/" element={<DashboardPage />} />
                   <Route path="/instances" element={<InstancesPage />} />

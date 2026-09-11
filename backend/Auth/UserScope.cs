@@ -4,9 +4,9 @@ using Microsoft.Data.SqlClient;
 namespace DBADashWebView.Auth;
 
 /// <summary>
-/// Resolves the per-user scope (allowed tag names / allowed group ids) from a
-/// <see cref="ClaimsPrincipal"/> and exposes helpers that turn the scope into
-/// SQL fragments used by the endpoint mappings.
+/// Resolves the per-user authorization scope and optional request-scoped view
+/// tags from a <see cref="ClaimsPrincipal"/>, then exposes helpers that turn
+/// both into SQL fragments used by the endpoint mappings.
 ///
 /// An empty scope means "no restriction" (full fleet access). This keeps the
 /// behaviour backwards compatible with existing users that have no scope
@@ -21,12 +21,8 @@ public sealed class UserScope
             return Unrestricted;
         }
 
-        var tags = principal.FindAll(AppClaimTypes.AllowedTag)
-            .Select(c => c.Value)
-            .Where(value => !string.IsNullOrWhiteSpace(value))
-            .Select(value => value.Trim())
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+        var tags = NormalizeTags(principal.FindAll(AppClaimTypes.AllowedTag));
+        var viewTags = NormalizeTags(principal.FindAll(AppClaimTypes.ViewTag));
 
         var groups = principal.FindAll(AppClaimTypes.AllowedGroupId)
             .Select(c => int.TryParse(c.Value, out var id) ? id : (int?)null)
@@ -35,26 +31,39 @@ public sealed class UserScope
             .Distinct()
             .ToArray();
 
-        if (tags.Length == 0 && groups.Length == 0)
+        if (tags.Length == 0 && viewTags.Length == 0 && groups.Length == 0)
         {
             return Unrestricted;
         }
 
-        return new UserScope(tags, groups);
+        return new UserScope(tags, viewTags, groups);
     }
 
-    public static UserScope Unrestricted { get; } = new(Array.Empty<string>(), Array.Empty<int>());
+    private static string[] NormalizeTags(IEnumerable<Claim> claims) =>
+        claims
+            .Select(c => c.Value)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
 
-    private UserScope(IReadOnlyList<string> allowedTags, IReadOnlyList<int> allowedGroupIds)
+    public static UserScope Unrestricted { get; } = new([], [], []);
+
+    private UserScope(
+        IReadOnlyList<string> allowedTags,
+        IReadOnlyList<string> viewTags,
+        IReadOnlyList<int> allowedGroupIds)
     {
         AllowedTags = allowedTags;
+        ViewTags = viewTags;
         AllowedGroupIds = allowedGroupIds;
     }
 
     public IReadOnlyList<string> AllowedTags { get; }
+    public IReadOnlyList<string> ViewTags { get; }
     public IReadOnlyList<int> AllowedGroupIds { get; }
 
-    public bool IsUnrestricted => AllowedTags.Count == 0 && AllowedGroupIds.Count == 0;
+    public bool IsUnrestricted => AllowedTags.Count == 0 && ViewTags.Count == 0 && AllowedGroupIds.Count == 0;
 
     /// <summary>
     /// True when the scope can actually be enforced in SQL. Only tag scope is
@@ -63,7 +72,7 @@ public sealed class UserScope
     /// <see cref="IsUnrestricted"/> before building a tag predicate — otherwise
     /// they emit <c>IN ()</c> / a dangling <c>AND</c> and the query fails.
     /// </summary>
-    public bool HasTagScope => AllowedTags.Count > 0;
+    public bool HasTagScope => AllowedTags.Count > 0 || ViewTags.Count > 0;
 
     /// <summary>
     /// Returns a SQL predicate (without leading AND) that constrains the
@@ -80,18 +89,24 @@ public sealed class UserScope
     /// </summary>
     public string BuildInstanceFilter(string instanceIdColumn, string parameterPrefix = "@scope")
     {
-        if (AllowedTags.Count == 0)
+        var predicates = new List<string>();
+        if (AllowedTags.Count > 0)
         {
-            return string.Empty;
+            predicates.Add(BuildTagPredicate(instanceIdColumn, AllowedTags.Count, parameterPrefix + "_tag_"));
         }
 
-        // Parameterise every tag so we never concatenate user input into SQL.
-        var paramNames = AllowedTags
-            .Select((_, index) => parameterPrefix + "_tag_" + index)
-            .ToArray();
+        if (ViewTags.Count > 0)
+        {
+            predicates.Add(BuildTagPredicate(instanceIdColumn, ViewTags.Count, parameterPrefix + "_view_tag_"));
+        }
 
-        var inList = string.Join(", ", paramNames);
-        return $"{instanceIdColumn} IN (SELECT it.InstanceID FROM dbo.InstanceIDsTags it JOIN dbo.Tags t ON it.TagID = t.TagID WHERE t.TagName IN ({inList}))";
+        return string.Join(" AND ", predicates.Select(predicate => $"({predicate})"));
+    }
+
+    private static string BuildTagPredicate(string instanceIdColumn, int tagCount, string parameterPrefix)
+    {
+        var paramNames = Enumerable.Range(0, tagCount).Select(index => parameterPrefix + index);
+        return $"{instanceIdColumn} IN (SELECT it.InstanceID FROM dbo.InstanceIDsTags it JOIN dbo.Tags t ON it.TagID = t.TagID WHERE t.TagName IN ({string.Join(", ", paramNames)}))";
     }
 
     /// <summary>
@@ -104,6 +119,11 @@ public sealed class UserScope
         {
             command.Parameters.AddWithValue(parameterPrefix + "_tag_" + index, AllowedTags[index]);
         }
+
+        for (var index = 0; index < ViewTags.Count; index++)
+        {
+            command.Parameters.AddWithValue(parameterPrefix + "_view_tag_" + index, ViewTags[index]);
+        }
     }
 
     /// <summary>
@@ -115,6 +135,11 @@ public sealed class UserScope
         for (var index = 0; index < AllowedTags.Count; index++)
         {
             yield return (parameterPrefix + "_tag_" + index, AllowedTags[index]);
+        }
+
+        for (var index = 0; index < ViewTags.Count; index++)
+        {
+            yield return (parameterPrefix + "_view_tag_" + index, ViewTags[index]);
         }
     }
 
@@ -150,8 +175,8 @@ public sealed class UserScope
             return null;
         }
 
-        var paramNames = string.Join(", ", AllowedTags.Select((_, index) => "@scope_tag_" + index));
-        var query = $"SELECT DISTINCT it.InstanceID FROM dbo.InstanceIDsTags it JOIN dbo.Tags t ON it.TagID = t.TagID WHERE t.TagName IN ({paramNames})";
+        var predicate = BuildInstanceFilter("i.InstanceID");
+        var query = $"SELECT i.InstanceID FROM dbo.Instances i WHERE {predicate}";
 
         var rows = await sql.QueryAsync(query, cancellationToken, ParameterTuples().ToArray());
         var ids = new HashSet<int>();
@@ -182,9 +207,7 @@ public sealed class UserScope
 
         var parameters = new List<(string name, object? value)> { ("@instanceId", instanceId) };
         parameters.AddRange(ParameterTuples());
-
-        var paramNames = string.Join(", ", AllowedTags.Select((_, index) => "@scope_tag_" + index));
-        var query = $"SELECT TOP 1 1 FROM dbo.InstanceIDsTags it JOIN dbo.Tags t ON it.TagID = t.TagID WHERE it.InstanceID = @instanceId AND t.TagName IN ({paramNames})";
+        var query = $"SELECT TOP 1 1 WHERE {BuildInstanceFilter("@instanceId")}";
 
         var rows = await sql.QueryAsync(query, cancellationToken, parameters.ToArray());
         return rows.Count > 0;

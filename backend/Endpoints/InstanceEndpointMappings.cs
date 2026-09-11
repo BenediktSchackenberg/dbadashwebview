@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using DBADashWebView.Auth;
 using DBADashWebView.Data;
 
 namespace DBADashWebView.Endpoints;
@@ -7,6 +8,27 @@ public static class InstanceEndpointMappings
 {
     public static IEndpointRouteBuilder MapInstanceEndpoints(this IEndpointRouteBuilder endpoints)
     {
+        endpoints.MapGet("/api/tags", async (SqlDataService sql, CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                var tags = await sql.QueryAsync("""
+                    SELECT t.TagName AS name,
+                           COUNT(DISTINCT CASE WHEN i.IsActive = 1 THEN it.InstanceID END) AS instanceCount
+                    FROM dbo.Tags t
+                    LEFT JOIN dbo.InstanceIDsTags it ON t.TagID = it.TagID
+                    LEFT JOIN dbo.Instances i ON it.InstanceID = i.InstanceID
+                    GROUP BY t.TagName
+                    ORDER BY t.TagName
+                    """, cancellationToken);
+                return Results.Ok(tags);
+            }
+            catch (Exception ex)
+            {
+                return Results.Ok(new { error = ex.Message, data = Array.Empty<object>() });
+            }
+        }).RequireAuthorization(AppPolicies.AdminOnly);
+
         endpoints.MapGet("/api/instances", async (ClaimsPrincipal user, SqlDataService sql, CancellationToken cancellationToken) =>
         {
             try

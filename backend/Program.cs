@@ -74,6 +74,7 @@ app.UseCors();
 app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseAuthentication();
+app.UseMiddleware<AdminViewTagFilterMiddleware>();
 app.UseAuthorization();
 
 if (app.Environment.IsDevelopment())

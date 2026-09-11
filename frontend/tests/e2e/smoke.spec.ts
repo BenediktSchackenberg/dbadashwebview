@@ -7,8 +7,9 @@ const authStatus = {
   supportedRoles: ['Admin', 'Operator', 'Viewer'],
 };
 
-async function mockShellApis(page: Page) {
+async function mockShellApis(page: Page, onInstancesRequest?: (viewTags: string | undefined) => void) {
   await page.route('**/api/instances', async (route) => {
+    onInstancesRequest?.(route.request().headers()['x-dbadash-view-tags']);
     await route.fulfill({
       json: [
         {
@@ -26,6 +27,15 @@ async function mockShellApis(page: Page) {
 
   await page.route('**/api/jobs/recent', async (route) => {
     await route.fulfill({ json: [] });
+  });
+
+  await page.route('**/api/tags', async (route) => {
+    await route.fulfill({
+      json: [
+        { name: 'production', instanceCount: 1 },
+        { name: 'team blue', instanceCount: 3 },
+      ],
+    });
   });
 
   await page.route('**/api/tree', async (route) => {
@@ -133,4 +143,28 @@ test('shows the installed application version on the About page', async ({ page 
   await expect(page.getByRole('heading', { name: 'About DBA Dash WebView' })).toBeVisible();
   await expect(page.getByText('v0.2.6', { exact: true })).toBeVisible();
   await expect(page.getByText('Release package', { exact: true })).toBeVisible();
+});
+
+test('admin tag filter is applied to subsequent API requests for the session', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('auth-session', JSON.stringify({
+      token: 'admin-jwt',
+      username: 'admin',
+      displayName: 'Administrator',
+      role: 'Admin',
+      source: 'local',
+    }));
+  });
+
+  const observedHeaders: Array<string | undefined> = [];
+  await mockShellApis(page, viewTags => observedHeaders.push(viewTags));
+  await page.goto('/');
+
+  await page.getByRole('button', { name: 'Filter current view by tag' }).click();
+  await page.getByRole('button', { name: /production/ }).click();
+
+  await expect(page.getByRole('button', { name: 'Filter current view by tag' })).toContainText('Tags (1)');
+  await expect.poll(() => observedHeaders).toContain('production');
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem('admin-view-tags')))
+    .toBe('["production"]');
 });
